@@ -36,13 +36,13 @@ services:
     # GPU support: uncomment the deploy block below and set
     # HEADROOM_GPU_COUNT=all (or a number) to enable GPU passthrough.
     # Requires nvidia-container-toolkit on the host.
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: ${HEADROOM_GPU_COUNT:-1}
-    #           capabilities: [gpu]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: ${HEADROOM_GPU_COUNT:-1}
+              capabilities: [gpu]
     environment:
       HOME: /tmp/headroom-home
       HEADROOM_HOST: 0.0.0.0
@@ -55,7 +55,7 @@ services:
       OPENAI_TARGET_API_URL: https://api.deepseek.com
       HEADROOM_ANTHROPIC_ENABLED: "false"
       HEADROOM_SILENCE_HEALTH_PROBES: "true"
-      HEADROOM_KOMPRESS_BACKEND: onnx
+      HEADROOM_KOMPRESS_BACKEND: onnx-gpu
       HF_HOME: /tmp/hf-cache
       XDG_CACHE_HOME: /tmp/xdg-cache
     ports:
@@ -66,5 +66,5 @@ services:
       - ${HEADROOM_HOST_HOME:?set HEADROOM_HOST_HOME}/.claude:/tmp/headroom-home/.claude
       - ${HEADROOM_HOST_HOME:?set HEADROOM_HOST_HOME}/.codex:/tmp/headroom-home/.codex
       - ${HEADROOM_HOST_HOME:?set HEADROOM_HOST_HOME}/.gemini:/tmp/headroom-home/.gemini
-    command: ["--host", "0.0.0.0", "--port", "${HEADROOM_PORT:-8787}", "--memory", "--code-aware", "--learn"]
+    command: ["--host", "0.0.0.0", "--port", "${HEADROOM_PORT:-8787}", "--code-aware"]
     env_file: .env
