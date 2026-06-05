@@ -4,6 +4,9 @@ ARG DISTROLESS_IMAGE=gcr.io/distroless/python3-debian13
 ARG PYTHON_SITE_PACKAGES=/usr/local/lib/python${PYTHON_VERSION}/site-packages
 
 
+# ---- CUDA runtime libraries stage (GPU support for onnxruntime-gpu) ----
+FROM nvidia/cuda:12.6.3-cudnn-runtime-ubuntu22.04 AS cuda-libs
+
 # ---- Build stage: compile native extensions, build wheel ----
 FROM python:${PYTHON_VERSION}-slim AS builder
 
@@ -146,16 +149,11 @@ PY
 RUN cd /tmp && python -c "from headroom._core import DiffCompressor, SmartCrusher; \
     print(f'build-stage rust core verify OK: {DiffCompressor.__name__}, {SmartCrusher.__name__}')"
 
-# Build the native Rust reverse proxy binary and stage it for the runtime
-# images (issue #976). These images already run "the proxy"; bundling the
-# native `headroom-proxy` binary lets operators front the Python proxy with
-# the Rust SigV4 / live-zone compression path from the same image. The
-# binary is copied out of the cache-mounted target dir into a persistent
-# path so the COPY in the runtime stages can pick it up.
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    --mount=type=cache,target=/build/target \
-    cargo build --release --locked --bin headroom-proxy && \
-    cp target/release/headroom-proxy /usr/local/bin/headroom-proxy
+# Download rtk binary from GitHub releases
+RUN python -c "from headroom.rtk.installer import download_rtk; download_rtk()"
+
+# Replace CPU-only onnxruntime with GPU-enabled onnxruntime-gpu
+RUN pip install --no-cache-dir --force-reinstall "onnxruntime-gpu>=1.16.0"
 
 # ---- Runtime stage (python-slim): supports root/nonroot via build arg ----
 FROM python:${PYTHON_VERSION}-slim AS runtime-slim-base
@@ -170,8 +168,8 @@ RUN apt-get update && \
 
 COPY --from=builder ${PYTHON_SITE_PACKAGES} ${PYTHON_SITE_PACKAGES}
 COPY --from=builder /usr/local/bin/headroom /usr/local/bin/headroom
-# Native Rust reverse proxy binary (issue #976).
-COPY --from=builder /usr/local/bin/headroom-proxy /usr/local/bin/headroom-proxy
+COPY --from=builder /root/.headroom/bin/rtk /usr/local/bin/rtk
+COPY --from=cuda-libs /usr/local/cuda-12.6 /usr/local/cuda-12.6
 
 RUN mkdir -p /home/nonroot /data && \
     if [ "$RUNTIME_USER" = "nonroot" ]; then \
@@ -188,7 +186,8 @@ WORKDIR ${RUNTIME_HOME}
 
 ENV HEADROOM_HOST=0.0.0.0 \
     PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1
+    PYTHONDONTWRITEBYTECODE=1 \
+    LD_LIBRARY_PATH=/usr/local/cuda-12.6/lib64:${LD_LIBRARY_PATH}
 
 # Declare ~/.headroom as a volume so Docker (and ACA) can attach persistent
 # storage here.  Bare `docker run` gets an anonymous volume as a fallback so
@@ -211,8 +210,8 @@ ARG RUNTIME_USER=nonroot
 ARG PYTHON_SITE_PACKAGES
 
 COPY --from=builder ${PYTHON_SITE_PACKAGES} ${PYTHON_SITE_PACKAGES}
-# Native Rust reverse proxy binary (issue #976).
-COPY --from=builder /usr/local/bin/headroom-proxy /usr/local/bin/headroom-proxy
+COPY --from=builder /root/.headroom/bin/rtk /usr/local/bin/rtk
+COPY --from=cuda-libs /usr/local/cuda-12.6 /usr/local/cuda-12.6
 
 USER ${RUNTIME_USER}
 WORKDIR /app
@@ -220,7 +219,8 @@ WORKDIR /app
 ENV HEADROOM_HOST=0.0.0.0 \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONPATH=${PYTHON_SITE_PACKAGES}
+    PYTHONPATH=${PYTHON_SITE_PACKAGES} \
+    LD_LIBRARY_PATH=/usr/local/cuda-12.6/lib64:${LD_LIBRARY_PATH}
 
 EXPOSE 8787
 
