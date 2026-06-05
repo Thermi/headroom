@@ -448,7 +448,6 @@ class OnnxLocalEmbedder:
         from tokenizers import Tokenizer
 
         logger.info("Loading ONNX embedding model (all-MiniLM-L6-v2, ~86MB)...")
-
         # Prefer local cache to avoid a redundant network HEAD on warm starts.
         model_path = hf_hub_download_local_first(self.ONNX_REPO, "model.onnx")
         tok_path = hf_hub_download_local_first(self.ONNX_REPO, "tokenizer.json")
@@ -461,10 +460,20 @@ class OnnxLocalEmbedder:
             intra_op_num_threads=1,
             inter_op_num_threads=1,
         )
-        self._session = ort.InferenceSession(
-            model_path, sess_options, providers=["CPUExecutionProvider"]
-        )
-        self._tokenizer = Tokenizer.from_file(tok_path)
+        try:
+            self._session = ort.InferenceSession(
+                model_path, sess_options, providers=["CPUExecutionProvider"]
+            )
+        except Exception as exc:
+            logger.error("Failed to create ONNX inference session: %s: %s", type(exc).__name__, exc)
+            raise
+
+        try:
+            self._tokenizer = Tokenizer.from_file(tok_path)
+        except Exception as exc:
+            logger.error("Failed to load ONNX tokenizer from file: %s: %s", type(exc).__name__, exc)
+            raise
+
         self._tokenizer.enable_truncation(max_length=self._max_length)
         self._tokenizer.enable_padding(length=self._max_length)
         self._input_names = [inp.name for inp in self._session.get_inputs()]
