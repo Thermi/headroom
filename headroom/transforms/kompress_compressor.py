@@ -119,7 +119,7 @@ _DEFAULT_ACQUIRE_TIMEOUT_SECONDS = 5.0
 _DEFAULT_TIME_BUDGET_SECONDS = 20.0
 _DEFAULT_CANARY_THRESHOLD_SECONDS = 5.0
 
-KompressBackend = Literal["auto", "onnx", "onnx_cpu", "onnx_coreml", "pytorch", "pytorch_mps"]
+KompressBackend = Literal["auto", "onnx", "onnx_cpu", "onnx_coreml", "onnx_gpu", "pytorch", "pytorch_mps"]
 
 # HuggingFace local-lookup errors that mean "asset not in cache" rather than a
 # genuine failure. Caught when loading cache-only so startup can defer instead.
@@ -241,6 +241,7 @@ def _selected_backend() -> KompressBackend:
         "onnx": "onnx",
         "onnx_cpu": "onnx_cpu",
         "onnx_coreml": "onnx_coreml",
+        "onnx_gpu": "onnx_gpu",
         "pytorch": "pytorch",
         "pytorch_mps": "pytorch_mps",
         "auto": "auto",
@@ -692,7 +693,7 @@ def _load_kompress_onnx(
     model_id: str,
     *,
     use_coreml: bool = False,
-    allow_download: bool = True,
+    use_gpu: bool = False,
 ) -> tuple[Any, Any, str]:
     """Download ONNX INT8 model from HuggingFace and load with onnxruntime.
 
@@ -706,7 +707,7 @@ def _load_kompress_onnx(
 
         logger.info("Downloading Kompress ONNX model from %s ...", model_id)
 
-        backend = "onnx_coreml" if use_coreml else "onnx"
+        backend = "onnx_coreml" if use_coreml else ("onnx_gpu" if use_gpu else "onnx")
         providers: list[Any]
         if use_coreml:
             from headroom import paths as _paths
@@ -728,6 +729,11 @@ def _load_kompress_onnx(
                         "ModelCacheDirectory": cache_dir,
                     },
                 ),
+                "CPUExecutionProvider",
+            ]
+        elif use_gpu:
+            providers = [
+                "CUDAExecutionProvider",
                 "CPUExecutionProvider",
             ]
         else:
@@ -933,6 +939,7 @@ def _load_kompress(
 
     - auto: ONNX CPU first, then PyTorch.
     - onnx / onnx_cpu: force ONNX CPU.
+    - onnx_gpu: force ONNX Runtime CUDA provider with CPU fallback.
     - onnx_coreml: force ONNX Runtime CoreML provider with CPU fallback.
     - pytorch: force PyTorch with the configured device.
     - pytorch_mps: force PyTorch on Apple's MPS backend.
@@ -949,6 +956,9 @@ def _load_kompress(
     backend = _selected_backend()
     if backend in ("onnx", "onnx_cpu"):
         return _load_kompress_onnx(model_id, use_coreml=False, allow_download=allow_download)
+
+    if backend == "onnx_gpu":
+        return _load_kompress_onnx(model_id, use_coreml=False, use_gpu=True)
 
     if backend == "onnx_coreml":
         return _load_kompress_onnx(model_id, use_coreml=True, allow_download=allow_download)
