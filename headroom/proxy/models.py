@@ -171,6 +171,7 @@ class ProxyConfig:
 
     # Optimization
     optimize: bool = True
+    kompress_enabled: bool = True
     image_optimize: bool = True
     min_tokens_to_crush: int = 500
     max_items_after_crush: int = 50

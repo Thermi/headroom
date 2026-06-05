@@ -262,6 +262,7 @@ def dashboard(port: int, no_open: bool) -> None:
     ),
 )
 @click.option("--no-optimize", is_flag=True, help="Disable optimization (passthrough mode)")
+@click.option("--no-kompress", is_flag=True, help="Disable Kompress ML text compression")
 @click.option("--no-cache", is_flag=True, help="Disable semantic caching")
 @click.option("--no-rate-limit", is_flag=True, help="Disable rate limiting")
 @click.option(
@@ -919,6 +920,7 @@ def proxy(
     http_proxy: str | None,
     intercept_tool_results: bool,
     no_optimize: bool,
+    no_kompress: bool,
     no_cache: bool,
     no_rate_limit: bool,
     protect_tool_results: str | None,
@@ -1179,6 +1181,7 @@ def proxy(
         anthropic_enabled=anthropic_enabled,
         mode=effective_mode,
         optimize=not no_optimize,
+        kompress_enabled=not no_kompress,
         cache_enabled=not no_cache,
         rate_limit_enabled=not no_rate_limit,
         rate_limit_requests_per_minute=rpm if rpm is not None else 60,
