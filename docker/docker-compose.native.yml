@@ -1,10 +1,13 @@
 services:
   cli:
-    image: ${HEADROOM_IMAGE:-ghcr.io/headroomlabs-ai/headroom:latest}
-    entrypoint: ["headroom"]
+    image: ${HEADROOM_IMAGE:-ghcr.io/chopratejas/headroom:latest}
+    # entrypoint: ["headroom"]
+    entrypoint: ["bash"]
     working_dir: /workspace
     stdin_open: true
     tty: true
+    healthcheck:
+      test: ["NONE"]
     environment:
       HOME: /tmp/headroom-home
       # Canonical Headroom filesystem contract (issue #175). Forwarded into
@@ -13,21 +16,33 @@ services:
       # the Docker bind-mount source and is intentionally different.
       HEADROOM_WORKSPACE_DIR: /tmp/headroom-home/.headroom
       HEADROOM_CONFIG_DIR: /tmp/headroom-home/.headroom/config
+      # CLI-filtering dashboard figures require the `rtk` binary inside this
+      # container; it is not installed by this image. See docs/content/docs/docker-install.mdx.
     volumes:
       - ${HEADROOM_WORKSPACE:-.}:/workspace
       - ${HEADROOM_HOST_HOME:?set HEADROOM_HOST_HOME}/.headroom:/tmp/headroom-home/.headroom
       - ${HEADROOM_HOST_HOME:?set HEADROOM_HOST_HOME}/.claude:/tmp/headroom-home/.claude
       - ${HEADROOM_HOST_HOME:?set HEADROOM_HOST_HOME}/.codex:/tmp/headroom-home/.codex
       - ${HEADROOM_HOST_HOME:?set HEADROOM_HOST_HOME}/.gemini:/tmp/headroom-home/.gemini
-    command: ["--help"]
-    scale: 0
+    command: []
+    scale: 1
     env_file: .env
 
   proxy:
-    image: ${HEADROOM_IMAGE:-ghcr.io/headroomlabs-ai/headroom:latest}
+    image: ${HEADROOM_IMAGE:-ghcr.io/chopratejas/headroom:latest}
     entrypoint: ["headroom", "proxy"]
     working_dir: /workspace
     restart: unless-stopped
+    # GPU support: uncomment the deploy block below and set
+    # HEADROOM_GPU_COUNT=all (or a number) to enable GPU passthrough.
+    # Requires nvidia-container-toolkit on the host.
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: ${HEADROOM_GPU_COUNT:-1}
+    #           capabilities: [gpu]
     environment:
       HOME: /tmp/headroom-home
       HEADROOM_HOST: 0.0.0.0
@@ -35,6 +50,10 @@ services:
       # above for rationale.
       HEADROOM_WORKSPACE_DIR: /tmp/headroom-home/.headroom
       HEADROOM_CONFIG_DIR: /tmp/headroom-home/.headroom/config
+# CLI-filtering dashboard figures require the `rtk` binary inside this
+      # container; it is not installed by this image. See docs/content/docs/docker-install.mdx.
+      OPENAI_TARGET_API_URL: https://api.deepseek.com
+      HEADROOM_ANTHROPIC_ENABLED: "false"
     ports:
       - "${HEADROOM_PORT:-8787}:${HEADROOM_PORT:-8787}"
     volumes:
@@ -43,5 +62,5 @@ services:
       - ${HEADROOM_HOST_HOME:?set HEADROOM_HOST_HOME}/.claude:/tmp/headroom-home/.claude
       - ${HEADROOM_HOST_HOME:?set HEADROOM_HOST_HOME}/.codex:/tmp/headroom-home/.codex
       - ${HEADROOM_HOST_HOME:?set HEADROOM_HOST_HOME}/.gemini:/tmp/headroom-home/.gemini
-    command: ["--host", "0.0.0.0", "--port", "${HEADROOM_PORT:-8787}"]
+    command: ["--host", "0.0.0.0", "--port", "${HEADROOM_PORT:-8787}", "--memory", "--code-aware", "--learn", "--backend", "--anyllm"]
     env_file: .env
