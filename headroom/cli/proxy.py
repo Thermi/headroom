@@ -881,19 +881,11 @@ def dashboard(port: int, no_open: bool) -> None:
     "(env: HEADROOM_STATELESS=true)",
 )
 @click.option(
-    "--embedding-server/--no-embedding-server",
+    "--no-anthropic",
+    is_flag=True,
     default=False,
-    help="Run a dedicated embedding server sidecar (Option E). "
-    "Shares a single ONNX embedder + HNSW index across all worker processes, "
-    "saving ~600 MB RSS. Default: disabled (opt-in for testing). "
-    "(env: HEADROOM_EMBEDDING_SERVER=true)",
-)
-@click.option(
-    "--embedding-server-socket",
-    default=None,
-    help="Unix socket path for the embedding server sidecar. "
-    "Default: /tmp/headroom-embed-{port}.sock. "
-    "(env: HEADROOM_EMBEDDING_SERVER_SOCKET)",
+    help="Disable Anthropic API routes entirely. "
+    "Use when you only need OpenAI-compatible endpoints (env: HEADROOM_ANTHROPIC_ENABLED=false)",
 )
 @click.option(
     "--anthropic-extra-headers",
@@ -998,8 +990,7 @@ def proxy(
     telemetry: bool,
     no_telemetry: bool,
     stateless: bool,
-    embedding_server: bool,
-    embedding_server_socket: str | None,
+    no_anthropic: bool,
 ) -> None:
     """Start the optimization proxy server.
 
@@ -1168,6 +1159,12 @@ def proxy(
     if memory_qdrant_api_key is not None:
         qdrant_overrides["memory_qdrant_api_key"] = memory_qdrant_api_key
 
+    # Anthropic routes: CLI --no-anthropic > env var > default True
+    anthropic_enabled = not (
+        no_anthropic
+        or os.environ.get("HEADROOM_ANTHROPIC_ENABLED", "").strip().lower() in ("false", "0", "no", "off")
+    )
+
     config = ProxyConfig(
         host=host,
         port=port,
@@ -1179,6 +1176,7 @@ def proxy(
         gemini_api_url=provider_api_overrides.gemini,
         cloudcode_api_url=provider_api_overrides.cloudcode,
         vertex_api_url=provider_api_overrides.vertex,
+        anthropic_enabled=anthropic_enabled,
         mode=effective_mode,
         optimize=not no_optimize,
         cache_enabled=not no_cache,
@@ -1340,6 +1338,10 @@ def proxy(
     openai_url = provider_api_targets.openai
     cloudcode_url = provider_api_targets.cloudcode
     vertex_url = provider_api_targets.vertex
+    if config.anthropic_enabled:
+        anthropic_route_line = f"  /v1/messages                    → {anthropic_url}"
+    else:
+        anthropic_route_line = "  /v1/messages                    → DISABLED"
     backend_section = ""
 
     if config.backend == "anyllm" or config.backend.startswith("anyllm-"):
@@ -1493,7 +1495,7 @@ Starting proxy server...
 {backend_section}{tuning_section}
 
 Routing:
-  /v1/messages                    → {anthropic_url}
+{anthropic_route_line}
   /v1/chat/completions            → {openai_url}
   /v1/responses                   → {openai_url}  (HTTP + WebSocket)
   /v1internal:streamGenerateContent → {cloudcode_url}

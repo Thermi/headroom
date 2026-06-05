@@ -148,6 +148,9 @@ class ProxyConfig:
     anthropic_extra_headers: dict[str, str] | None = None
     openai_extra_headers: dict[str, str] | None = None
 
+    # Feature flags
+    anthropic_enabled: bool = True  # Set to False to disable Anthropic routes entirely
+
     # Backend: "anthropic" (direct API), "litellm-*" (via LiteLLM), or "anyllm" (via any-llm)
     backend: str = "anthropic"
     bedrock_region: str = "us-west-2"
