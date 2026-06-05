@@ -54,6 +54,8 @@ services:
       # container; it is not installed by this image. See docs/content/docs/docker-install.mdx.
       OPENAI_TARGET_API_URL: https://api.deepseek.com
       HEADROOM_ANTHROPIC_ENABLED: "false"
+      HEADROOM_SILENCE_HEALTH_PROBES: "true"
+      HEADROOM_KOMPRESS_BACKEND: onnx
       HF_HOME: /tmp/hf-cache
       XDG_CACHE_HOME: /tmp/xdg-cache
     ports:
