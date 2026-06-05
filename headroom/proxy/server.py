@@ -470,19 +470,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("headroom.proxy")
 
-LoopExceptionHandler = Callable[[asyncio.AbstractEventLoop, dict[str, Any]], object]
-
-
-class LoopFailureDetails(TypedDict):
-    message: Any | None
-    exception: str | None
-
-
-class LoopHealthState(TypedDict):
-    status: str
-    known_failures: int
-    last_known_failure: LoopFailureDetails | None
-
+_SILENCE_HEALTH_PROBES = os.environ.get("HEADROOM_SILENCE_HEALTH_PROBES", "").lower() in ("1", "true", "yes")
 
 class CompressionQuarantinedError(asyncio.TimeoutError):
     """Compression was skipped while a timed-out worker was still running.
@@ -3082,7 +3070,10 @@ def create_app(config: ProxyConfig | None = None) -> FastAPI:
             safe_headers = redact_for_wire_debug(headers)
         except Exception:
             safe_headers = {"redaction_error": True}
-        logger.info(
+        _health_path = path in ("/livez", "/readyz", "/health")
+        _log_level = logging.DEBUG if _health_path and _SILENCE_HEALTH_PROBES else logging.INFO
+        logger.log(
+            _log_level,
             "event=proxy_inbound_request id=%s method=%s path=%s query=%s client=%s "
             "content_length=%s headers=%s",
             inbound_id,
@@ -3136,7 +3127,8 @@ def create_app(config: ProxyConfig | None = None) -> FastAPI:
             proxy.metrics.record_inbound_response(status_code=response.status_code)
         except Exception:
             logger.debug("record_inbound_response failed", exc_info=True)
-        logger.info(
+        logger.log(
+            _log_level,
             "event=proxy_inbound_response id=%s method=%s path=%s status=%s duration_ms=%.2f",
             inbound_id,
             method,
