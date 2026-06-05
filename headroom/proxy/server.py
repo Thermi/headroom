@@ -1769,7 +1769,7 @@ class HeadroomProxy(
                 await self.memory_handler.ensure_initialized()
             except Exception as exc:  # pragma: no cover - defensive
                 self.warmup.memory_backend.mark_error(str(exc))
-                logger.warning("Memory: backend initialization failed (startup continues): %s", exc)
+                logger.error("Memory: backend initialization failed (startup continues): %s: %s", type(exc).__name__, exc)
             memory_status = self.memory_handler.health_status()
             if memory_status.get("initialized"):
                 self.warmup.memory_backend.mark_loaded(
