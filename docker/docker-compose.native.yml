@@ -62,5 +62,5 @@ services:
       - ${HEADROOM_HOST_HOME:?set HEADROOM_HOST_HOME}/.claude:/tmp/headroom-home/.claude
       - ${HEADROOM_HOST_HOME:?set HEADROOM_HOST_HOME}/.codex:/tmp/headroom-home/.codex
       - ${HEADROOM_HOST_HOME:?set HEADROOM_HOST_HOME}/.gemini:/tmp/headroom-home/.gemini
-    command: ["--host", "0.0.0.0", "--port", "${HEADROOM_PORT:-8787}", "--memory", "--code-aware", "--learn", "--backend", "--anyllm"]
+    command: ["--host", "0.0.0.0", "--port", "${HEADROOM_PORT:-8787}", "--memory", "--code-aware", "--learn"]
     env_file: .env
