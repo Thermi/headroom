@@ -1,7 +1,8 @@
 ARG PYTHON_VERSION=3.13
-ARG UV_VERSION=0.11.18
+ARG UV_VERSION=0.11.19
 ARG DISTROLESS_IMAGE=gcr.io/distroless/python3-debian13
 ARG PYTHON_SITE_PACKAGES=/usr/local/lib/python${PYTHON_VERSION}/site-packages
+
 
 # ---- Build stage: compile native extensions, build wheel ----
 FROM python:${PYTHON_VERSION}-slim AS builder
@@ -28,6 +29,9 @@ RUN apt-get update && \
 
 RUN python -m pip install --no-cache-dir uv==${UV_VERSION}
 
+#ARG HEADROOM_EXTRAS=code,proxy,memory
+ARG HEADROOM_EXTRAS=all
+
 # Rust toolchain for the headroom._core extension. With single-wheel
 # architecture (post-#355), `pip install -e .` invokes maturin via
 # pyproject.toml's [build-system], which calls cargo. No more separate
@@ -48,12 +52,11 @@ COPY Cargo.toml Cargo.lock rust-toolchain.toml ./
 COPY crates/ crates/
 COPY headroom/ headroom/
 
-ARG HEADROOM_EXTRAS=proxy,code
-RUN --mount=type=cache,target=/root/.cache/uv \
-    --mount=type=cache,target=/usr/local/cargo/registry \
-    --mount=type=cache,target=/usr/local/cargo/git \
+RUN echo "setuptools<82" > /tmp/build-constraints.txt
+RUN --mount=type=cache,target=/root/.cargo/registry \
     --mount=type=cache,target=/build/target \
-    uv pip install --system ".[${HEADROOM_EXTRAS}]"
+    PIP_CONSTRAINT=/tmp/build-constraints.txt \
+    pip install --no-cache-dir ".[${HEADROOM_EXTRAS}]"
 
 RUN --mount=type=bind,source=.,target=/context,readonly \
     HEADROOM_BUILD_VERSION="${HEADROOM_BUILD_VERSION}" PYTHON_SITE_PACKAGES="${PYTHON_SITE_PACKAGES}" python - <<'PY'
