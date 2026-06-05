@@ -940,11 +940,14 @@ def _headroom_log_dir() -> Path:
 
 
 def _setup_file_logging() -> None:
-    """Add a RotatingFileHandler to the headroom root logger.
+    """Add a RotatingFileHandler and a StreamHandler to the headroom root logger.
 
-    Writes to ~/.headroom/logs/proxy.log with automatic rotation:
+    File writes to ~/.headroom/logs/proxy.log with automatic rotation:
     - Rotates at 10 MB
     - Keeps 5 backups (~50 MB max)
+
+    Stream output goes to stderr so Headroom messages appear in ``docker logs``
+    (and terminals) alongside third-party library logs.
     """
     from logging.handlers import RotatingFileHandler
 
@@ -952,27 +955,32 @@ def _setup_file_logging() -> None:
         log_dir = _headroom_log_dir()
         log_dir.mkdir(parents=True, exist_ok=True)
         log_path = log_dir / "proxy.log"
-        handler = RotatingFileHandler(
+        file_handler = RotatingFileHandler(
             log_path,
             maxBytes=10 * 1024 * 1024,  # 10 MB
             backupCount=5,
             encoding="utf-8",
         )
-        handler.setLevel(logging.INFO)
-        handler.setFormatter(
-            logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-        )
+        file_handler.setLevel(logging.INFO)
+        fmt = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+        file_handler.setFormatter(fmt)
+
+        stream_handler = logging.StreamHandler()
+        stream_handler.setLevel(logging.INFO)
+        stream_handler.setFormatter(fmt)
+
         # Attach to the headroom root logger so all sub-loggers are captured.
         # Disable propagation to root to avoid duplicate writes when
         # wrap.py redirects stderr to the same log file.
         headroom_logger = logging.getLogger("headroom")
         headroom_logger.setLevel(logging.INFO)
         if not any(isinstance(h, RotatingFileHandler) for h in headroom_logger.handlers):
-            headroom_logger.addHandler(handler)
+            headroom_logger.addHandler(file_handler)
+        headroom_logger.addHandler(stream_handler)
         headroom_logger.propagate = False
-    except OSError:
-        # Non-fatal: can't write logs (read-only fs, permissions, etc.)
-        pass
+    except OSError as exc:
+        import warnings
+        warnings.warn(f"Logging setup failed (non-fatal): {exc}")
 
 
 def is_anthropic_auth(headers: dict[str, str]) -> bool:
