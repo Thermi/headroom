@@ -2386,6 +2386,17 @@ def create_app(config: ProxyConfig | None = None) -> FastAPI:
     # to the user's live proxy.log.
     _setup_file_logging()
 
+    # Probe GPU availability for Kompress model inference.
+    try:
+        from headroom.transforms.kompress_compressor import _is_gpu_available as _probe_gpu
+
+        if _probe_gpu():
+            logger.info("GPU detected — Kompress ONNX will use CUDAExecutionProvider")
+        else:
+            logger.info("No GPU detected — Kompress ONNX will use CPUExecutionProvider")
+    except Exception:
+        pass
+
     # Register model costs with litellm so cost_per_token() resolves models
     # without falling through to get_llm_provider() (which prints the "Provider
     # List" banner and raises). Also suppress debug info/verbose globally.

@@ -483,6 +483,18 @@ def _is_onnx_available() -> bool:
         return False
 
 
+def _is_gpu_available() -> bool:
+    """Check if ONNX Runtime can use a GPU (CUDA provider is functional)."""
+    if not _is_onnx_available():
+        return False
+    try:
+        import onnxruntime as ort
+
+        return "CUDAExecutionProvider" in ort.get_available_providers()
+    except Exception:
+        return False
+
+
 def _is_pytorch_available() -> bool:
     """Check if full PyTorch stack is available (requires [ml] extra)."""
     try:
@@ -732,10 +744,20 @@ def _load_kompress_onnx(
                 "CPUExecutionProvider",
             ]
         elif use_gpu:
-            providers = [
-                "CUDAExecutionProvider",
-                "CPUExecutionProvider",
-            ]
+            if _is_gpu_available():
+                providers = [
+                    "CUDAExecutionProvider",
+                    "CPUExecutionProvider",
+                ]
+                logger.info("Kompress ONNX: CUDA GPU detected — using CUDAExecutionProvider")
+            else:
+                logger.warning(
+                    "Kompress ONNX: no CUDA GPU available (CUDAExecutionProvider not in ort.get_available_providers()); "
+                    "falling back to CPU"
+                )
+                providers = ["CPUExecutionProvider"]
+                use_gpu = False
+                backend = "onnx"
         else:
             providers = ["CPUExecutionProvider"]
 

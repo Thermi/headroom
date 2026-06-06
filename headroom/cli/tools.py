@@ -23,7 +23,11 @@ from collections.abc import Sequence
 
 import click
 
+import json as _json
+import logging
+
 from headroom import binaries
+from headroom.transforms.kompress_compressor import _is_gpu_available, is_kompress_available
 
 from .main import main
 
@@ -137,11 +141,19 @@ def tools_list_cmd() -> None:
 def tools_doctor_cmd(emit_json: bool) -> None:
     """Check the status of every bundled tool."""
     rows = binaries.status()
-    if emit_json:
-        import json as _json
+    # Append GPU status row
+    kompress = is_kompress_available()
+    gpu = _is_gpu_available() if kompress else False
+    if gpu:
+        rows.append({"tool": "gpu", "state": "available", "version": "", "platform": "cuda", "path": "CUDAExecutionProvider"})
+    elif kompress:
+        rows.append({"tool": "gpu", "state": "unavailable", "version": "", "platform": "cpu", "path": "CPUExecutionProvider"})
+    else:
+        rows.append({"tool": "gpu", "state": "unknown", "version": "", "platform": "", "path": "Kompress not installed"})
 
+    if emit_json:
         click.echo(_json.dumps(rows, indent=2))
-        broken = any(r["state"] in ("missing", "unsupported-platform") for r in rows)
+        broken = any(r["state"] in ("missing", "unsupported-platform", "unavailable") for r in rows)
         sys.exit(1 if broken else 0)
 
     from rich.console import Console
@@ -149,25 +161,28 @@ def tools_doctor_cmd(emit_json: bool) -> None:
 
     console = Console()
     table = Table(show_header=True, header_style="bold")
-    for col in ("tool", "state", "version", "platform", "path"):
+    for col in ("check", "state", "version", "detail"):
         table.add_column(col)
     state_style = {
         "on-path": "green",
         "cached": "green",
+        "available": "green",
         "missing": "yellow",
+        "unknown": "yellow",
         "unsupported-platform": "red",
+        "unavailable": "yellow",
     }
     broken = False
     for r in rows:
         style = state_style.get(r["state"], "white")
-        if r["state"] in ("missing", "unsupported-platform"):
+        if r["state"] in ("missing", "unsupported-platform", "unavailable"):
             broken = True
+        platform = r.get("platform", "") or ""
         table.add_row(
             r["tool"],
             f"[{style}]{r['state']}[/{style}]",
-            str(r.get("version")),
-            r.get("platform", ""),
-            r.get("path") or "-",
+            str(r.get("version", "")),
+            f"{platform} {r.get('path', '')}".strip(),
         )
     console.print(table)
     from rich.markup import escape as _escape
