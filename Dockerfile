@@ -54,16 +54,16 @@ RUN pip install --no-cache-dir maturin setuptools-rust patchelf
 # without building the headroom package itself.  Only pyproject.toml and
 # the lockfile invalidate this cache; source-code edits do not.
 COPY pyproject.toml uv.lock ./
-RUN python -c "
-import tomllib, pathlib, sys
+RUN python <<SCRIPT > /tmp/runtime-deps.txt
+import tomllib, pathlib
 p = tomllib.loads(pathlib.Path('pyproject.toml').read_text())
 deps = list(p['project'].get('dependencies', []))
 for name, group in p['project'].get('optional-dependencies', {}).items():
     if name not in ('dev', 'test', 'doc'):
         deps.extend(group)
-sys.stdout.write('\n'.join(deps))
-" > /tmp/runtime-deps.txt && \
-    pip install --no-cache-dir -r /tmp/runtime-deps.txt
+print('\n'.join(deps))
+SCRIPT
+RUN pip install --no-cache-dir -r /tmp/runtime-deps.txt
 
 # Phase 2 — copy the Rust workspace + Python source and build the wheel.
 # Cache-busted by actual source changes only; dep install stays cached.
