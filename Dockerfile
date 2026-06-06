@@ -228,6 +228,7 @@ RUN apt-get update && \
 COPY --from=builder ${PYTHON_SITE_PACKAGES} ${PYTHON_SITE_PACKAGES}
 COPY --from=builder /usr/local/bin/headroom /usr/local/bin/headroom
 COPY --from=builder /root/.headroom/bin/rtk /usr/local/bin/rtk
+COPY --from=builder /opt/headroom/kompress-int8.onnx /opt/headroom/kompress-int8.onnx
 COPY --from=cuda-libs /usr/local/cuda-12.6 /usr/local/cuda-12.6
 # cuDNN is installed to system paths (/usr/lib/x86_64-linux-gnu/) in the
 # nvidia/cuda image, not inside the CUDA toolkit directory.  Copy it into
@@ -275,8 +276,8 @@ ARG PYTHON_SITE_PACKAGES
 
 COPY --from=builder ${PYTHON_SITE_PACKAGES} ${PYTHON_SITE_PACKAGES}
 COPY --from=builder /root/.headroom/bin/rtk /usr/local/bin/rtk
+COPY --from=builder /opt/headroom/kompress-int8.onnx /opt/headroom/kompress-int8.onnx
 COPY --from=cuda-libs /usr/local/cuda-12.6 /usr/local/cuda-12.6
-COPY --from=cuda-libs /usr/lib/x86_64-linux-gnu/libcudnn* /usr/local/cuda-12.6/lib64/
 
 USER ${RUNTIME_USER}
 WORKDIR /app
