@@ -80,16 +80,22 @@ ARG HEADROOM_EXTRAS=all
 # Phase 2 — copy the Rust workspace + Python source and build the wheel.
 # Cache-busted by actual source changes only; dep install stays cached.
 COPY Cargo.toml Cargo.lock rust-toolchain.toml ./
+COPY .git .git/
 COPY crates/ crates/
 COPY headroom/ headroom/
 COPY README.md ./
 
-# Inject build-time metadata (git commit, build timestamp) into _build_info.py
-# so the baked site-packages carry them for the version startup banner.
-RUN GIT="${GIT_COMMIT:-unknown}" BUILD="${BUILD_TIME:-unknown}" && \
+# Inject build-time metadata (git commit, build timestamp) into _build_info.py.
+# When .git is available (build context from a git checkout), pull the short
+# commit hash directly.  Otherwise fall back to the GIT_COMMIT / BUILD_TIME
+# build args (CI / docker-compose).
+RUN GIT="${GIT_COMMIT:-$(git rev-parse --short HEAD 2>/dev/null || echo unknown)}" \
+    BUILD="${BUILD_TIME:-$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo unknown)}" && \
     sed -i "s/BUILD_GIT_COMMIT: str = ''/BUILD_GIT_COMMIT: str = '$GIT'/" headroom/_build_info.py && \
     sed -i "s/BUILD_TIME: str = ''/BUILD_TIME: str = '$BUILD'/" headroom/_build_info.py && \
     echo "headroom/_build_info.py injected: commit=$GIT build=$BUILD"
+# Remove .git to keep the builder layer lean — it is not needed at runtime.
+RUN rm -rf .git
 
 RUN echo "setuptools<82" > /tmp/build-constraints.txt
 RUN --mount=type=cache,target=/root/.cache/pip \
