@@ -21,7 +21,7 @@ services:
     environment:
       HOME: /tmp/headroom-home
       HEADROOM_WORKSPACE_DIR: /tmp/headroom-home/.headroom
-      HEADROOM_CONFIG_DIR: /tmp/headroom-home/.headroom/config
+HEADROOM_CONFIG_DIR: /tmp/headroom-home/.headroom/config
       # CLI-filtering dashboard figures require the `rtk` binary inside this
       # container; it is not installed by this image. See docs/content/docs/docker-install.mdx.
     volumes:
@@ -71,9 +71,6 @@ services:
       HF_HOME: /tmp/hf-cache
       XDG_CACHE_HOME: /tmp/xdg-cache
       HEADROOM_KOMPRESS_ONNX_PATH: /opt/headroom/kompress-int8.onnx
-      # Prepend the mounted source so code changes take effect on restart
-      # without rebuilding the image.
-      PYTHONPATH: /headroom-src
     ports:
       - "${HEADROOM_PORT:-8787}:${HEADROOM_PORT:-8787}"
     volumes:
@@ -88,8 +85,5 @@ services:
       # Mount the locally-exported ONNX model so the proxy loads it directly
       # without downloading from HuggingFace at startup.
       - ${PWD:-.}/kompress-int8.onnx:/opt/headroom/kompress-int8.onnx
-      # Mount the headroom source tree so code changes take effect on
-      # container restart instead of requiring a full image rebuild.
-      - ${PWD:-.}/headroom:/headroom-src/headroom
     command: ["--host", "0.0.0.0", "--port", "${HEADROOM_PORT:-8787}", "--code-aware", "--memory"]
     env_file: .env
