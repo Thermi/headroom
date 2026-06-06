@@ -548,25 +548,11 @@ class LiteLLMBackend(Backend):
 
         # For Bedrock, fetch model map dynamically from AWS API
         if provider == "bedrock":
-            # litellm takes the botocore-backed `_auth_with_aws_session_token`
-            # path as soon as temporary credentials (AWS_SESSION_TOKEN) are
-            # present. botocore is an optional dependency (the `bedrock`
-            # extra); when it is absent — as in the slim default Docker image —
-            # the failure only surfaces at request time as a misleading
-            # `authentication_error: No module named 'botocore'` (#1551). Fail
-            # fast at startup with an actionable message instead.
-            if os.environ.get("AWS_SESSION_TOKEN") and importlib.util.find_spec("botocore") is None:
-                raise ImportError(
-                    "Bedrock with temporary credentials (AWS_SESSION_TOKEN) requires "
-                    "botocore, which is not installed. Install the bedrock extra: "
-                    "pip install 'headroom-ai[bedrock]' (or pip install botocore)."
-                )
-            self._model_map = _fetch_bedrock_inference_profiles(region, profile_name=profile_name)
-            litellm.set_verbose = False  # Reduce noise
+            self._model_map = _fetch_bedrock_inference_profiles(region)
         else:
             self._model_map = self._config.model_map
 
-        # Operator override map (all providers; only meaningful for Bedrock
+# Operator override map (all providers; only meaningful for Bedrock
         # today). Lets you pin a plain model name to a specific target the
         # AWS discovery can't disambiguate — e.g. a per-user application
         # inference profile ARN for cost attribution. See
@@ -579,6 +565,8 @@ class LiteLLMBackend(Backend):
                 f"Loaded {len(self._model_overrides)} Bedrock model override(s) "
                 f"from HEADROOM_BEDROCK_MODEL_MAP: {sorted(self._model_overrides)}"
             )
+        litellm.set_verbose = False
+        litellm.suppress_debug_info = True
 
         logger.info(f"LiteLLM backend initialized (provider={provider}, region={region})")
 
