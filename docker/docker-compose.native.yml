@@ -71,6 +71,9 @@ services:
       HF_HOME: /tmp/hf-cache
       XDG_CACHE_HOME: /tmp/xdg-cache
       HEADROOM_KOMPRESS_ONNX_PATH: /opt/headroom/kompress-int8.onnx
+      # Prepend the mounted source so code changes take effect on restart
+      # without rebuilding the image.
+      PYTHONPATH: /headroom-src
     ports:
       - "${HEADROOM_PORT:-8787}:${HEADROOM_PORT:-8787}"
     volumes:
@@ -85,5 +88,8 @@ services:
       # Mount the locally-exported ONNX model so the proxy loads it directly
       # without downloading from HuggingFace at startup.
       - ${PWD:-.}/kompress-int8.onnx:/opt/headroom/kompress-int8.onnx
+      # Mount the headroom source tree so code changes take effect on
+      # container restart instead of requiring a full image rebuild.
+      - ${PWD:-.}/headroom:/headroom-src/headroom
     command: ["--host", "0.0.0.0", "--port", "${HEADROOM_PORT:-8787}", "--code-aware", "--memory"]
     env_file: .env
