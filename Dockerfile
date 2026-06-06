@@ -30,7 +30,8 @@ RUN apt-get update && \
     git \
   && rm -rf /var/lib/apt/lists/*
 
-RUN python -m pip install --no-cache-dir uv==${UV_VERSION}
+RUN --mount=type=cache,target=/root/.cache/pip \
+    python -m pip install uv==${UV_VERSION}
 
 #ARG HEADROOM_EXTRAS=code,proxy,memory
 ARG HEADROOM_EXTRAS=all
@@ -48,7 +49,8 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
 WORKDIR /build
 
 # Install build-time system deps (maturin, setuptools-rust) once.
-RUN pip install --no-cache-dir maturin setuptools-rust patchelf
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install maturin setuptools-rust patchelf
 
 # Phase 1 — resolve and install all Python dependencies from the lockfile,
 # without building the headroom package itself.  Only pyproject.toml and
@@ -63,7 +65,8 @@ for name, group in p['project'].get('optional-dependencies', {}).items():
         deps.extend(group)
 print('\n'.join(deps))
 SCRIPT
-RUN pip install --no-cache-dir -r /tmp/runtime-deps.txt
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install -r /tmp/runtime-deps.txt
 
 # Phase 2 — copy the Rust workspace + Python source and build the wheel.
 # Cache-busted by actual source changes only; dep install stays cached.
@@ -73,10 +76,11 @@ COPY headroom/ headroom/
 COPY README.md ./
 
 RUN echo "setuptools<82" > /tmp/build-constraints.txt
-RUN --mount=type=cache,target=/root/.cargo/registry \
+RUN --mount=type=cache,target=/root/.cache/pip \
+    --mount=type=cache,target=/root/.cargo/registry \
     --mount=type=cache,target=/build/target \
     PIP_CONSTRAINT=/tmp/build-constraints.txt \
-    pip install --no-cache-dir --no-build-isolation --no-deps ".[${HEADROOM_EXTRAS}]"
+    pip install --no-build-isolation --no-deps ".[${HEADROOM_EXTRAS}]"
 
 RUN --mount=type=bind,source=.,target=/context,readonly \
     HEADROOM_BUILD_VERSION="${HEADROOM_BUILD_VERSION}" PYTHON_SITE_PACKAGES="${PYTHON_SITE_PACKAGES}" python - <<'PY'
@@ -170,7 +174,8 @@ RUN cd /tmp && python -c "from headroom._core import DiffCompressor, SmartCrushe
 RUN python -c "from headroom.rtk.installer import download_rtk; download_rtk()"
 
 # Replace CPU-only onnxruntime with GPU-enabled onnxruntime-gpu
-RUN pip install --no-cache-dir --force-reinstall "onnxruntime-gpu>=1.16.0"
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --force-reinstall "onnxruntime-gpu>=1.16.0"
 
 # ---- Runtime stage (python-slim): supports root/nonroot via build arg ----
 FROM python:${PYTHON_VERSION}-slim AS runtime-slim-base
