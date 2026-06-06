@@ -483,16 +483,40 @@ def _is_onnx_available() -> bool:
         return False
 
 
-def _is_gpu_available() -> bool:
-    """Check if ONNX Runtime can use a GPU (CUDA provider is functional)."""
+# GPU providers ORT supports, ordered by preference for Kompress inference.
+_GPU_PROVIDERS: list[str] = [
+    "CUDAExecutionProvider",
+    "ROCMExecutionProvider",
+    "DmlExecutionProvider",
+    "TensorrtExecutionProvider",
+    "OpenVINOExecutionProvider",
+]
+
+
+def _available_gpu_providers() -> list[str]:
+    """Return the subset of GPU providers that are available in this ORT build."""
     if not _is_onnx_available():
-        return False
+        return []
     try:
         import onnxruntime as ort
 
-        return "CUDAExecutionProvider" in ort.get_available_providers()
+        available = set(ort.get_available_providers())
+        return [p for p in _GPU_PROVIDERS if p in available]
     except Exception:
-        return False
+        return []
+
+
+def _is_gpu_available() -> bool:
+    """Check if ONNX Runtime can use any GPU provider."""
+    return len(_available_gpu_providers()) > 0
+
+
+def _best_gpu_providers() -> list[str]:
+    """Return the best GPU provider(s) + CPU fallback for model session."""
+    gpu = _available_gpu_providers()
+    if not gpu:
+        return ["CPUExecutionProvider"]
+    return [gpu[0], "CPUExecutionProvider"]
 
 
 def _is_pytorch_available() -> bool:
@@ -744,16 +768,19 @@ def _load_kompress_onnx(
                 "CPUExecutionProvider",
             ]
         elif use_gpu:
-            if _is_gpu_available():
-                providers = [
-                    "CUDAExecutionProvider",
-                    "CPUExecutionProvider",
-                ]
-                logger.info("Kompress ONNX: CUDA GPU detected — using CUDAExecutionProvider")
+            gpu_providers = _available_gpu_providers()
+            if gpu_providers:
+                providers = [gpu_providers[0], "CPUExecutionProvider"]
+                logger.info(
+                    "Kompress ONNX: GPU detected (%s) — using %s",
+                    gpu_providers[0],
+                    gpu_providers[0],
+                )
             else:
                 logger.warning(
-                    "Kompress ONNX: no CUDA GPU available (CUDAExecutionProvider not in ort.get_available_providers()); "
-                    "falling back to CPU"
+                    "Kompress ONNX: no GPU provider available "
+                    "(ort.get_available_providers()=%s); falling back to CPU",
+                    ort.get_available_providers() if hasattr(ort, "get_available_providers") else "?",
                 )
                 providers = ["CPUExecutionProvider"]
                 use_gpu = False

@@ -2388,10 +2388,11 @@ def create_app(config: ProxyConfig | None = None) -> FastAPI:
 
     # Probe GPU availability for Kompress model inference.
     try:
-        from headroom.transforms.kompress_compressor import _is_gpu_available as _probe_gpu
+        from headroom.transforms.kompress_compressor import _available_gpu_providers as _probe_gpu
 
-        if _probe_gpu():
-            logger.info("GPU detected — Kompress ONNX will use CUDAExecutionProvider")
+        gpu = _probe_gpu()
+        if gpu:
+            logger.info("GPU detected — Kompress ONNX will use %s", gpu[0])
         else:
             logger.info("No GPU detected — Kompress ONNX will use CPUExecutionProvider")
     except Exception:
