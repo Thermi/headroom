@@ -7,8 +7,8 @@ ARG PYTHON_SITE_PACKAGES=/usr/local/lib/python${PYTHON_VERSION}/site-packages
 # ---- CUDA runtime libraries stage (GPU support for onnxruntime-gpu) ----
 FROM nvidia/cuda:12.6.3-cudnn-runtime-ubuntu22.04 AS cuda-libs
 
-# ---- Build stage: compile native extensions, build wheel ----
-FROM python:${PYTHON_VERSION}-slim AS builder
+# ---- Rust toolchain stage (rarely changes; cached independently) ----
+FROM python:${PYTHON_VERSION}-slim AS rust-toolchain
 
 ARG UV_VERSION
 ARG PYTHON_SITE_PACKAGES
@@ -42,6 +42,9 @@ ENV CARGO_HOME=/usr/local/cargo \
     PATH=/usr/local/cargo/bin:${PATH}
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
       | sh -s -- -y --no-modify-path --profile minimal -c rustfmt -c clippy --default-toolchain 1.95.0
+
+# ---- Build stage: compile native extensions, build wheel ----
+FROM rust-toolchain AS builder
 
 WORKDIR /build
 
