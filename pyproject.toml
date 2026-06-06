@@ -451,11 +451,8 @@ module = [
     "headroom.proxy.rate_limiter",
     "headroom.proxy.request_logger",
     "headroom.proxy.helpers",
-    "headroom.integrations.langchain",
-    "headroom.integrations.mcp",
     "headroom.ccr.mcp_server",
     "headroom.relevance.embedding",
-    "headroom.reporting.generator",
 ]
 disallow_untyped_defs = false
 
@@ -472,11 +469,6 @@ warn_return_any = false
 [[tool.mypy.overrides]]
 module = ["headroom.proxy.handlers.*"]
 disallow_untyped_defs = false
-ignore_errors = true
-
-# Ignore third-party stubs with syntax errors
-[[tool.mypy.overrides]]
-module = ["mlx.*"]
 ignore_errors = true
 
 [tool.pytest.ini_options]

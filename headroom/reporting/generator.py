@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     pass
 
 
-def _get_jinja2_template(template_str: str):
+def _get_jinja2_template(template_str: str) -> Any:
     """Lazily import jinja2 and create template."""
     try:
         from jinja2 import Template
