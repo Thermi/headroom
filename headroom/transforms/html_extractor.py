@@ -30,6 +30,11 @@ logging.getLogger("trafilatura").setLevel(logging.CRITICAL)
 
 logger = logging.getLogger(__name__)
 
+# Silence trafilatura's own noisy WARNING about "discarding data: None" when it
+# receives unparseable content. We handle None return ourselves at the call site
+# and don't need the library's internal diagnostics flooding proxy logs.
+logging.getLogger("trafilatura.core").setLevel(logging.ERROR)
+
 
 @dataclass
 class HTMLExtractionResult:
