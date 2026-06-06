@@ -86,8 +86,9 @@ def export(
                 ).last_hidden_state
                 # Token head: softmax over 2 classes, take class-1 probability
                 token_probs = torch.softmax(self.inner.token_head(hidden), dim=-1)[:, :, 1]
-                # Span head: 1D CNN → sigmoid → importance score
-                span_scores = self.inner.span_conv(hidden.transpose(1, 2)).squeeze(1)
+                # Span head: 2D CNN (dummy height dim for CUDA compat)
+                span_scores = self.inner.span_conv(hidden.transpose(1, 2).unsqueeze(2))
+                span_scores = span_scores.view(hidden.size(0), -1)
                 return token_probs * (0.5 + 0.5 * span_scores)
 
     export_model = KompressONNX(model)
