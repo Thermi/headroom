@@ -66,5 +66,8 @@ services:
       - ${HEADROOM_HOST_HOME:?set HEADROOM_HOST_HOME}/.claude:/tmp/headroom-home/.claude
       - ${HEADROOM_HOST_HOME:?set HEADROOM_HOST_HOME}/.codex:/tmp/headroom-home/.codex
       - ${HEADROOM_HOST_HOME:?set HEADROOM_HOST_HOME}/.gemini:/tmp/headroom-home/.gemini
-    command: ["--host", "0.0.0.0", "--port", "${HEADROOM_PORT:-8787}", "--code-aware"]
+      # Bind-mount host HuggingFace cache so pre-downloaded Kompress models
+      # are loaded from disk at container startup (no re-download on restart)
+      - ${HEADROOM_HOST_HOME:?set HEADROOM_HOST_HOME}/.cache/huggingface:/tmp/hf-cache
+    command: ["--host", "0.0.0.0", "--port", "${HEADROOM_PORT:-8787}", "--code-aware", "--no-learn"]
     env_file: .env
