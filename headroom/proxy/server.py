@@ -2386,17 +2386,83 @@ def create_app(config: ProxyConfig | None = None) -> FastAPI:
     # to the user's live proxy.log.
     _setup_file_logging()
 
-    # Suppress litellm's "Provider List" print before any request can trigger
-    # a lazy import of the litellm module (via cost.py, savings_tracker.py, etc.).
-    # litellm.get_llm_provider() prints a red banner with a provider-list URL
-    # when it cannot resolve a model AND suppress_debug_info is False. We import
-    # early here so the flag is in place before any per-request code path touches
-    # the module.
+    # Register model costs with litellm so cost_per_token() resolves models
+    # without falling through to get_llm_provider() (which prints the "Provider
+    # List" banner and raises). Also suppress debug info/verbose globally.
     try:
         import litellm as _litellm
 
         _litellm.suppress_debug_info = True
         _litellm.set_verbose = False
+
+        # DeepSeek models
+        _litellm.model_cost["deepseek-chat"] = {
+            "input_cost_per_token": 0.0000002,
+            "output_cost_per_token": 0.0000011,
+            "litellm_provider": "deepseek",
+            "mode": "chat",
+        }
+        _litellm.model_cost["deepseek-reasoner"] = {
+            "input_cost_per_token": 0.00000055,
+            "output_cost_per_token": 0.00000219,
+            "litellm_provider": "deepseek",
+            "mode": "chat",
+        }
+        _litellm.model_cost["deepseek-v4-flash"] = {
+            "input_cost_per_token": 0.0000002,
+            "output_cost_per_token": 0.0000011,
+            "litellm_provider": "deepseek",
+            "mode": "chat",
+        }
+        _litellm.model_cost["deepseek-v4-pro"] = {
+            "input_cost_per_token": 0.000001,
+            "output_cost_per_token": 0.000004,
+            "litellm_provider": "deepseek",
+            "mode": "chat",
+        }
+
+        # Claude 4.6 models
+        _litellm.model_cost["claude-sonnet-4-6"] = {
+            "input_cost_per_token": 0.000003,
+            "output_cost_per_token": 0.000015,
+            "cache_read_input_token_cost": 0.0000003,
+            "cache_creation_input_token_cost": 0.00000375,
+            "litellm_provider": "anthropic",
+            "mode": "chat",
+            "supports_prompt_caching": True,
+        }
+        _litellm.model_cost["claude-opus-4-6"] = {
+            "input_cost_per_token": 0.000015,
+            "output_cost_per_token": 0.000075,
+            "cache_read_input_token_cost": 0.0000015,
+            "cache_creation_input_token_cost": 0.00001875,
+            "litellm_provider": "anthropic",
+            "mode": "chat",
+            "supports_prompt_caching": True,
+        }
+        _litellm.model_cost["claude-haiku-4-5-20251001"] = {
+            "input_cost_per_token": 0.000001,
+            "output_cost_per_token": 0.000005,
+            "cache_read_input_token_cost": 0.0000001,
+            "cache_creation_input_token_cost": 0.00000125,
+            "litellm_provider": "anthropic",
+            "mode": "chat",
+            "supports_prompt_caching": True,
+        }
+
+        # GPT models
+        _litellm.model_cost["gpt-4o"] = {
+            "input_cost_per_token": 0.0000025,
+            "output_cost_per_token": 0.00001,
+            "litellm_provider": "openai",
+            "mode": "chat",
+        }
+        _litellm.model_cost["gpt-4.1"] = {
+            "input_cost_per_token": 0.000002,
+            "output_cost_per_token": 0.000008,
+            "litellm_provider": "openai",
+            "mode": "chat",
+        }
     except ImportError:
         pass
 
