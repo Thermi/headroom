@@ -948,39 +948,53 @@ def _setup_file_logging() -> None:
 
     Stream output goes to stderr so Headroom messages appear in ``docker logs``
     (and terminals) alongside third-party library logs.
+
+    If the configured log directory is not writable, falls back to a temporary
+    directory so logging is never silently lost.
     """
+    import tempfile
+    import warnings
     from logging.handlers import RotatingFileHandler
 
+    log_dir = _headroom_log_dir()
     try:
-        log_dir = _headroom_log_dir()
         log_dir.mkdir(parents=True, exist_ok=True)
-        log_path = log_dir / "proxy.log"
-        file_handler = RotatingFileHandler(
-            log_path,
-            maxBytes=10 * 1024 * 1024,  # 10 MB
-            backupCount=5,
-            encoding="utf-8",
-        )
-        file_handler.setLevel(logging.INFO)
-        fmt = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-        file_handler.setFormatter(fmt)
-
-        stream_handler = logging.StreamHandler()
-        stream_handler.setLevel(logging.INFO)
-        stream_handler.setFormatter(fmt)
-
-        # Attach to the headroom root logger so all sub-loggers are captured.
-        # Disable propagation to root to avoid duplicate writes when
-        # wrap.py redirects stderr to the same log file.
-        headroom_logger = logging.getLogger("headroom")
-        headroom_logger.setLevel(logging.INFO)
-        if not any(isinstance(h, RotatingFileHandler) for h in headroom_logger.handlers):
-            headroom_logger.addHandler(file_handler)
-        headroom_logger.addHandler(stream_handler)
-        headroom_logger.propagate = False
     except OSError as exc:
-        import warnings
-        warnings.warn(f"Logging setup failed (non-fatal): {exc}")
+        warnings.warn(f"Logging to {log_dir} failed ({exc}), falling back to temp directory")
+        try:
+            log_dir = Path(tempfile.mkdtemp(prefix="headroom-logs-"))
+        except OSError as exc2:
+            warnings.warn(f"Logging setup failed (non-fatal): {exc2}")
+            log_dir = None
+
+    fmt = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+
+    stream_handler = logging.StreamHandler()
+    stream_handler.setLevel(logging.INFO)
+    stream_handler.setFormatter(fmt)
+
+    headroom_logger = logging.getLogger("headroom")
+    headroom_logger.setLevel(logging.INFO)
+    headroom_logger.addHandler(stream_handler)
+
+    if log_dir is not None:
+        try:
+            log_path = log_dir / "proxy.log"
+            file_handler = RotatingFileHandler(
+                log_path,
+                maxBytes=10 * 1024 * 1024,  # 10 MB
+                backupCount=5,
+                encoding="utf-8",
+            )
+            file_handler.setLevel(logging.INFO)
+            file_handler.setFormatter(fmt)
+
+            if not any(isinstance(h, RotatingFileHandler) for h in headroom_logger.handlers):
+                headroom_logger.addHandler(file_handler)
+        except OSError as exc:
+            warnings.warn(f"Logging setup failed (non-fatal): {exc}")
+
+    headroom_logger.propagate = False
 
 
 def is_anthropic_auth(headers: dict[str, str]) -> bool:
