@@ -1,12 +1,16 @@
 """Re-export Kompress ONNX model from PyTorch with GPU-optimized settings.
 
 Usage:
-    python scripts/export_kompress_onnx.py                          # default: onnx/kompress-int8.onnx
-    python scripts/export_kompress_onnx.py --opset 21               # newer opset
-    python scripts/export_kompress_onnx.py --output ./custom.onnx   # custom path
+    python scripts/export_kompress_onnx.py                              # default: onnx/kompress-int8.onnx
+    python scripts/export_kompress_onnx.py --opset 21                   # newer opset
+    python scripts/export_kompress_onnx.py --output /tmp/my-model.onnx  # custom path
+
+    Headroom loads the exported model via HEADROOM_KOMPRESS_ONNX_PATH.
+    No HuggingFace upload needed — keep the file local.
 
 Requirements:
     pip install headroom-ai[ml]  (torch, transformers, safetensors)
+    pip install onnxruntime onnxruntime.quantization  (for INT8 quantize step)
 """
 
 from __future__ import annotations
@@ -148,8 +152,9 @@ def export(
         print(f"Verification failed (ONNX load error): {exc}")
         sys.exit(1)
 
-    print(f"Done — re-upload to HuggingFace with:\n"
-          f"  huggingface-cli upload {HF_MODEL_ID} {output_path} onnx/kompress-int8.onnx")
+    print(f"Done — saved to {output_path}")
+    print(f"To use this export, set:\n"
+          f"  export HEADROOM_KOMPRESS_ONNX_PATH={os.path.abspath(output_path)}")
 
 
 if __name__ == "__main__":
