@@ -108,6 +108,10 @@ def export(
         },
         opset_version=opset,
         do_constant_folding=True,
+        # Embed weights directly in the .onnx file instead of using a
+        # separate .onnx.data file.  This makes the model self-contained
+        # and avoids file-path issues at load time in Docker.
+        large_model=False,
     )
     print(f"Exported to {output_path}")
 
