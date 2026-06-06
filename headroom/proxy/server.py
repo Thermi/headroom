@@ -2386,6 +2386,20 @@ def create_app(config: ProxyConfig | None = None) -> FastAPI:
     # to the user's live proxy.log.
     _setup_file_logging()
 
+    # Suppress litellm's "Provider List" print before any request can trigger
+    # a lazy import of the litellm module (via cost.py, savings_tracker.py, etc.).
+    # litellm.get_llm_provider() prints a red banner with a provider-list URL
+    # when it cannot resolve a model AND suppress_debug_info is False. We import
+    # early here so the flag is in place before any per-request code path touches
+    # the module.
+    try:
+        import litellm as _litellm
+
+        _litellm.suppress_debug_info = True
+        _litellm.set_verbose = False
+    except ImportError:
+        pass
+
     config = config or ProxyConfig()
 
     # Defensive re-apply of file-backed settings for embedded/non-CLI callers
