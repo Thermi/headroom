@@ -84,7 +84,6 @@ COPY .git .git/
 COPY crates/ crates/
 COPY headroom/ headroom/
 COPY README.md ./
-COPY scripts/export_kompress_onnx.py export_kompress_onnx.py
 
 # Inject build-time metadata (git commit, build timestamp) into _build_info.py.
 # When .git is available (build context from a git checkout), pull the short
@@ -200,20 +199,6 @@ RUN python -c "from headroom.rtk.installer import download_rtk; download_rtk()"
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --system --force-reinstall "onnxruntime-gpu>=1.16.0"
 
-# Re-export the Kompress ONNX model with a newer opset and bake it into the
-# image so inference never waits for a HuggingFace download at cold start.
-# Requires [ml] extras (already installed by HEADROOM_EXTRAS=all).
-# The baked path is advertised to the runtime via HEADROOM_KOMPRESS_ONNX_PATH.
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install --system onnxscript && \
-    mkdir -p /opt/headroom && \
-    python export_kompress_onnx.py \
-        --output /opt/headroom/kompress-int8.onnx \
-        --opset 18 \
-        --no-quantize && \
-    rm -f export_kompress_onnx.py && \
-    rm -rf /root/.cache/huggingface/hub
-
 # ---- Runtime stage (python-slim): supports root/nonroot via build arg ----
 FROM python:${PYTHON_VERSION}-slim AS runtime-slim-base
 
@@ -228,7 +213,6 @@ RUN apt-get update && \
 COPY --from=builder ${PYTHON_SITE_PACKAGES} ${PYTHON_SITE_PACKAGES}
 COPY --from=builder /usr/local/bin/headroom /usr/local/bin/headroom
 COPY --from=builder /root/.headroom/bin/rtk /usr/local/bin/rtk
-COPY --from=builder /opt/headroom/kompress-int8.onnx /opt/headroom/kompress-int8.onnx
 COPY --from=cuda-libs /usr/local/cuda-12.6 /usr/local/cuda-12.6
 # cuDNN is installed to system paths (/usr/lib/x86_64-linux-gnu/) in the
 # nvidia/cuda image, not inside the CUDA toolkit directory.  Copy it into
@@ -251,8 +235,7 @@ WORKDIR ${RUNTIME_HOME}
 ENV HEADROOM_HOST=0.0.0.0 \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    LD_LIBRARY_PATH=/usr/local/cuda-12.6/lib64:${LD_LIBRARY_PATH:-} \
-    HEADROOM_KOMPRESS_ONNX_PATH=/opt/headroom/kompress-int8.onnx
+    LD_LIBRARY_PATH=/usr/local/cuda-12.6/lib64:${LD_LIBRARY_PATH:-}
 
 # Declare ~/.headroom as a volume so Docker (and ACA) can attach persistent
 # storage here.  Bare `docker run` gets an anonymous volume as a fallback so
@@ -276,7 +259,6 @@ ARG PYTHON_SITE_PACKAGES
 
 COPY --from=builder ${PYTHON_SITE_PACKAGES} ${PYTHON_SITE_PACKAGES}
 COPY --from=builder /root/.headroom/bin/rtk /usr/local/bin/rtk
-COPY --from=builder /opt/headroom/kompress-int8.onnx /opt/headroom/kompress-int8.onnx
 COPY --from=cuda-libs /usr/local/cuda-12.6 /usr/local/cuda-12.6
 
 USER ${RUNTIME_USER}
@@ -286,8 +268,7 @@ ENV HEADROOM_HOST=0.0.0.0 \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH=${PYTHON_SITE_PACKAGES} \
-    LD_LIBRARY_PATH=/usr/local/cuda-12.6/lib64:${LD_LIBRARY_PATH} \
-    HEADROOM_KOMPRESS_ONNX_PATH=/opt/headroom/kompress-int8.onnx
+    LD_LIBRARY_PATH=/usr/local/cuda-12.6/lib64:${LD_LIBRARY_PATH}
 
 EXPOSE 8787
 
