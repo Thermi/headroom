@@ -793,17 +793,29 @@ class HeadroomProxy(
     def __init__(self, config: ProxyConfig):
         self.config = config
         self.config.mode = normalize_proxy_mode(self.config.mode)
-        # Record process-wide stateless mode so module-level persisters
-        # (output-savings recorder, etc.) can skip workspace writes.
-        from headroom import paths as _hr_paths
 
-        _hr_paths.set_process_stateless(config.stateless)
-        # Stateless: keep TOIN learning in-memory; never touch toin.json.
-        _apply_stateless_persistence(self.config)
-        pipeline_extensions = list(config.pipeline_extensions or [])
-        probe_recorder = probe_recorder_from_env()
-        if probe_recorder is not None:
-            pipeline_extensions.append(probe_recorder)
+        # Build info: injected at container build time via Docker build args,
+        # falls back to runtime git detection when running from a source checkout.
+        self._build_info: dict[str, str] = {}
+        try:
+            from headroom._build_info import BUILD_GIT_COMMIT, BUILD_TIME
+
+            self._build_info["git_commit"] = BUILD_GIT_COMMIT or "unknown"
+            self._build_info["build_time"] = BUILD_TIME or "unknown"
+        except (ImportError, AttributeError):
+            try:
+                import subprocess
+
+                result = subprocess.run(
+                    ["git", "rev-parse", "--short", "HEAD"],
+                    capture_output=True, text=True, timeout=2,
+                )
+                if result.returncode == 0:
+                    self._build_info["git_commit"] = result.stdout.strip()
+                self._build_info["build_time"] = __import__("datetime").datetime.now().isoformat()
+            except Exception:
+                self._build_info["git_commit"] = "unknown"
+                self._build_info["build_time"] = "unknown"
         self.pipeline_extensions = PipelineExtensionManager(
             hooks=config.hooks,
             extensions=pipeline_extensions,
@@ -1692,7 +1704,12 @@ prefer_code_aware_for_code=_get_env_bool("HEADROOM_PREFER_CODE_AWARE_FOR_CODE", 
         self.http_client_h1 = (
             self.http_client if not _http2 else httpx.AsyncClient(http2=False, **_client_kwargs)
         )
-        logger.info("Headroom Proxy started (version %s)", __version__)
+logger.info(
+            "Headroom Proxy started — v%s commit=%s build=%s",
+            __version__,
+            self._build_info.get("git_commit", "unknown"),
+            self._build_info.get("build_time", "unknown"),
+        )
         logger.info(f"Optimization: {'ENABLED' if self.config.optimize else 'DISABLED'}")
         self.config.mode = normalize_proxy_mode(self.config.mode)
         logger.info(f"Mode: {self.config.mode}")
@@ -5233,6 +5250,34 @@ def create_app_from_env() -> FastAPI:
     return create_app(_proxy_config_from_env())
 
 
+def _get_build_info_value(key: str) -> str:
+    """Read build info from the injected module, falling back to git/runtime."""
+    try:
+        from headroom._build_info import BUILD_GIT_COMMIT, BUILD_TIME
+
+        return {"git_commit": BUILD_GIT_COMMIT, "build_time": BUILD_TIME}.get(key, "unknown")
+    except (ImportError, AttributeError):
+        pass
+    if key == "git_commit":
+        try:
+            import subprocess
+
+            r = subprocess.run(
+                ["git", "rev-parse", "--short", "HEAD"],
+                capture_output=True, text=True, timeout=2,
+            )
+            if r.returncode == 0:
+                return r.stdout.strip()
+        except Exception:
+            pass
+    elif key == "build_time":
+        try:
+            return __import__("datetime").datetime.now().isoformat()
+        except Exception:
+            pass
+    return "unknown"
+
+
 def _get_code_aware_banner_status(config: ProxyConfig) -> str:
     """Get code-aware compression status line for banner."""
     if config.code_aware_enabled:
@@ -5320,7 +5365,9 @@ def run_server(
 ╔══════════════════════════════════════════════════════════════════════╗
 ║                      HEADROOM PROXY SERVER                           ║
 ╠══════════════════════════════════════════════════════════════════════╣
-║  Version: 1.0.0                                                      ║
+║  Version: {__version__:<58}║
+║  Commit:  {_get_build_info_value("git_commit"):<58}║
+║  Build:   {_get_build_info_value("build_time"):<58}║
 ║  Listening: http://{config.host}:{config.port:<5}                                      ║
 ║  Workers: {workers:<3}  Concurrency Limit: {limit_concurrency:<5}                          ║
 ║  Backend: {backend_status:<59}║

@@ -1,3 +1,7 @@
+x-build-args: &build-args
+  GIT_COMMIT: ${GIT_COMMIT:-unknown}
+  BUILD_TIME: ${BUILD_TIME:-unknown}
+
 services:
   cli:
     image: ${HEADROOM_IMAGE:-ghcr.io/chopratejas/headroom:latest}
@@ -9,12 +13,13 @@ services:
     user: root
     healthcheck:
       test: ["NONE"]
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        <<: *build-args
     environment:
       HOME: /tmp/headroom-home
-      # Canonical Headroom filesystem contract (issue #175). Forwarded into
-      # the container so the proxy resolves state/config to the bind-mounted
-      # /tmp/headroom-home/.headroom path. HEADROOM_WORKSPACE (above) remains
-      # the Docker bind-mount source and is intentionally different.
       HEADROOM_WORKSPACE_DIR: /tmp/headroom-home/.headroom
       HEADROOM_CONFIG_DIR: /tmp/headroom-home/.headroom/config
       # CLI-filtering dashboard figures require the `rtk` binary inside this
@@ -31,6 +36,11 @@ services:
 
   proxy:
     image: ${HEADROOM_IMAGE:-ghcr.io/chopratejas/headroom:latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        <<: *build-args
     entrypoint: ["headroom", "proxy"]
     working_dir: /workspace
     restart: unless-stopped

@@ -43,8 +43,14 @@ ENV CARGO_HOME=/usr/local/cargo \
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
       | sh -s -- -y --no-modify-path --profile minimal -c rustfmt -c clippy --default-toolchain 1.95.0
 
+ARG GIT_COMMIT=
+ARG BUILD_TIME=
+
 # ---- Build stage: compile native extensions, build wheel ----
 FROM rust-toolchain AS builder
+
+ARG GIT_COMMIT
+ARG BUILD_TIME
 
 WORKDIR /build
 
@@ -77,6 +83,13 @@ COPY Cargo.toml Cargo.lock rust-toolchain.toml ./
 COPY crates/ crates/
 COPY headroom/ headroom/
 COPY README.md ./
+
+# Inject build-time metadata (git commit, build timestamp) into _build_info.py
+# so the baked site-packages carry them for the version startup banner.
+RUN GIT="${GIT_COMMIT:-unknown}" BUILD="${BUILD_TIME:-unknown}" && \
+    sed -i "s/BUILD_GIT_COMMIT: str = ''/BUILD_GIT_COMMIT: str = '$GIT'/" headroom/_build_info.py && \
+    sed -i "s/BUILD_TIME: str = ''/BUILD_TIME: str = '$BUILD'/" headroom/_build_info.py && \
+    echo "headroom/_build_info.py injected: commit=$GIT build=$BUILD"
 
 RUN echo "setuptools<82" > /tmp/build-constraints.txt
 RUN --mount=type=cache,target=/root/.cache/pip \
