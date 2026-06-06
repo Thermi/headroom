@@ -354,8 +354,10 @@ def _onnx_session_options(ort: Any) -> Any:
         inter_op_num_threads=_env_int(KOMPRESS_ONNX_INTER_THREADS_ENV),
     )
     # Suppress ORT's own WARNING-level noise (e.g. Memcpy node insertion
-    # warnings for CUDAExecutionProvider).  Level 3 = ERROR only.
-    opts.log_severity_level = 3
+    # warnings for CUDAExecutionProvider so proxy logs stay clean).
+    # Level 3 = ERROR + FATAL only; warnings are discarded.
+    if hasattr(opts, "log_severity_level"):
+        opts.log_severity_level = 3
     return opts
 
 
