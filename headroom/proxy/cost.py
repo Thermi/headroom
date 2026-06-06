@@ -48,6 +48,7 @@ def _get_litellm_module() -> Any | None:
         return None
 
     litellm = imported_litellm
+    litellm.suppress_debug_info = True
     return litellm
 
 
