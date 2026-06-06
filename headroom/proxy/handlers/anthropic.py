@@ -1590,9 +1590,13 @@ class AnthropicHandlerMixin:
                     if result and result.waste_signals:
                         waste_signals_dict = result.waste_signals.to_dict()
                 except Exception as e:
-                    # Include type so TimeoutError vs other failures is distinguishable
-                    # in bug reports — str(asyncio.TimeoutError()) is empty otherwise.
-                    logger.warning(f"[{request_id}] Optimization failed: {type(e).__name__}: {e}")
+                    from headroom.proxy.helpers import COMPRESSION_TIMEOUT_SECONDS as _to
+
+                    logger.warning(
+                        f"[{request_id}] Optimization failed: {type(e).__name__}: {e} "
+                        f"(model={model} tokens={original_tokens} timeout={_to}s "
+                        f"transforms={transforms_applied})"
+                    )
                     # Flag compression failure for observability
                     _compression_failed = True
                     # Split timeout from other errors: a timeout means the
