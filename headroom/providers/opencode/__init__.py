@@ -8,7 +8,6 @@ from collections.abc import Mapping
 
 from headroom.providers.claude import proxy_base_url as claude_proxy_base_url
 
-
 _OPENCODE_CONFIG_TEMPLATE = {
     "provider": {
         "headroom": {

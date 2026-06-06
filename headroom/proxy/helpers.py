@@ -982,11 +982,11 @@ def _setup_file_logging() -> None:
     try:
         log_dir.mkdir(parents=True, exist_ok=True)
     except OSError as exc:
-        warnings.warn(f"Logging to {log_dir} failed ({exc}), falling back to temp directory")
+        warnings.warn(f"Logging to {log_dir} failed ({exc}), falling back to temp directory", stacklevel=2)
         try:
             log_dir = Path(tempfile.mkdtemp(prefix="headroom-logs-"))
         except OSError as exc2:
-            warnings.warn(f"Logging setup failed (non-fatal): {exc2}")
+            warnings.warn(f"Logging setup failed (non-fatal): {exc2}", stacklevel=2)
             log_dir = None
 
     fmt = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -1015,7 +1015,7 @@ def _setup_file_logging() -> None:
             if not any(isinstance(h, RotatingFileHandler) for h in headroom_logger.handlers):
                 headroom_logger.addHandler(file_handler)
         except OSError as exc:
-            warnings.warn(f"Logging setup failed (non-fatal): {exc}")
+            warnings.warn(f"Logging setup failed (non-fatal): {exc}", stacklevel=2)
 
     headroom_logger.propagate = False
 

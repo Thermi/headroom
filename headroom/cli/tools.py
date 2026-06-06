@@ -16,15 +16,13 @@ tool without any Headroom-specific protocol.
 
 from __future__ import annotations
 
+import json as _json
 import os
 import subprocess
 import sys
 from collections.abc import Sequence
 
 import click
-
-import json as _json
-import logging
 
 from headroom import binaries
 from headroom.transforms.kompress_compressor import is_kompress_available

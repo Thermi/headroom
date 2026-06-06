@@ -123,7 +123,7 @@ def export(
     if quantize:
         try:
             import onnxruntime as ort
-            from onnxruntime.quantization import quantize_dynamic, QuantType
+            from onnxruntime.quantization import QuantType, quantize_dynamic
 
             orig_path = output_path
             quant_path = output_path.replace(".onnx", "-int8.onnx")
