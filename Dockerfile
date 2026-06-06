@@ -55,8 +55,8 @@ ARG BUILD_TIME
 WORKDIR /build
 
 # Install build-time system deps (maturin, setuptools-rust) once.
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install maturin setuptools-rust patchelf
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install maturin setuptools-rust patchelf
 
 # Phase 1 — resolve and install all Python dependencies from the lockfile,
 # without building the headroom package itself.  Only pyproject.toml and
@@ -71,8 +71,8 @@ for name, group in p['project'].get('optional-dependencies', {}).items():
         deps.extend(group)
 print('\n'.join(deps))
 SCRIPT
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install -r /tmp/runtime-deps.txt
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install -r /tmp/runtime-deps.txt
 
 #ARG HEADROOM_EXTRAS=code,proxy,memory
 ARG HEADROOM_EXTRAS=all
@@ -98,10 +98,11 @@ RUN GIT="${GIT_COMMIT:-$(git rev-parse --short HEAD 2>/dev/null || echo unknown)
 RUN rm -rf .git
 
 RUN echo "setuptools<82" > /tmp/build-constraints.txt
-RUN --mount=type=cache,target=/root/.cache/uv \
+RUN --mount=type=cache,target=/root/.cache/pip \
     --mount=type=cache,target=/root/.cargo/registry \
     --mount=type=cache,target=/build/target \
-    uv pip install --no-build-isolation --no-deps --constraint /tmp/build-constraints.txt ".[${HEADROOM_EXTRAS}]"
+    PIP_CONSTRAINT=/tmp/build-constraints.txt \
+    pip install --no-build-isolation --no-deps ".[${HEADROOM_EXTRAS}]"
 
 RUN --mount=type=bind,source=.,target=/context,readonly \
     HEADROOM_BUILD_VERSION="${HEADROOM_BUILD_VERSION}" PYTHON_SITE_PACKAGES="${PYTHON_SITE_PACKAGES}" python - <<'PY'
@@ -195,8 +196,8 @@ RUN cd /tmp && python -c "from headroom._core import DiffCompressor, SmartCrushe
 RUN python -c "from headroom.rtk.installer import download_rtk; download_rtk()"
 
 # Replace CPU-only onnxruntime with GPU-enabled onnxruntime-gpu
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install --force-reinstall "onnxruntime-gpu>=1.16.0"
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --force-reinstall "onnxruntime-gpu>=1.16.0"
 
 # ---- Runtime stage (python-slim): supports root/nonroot via build arg ----
 FROM python:${PYTHON_VERSION}-slim AS runtime-slim-base
