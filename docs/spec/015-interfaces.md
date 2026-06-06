@@ -265,6 +265,18 @@ X-Headroom-Compressed-Tokens: 5325
 | `HEADROOM_CONTENT_SENSITIVITY` | `0.5` | Content sensitivity (0-1) |
 | `HEADROOM_PRESERVE_SYSTEM` | `true` | Preserve system messages |
 
+### Kompress (ML Compression)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `HEADROOM_KOMPRESS_BACKEND` | `auto` | Backend: `auto`, `onnx`, `onnx_gpu`, `onnx_coreml`, `pytorch`, `pytorch_mps` |
+| `HEADROOM_KOMPRESS_ONNX_PROVIDER` | - | Force a specific ONNX Runtime provider (e.g. `ROCMExecutionProvider`, `DmlExecutionProvider`). When unset, the best available GPU provider is auto-detected. |
+| `HEADROOM_KOMPRESS_ONNX_INTRA_THREADS` | - | Intra-op thread count for ONNX sessions |
+| `HEADROOM_KOMPRESS_ONNX_INTER_THREADS` | - | Inter-op thread count for ONNX sessions |
+| `HEADROOM_KOMPRESS_MAX_CONCURRENT` | `1` | Max concurrent Kompress inference calls |
+| `HEADROOM_KOMPRESS_BATCH_SIZE` | `32` | Max chunks per batched forward pass (GPU only) |
+| `HEADROOM_KOMPRESS_COREML_CACHE_DIR` | - | Cache directory for CoreML compiled models |
+
 ---
 
 ## Plugin ABI
