@@ -33,9 +33,6 @@ RUN apt-get update && \
 RUN --mount=type=cache,target=/root/.cache/pip \
     python -m pip install uv==${UV_VERSION}
 
-#ARG HEADROOM_EXTRAS=code,proxy,memory
-ARG HEADROOM_EXTRAS=all
-
 # Rust toolchain for the headroom._core extension. With single-wheel
 # architecture (post-#355), `pip install -e .` invokes maturin via
 # pyproject.toml's [build-system], which calls cargo. No more separate
@@ -67,6 +64,9 @@ print('\n'.join(deps))
 SCRIPT
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install -r /tmp/runtime-deps.txt
+
+#ARG HEADROOM_EXTRAS=code,proxy,memory
+ARG HEADROOM_EXTRAS=all
 
 # Phase 2 — copy the Rust workspace + Python source and build the wheel.
 # Cache-busted by actual source changes only; dep install stays cached.
@@ -209,7 +209,7 @@ WORKDIR ${RUNTIME_HOME}
 ENV HEADROOM_HOST=0.0.0.0 \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    LD_LIBRARY_PATH=/usr/local/cuda-12.6/lib64:${LD_LIBRARY_PATH}
+    LD_LIBRARY_PATH=/usr/local/cuda-12.6/lib64:${LD_LIBRARY_PATH:-}
 
 # Declare ~/.headroom as a volume so Docker (and ACA) can attach persistent
 # storage here.  Bare `docker run` gets an anonymous volume as a fallback so
