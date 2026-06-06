@@ -142,7 +142,7 @@ def _load_tokenizer(tokenizer_name: str):
     from transformers import AutoTokenizer
 
     try:
-        return AutoTokenizer.from_pretrained(
+        tok = AutoTokenizer.from_pretrained(
             tokenizer_name,
             trust_remote_code=True,
             local_files_only=True,
@@ -188,7 +188,18 @@ def _load_tokenizer(tokenizer_name: str):
     if error:
         logger.warning(f"Failed to load tokenizer {tokenizer_name}: {error[0]}")
         return None
-    return result[0] if result else None
+    tok = result[0] if result else None
+
+    if tok is None:
+        return None
+
+    # Suppress the "Token indices sequence length is longer than the
+    # specified maximum sequence length" warning — Headroom counts
+    # tokens for cost estimation and does NOT feed them into the
+    # model, so truncation is neither needed nor desired.
+    if hasattr(tok, "model_max_length"):
+        tok.model_max_length = 1 << 30  # 1B — effectively unlimited
+    return tok
 
 
 def get_tokenizer_name(model: str) -> str:
