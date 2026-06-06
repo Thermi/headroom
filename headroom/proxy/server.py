@@ -1082,7 +1082,7 @@ class HeadroomProxy(
         self.compression_max_workers: int = _compression_max
         self._compression_executor = concurrent.futures.ThreadPoolExecutor(
             max_workers=_compression_max,
-            thread_name_prefix="headroom-compress",
+            thread_name_prefix="hdr-cmp",
         )
         # Phase 3 (#1171): off-path background compression. When enabled, a
         # cold-start-large request (frozen=0 + large live zone) forwards
@@ -1446,6 +1446,10 @@ class HeadroomProxy(
             )
 
         def _wrapped():  # noqa: ANN202
+            import threading as _threading
+
+            _t = _threading.current_thread()
+            _t.name = "hdr-cmp:run"
             started_at = time.monotonic()
             queue_wait = started_at - queued_at
             with self._compression_metrics_lock:
@@ -1465,6 +1469,7 @@ class HeadroomProxy(
             try:
                 return fn()
             finally:
+                _t.name = "hdr-cmp:idle"
                 elapsed = time.monotonic() - started_at
                 with self._compression_metrics_lock:
                     state["finished"] = True
