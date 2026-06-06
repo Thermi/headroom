@@ -47,19 +47,36 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
 
 WORKDIR /build
 
-# Copy the full set of files maturin needs to build the wheel: the root
-# pyproject.toml + Cargo workspace + Rust crates + Python source. The
-# uv install builds + installs the wheel in one shot.
-COPY pyproject.toml uv.lock README.md ./
+# Install build-time system deps (maturin, setuptools-rust) once.
+RUN pip install --no-cache-dir maturin setuptools-rust patchelf
+
+# Phase 1 — resolve and install all Python dependencies from the lockfile,
+# without building the headroom package itself.  Only pyproject.toml and
+# the lockfile invalidate this cache; source-code edits do not.
+COPY pyproject.toml uv.lock ./
+RUN python -c "
+import tomllib, pathlib, sys
+p = tomllib.loads(pathlib.Path('pyproject.toml').read_text())
+deps = list(p['project'].get('dependencies', []))
+for name, group in p['project'].get('optional-dependencies', {}).items():
+    if name not in ('dev', 'test', 'doc'):
+        deps.extend(group)
+sys.stdout.write('\n'.join(deps))
+" > /tmp/runtime-deps.txt && \
+    pip install --no-cache-dir -r /tmp/runtime-deps.txt
+
+# Phase 2 — copy the Rust workspace + Python source and build the wheel.
+# Cache-busted by actual source changes only; dep install stays cached.
 COPY Cargo.toml Cargo.lock rust-toolchain.toml ./
 COPY crates/ crates/
 COPY headroom/ headroom/
+COPY README.md ./
 
 RUN echo "setuptools<82" > /tmp/build-constraints.txt
 RUN --mount=type=cache,target=/root/.cargo/registry \
     --mount=type=cache,target=/build/target \
     PIP_CONSTRAINT=/tmp/build-constraints.txt \
-    pip install --no-cache-dir ".[${HEADROOM_EXTRAS}]"
+    pip install --no-cache-dir --no-build-isolation --no-deps ".[${HEADROOM_EXTRAS}]"
 
 RUN --mount=type=bind,source=.,target=/context,readonly \
     HEADROOM_BUILD_VERSION="${HEADROOM_BUILD_VERSION}" PYTHON_SITE_PACKAGES="${PYTHON_SITE_PACKAGES}" python - <<'PY'
