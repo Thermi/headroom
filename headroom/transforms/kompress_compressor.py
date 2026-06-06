@@ -348,11 +348,15 @@ def _log_giveup(reason: str, *, backend: str, device_type: str, n_words: int) ->
 
 
 def _onnx_session_options(ort: Any) -> Any:
-    return create_cpu_session_options(
+    opts = create_cpu_session_options(
         ort,
         intra_op_num_threads=_env_int(KOMPRESS_ONNX_INTRA_THREADS_ENV),
         inter_op_num_threads=_env_int(KOMPRESS_ONNX_INTER_THREADS_ENV),
     )
+    # Suppress ORT's own WARNING-level noise (e.g. Memcpy node insertion
+    # warnings for CUDAExecutionProvider).  Level 3 = ERROR only.
+    opts.log_severity_level = 3
+    return opts
 
 
 def _model_device_type(model: Any, backend: str) -> str:
