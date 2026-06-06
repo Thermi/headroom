@@ -57,6 +57,22 @@ def export(
 
     weights_path = hf_hub_download(HF_MODEL_ID, "model.safetensors")
     state_dict = load_file(weights_path)
+    # Adapt Conv1d / Conv2d weights to MLP (Linear) shape.
+    # Conv1d: [out, in, K] -> [out, in] via mean over kernel dim
+    for old_key, new_key in [("span_conv.0", "span_mlp.0"), ("span_conv.2", "span_mlp.2")]:
+        old_w = f"{old_key}.weight"
+        new_w = f"{new_key}.weight"
+        if old_w in state_dict:
+            w = state_dict.pop(old_w)
+            if w.dim() == 3:
+                state_dict[new_w] = w.mean(dim=2)
+            elif w.dim() == 4:
+                state_dict[new_w] = w.mean(dim=2).squeeze(-1)
+        old_b = f"{old_key}.bias"
+        new_b = f"{new_key}.bias"
+        if old_b in state_dict and old_b != new_b:
+            state_dict[new_b] = state_dict.pop(old_b)
+
     model.load_state_dict(state_dict, strict=False)
     print(f"Loaded weights from {weights_path}")
 
@@ -86,9 +102,8 @@ def export(
                 ).last_hidden_state
                 # Token head: softmax over 2 classes, take class-1 probability
                 token_probs = torch.softmax(self.inner.token_head(hidden), dim=-1)[:, :, 1]
-                # Span head: 2D CNN (dummy height dim for CUDA compat)
-                span_scores = self.inner.span_conv(hidden.transpose(1, 2).unsqueeze(2))
-                span_scores = span_scores.view(hidden.size(0), -1)
+                # Span head: MLP per token (no Conv ops — CUDA native)
+                span_scores = self.inner.span_mlp(hidden).squeeze(-1)
                 return token_probs * (0.5 + 0.5 * span_scores)
 
     export_model = KompressONNX(model)
