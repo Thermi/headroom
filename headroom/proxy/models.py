@@ -391,6 +391,12 @@ class ProxyConfig:
     # usage breakdown) does to budget enforcement. See budget_basis_policy.
     budget_estimated_basis: Literal["count", "ignore", "block"] = "count"
 
+    # Custom model cost map merged into litellm.model_cost at startup.
+    # JSON object mapping model names to cost dicts with keys like
+    # input_cost_per_token, output_cost_per_token, litellm_provider, etc.
+    # CLI: --model-cost-map <json>; env: HEADROOM_MODEL_COST_MAP=<json>.
+    model_cost_map: dict[str, dict[str, Any]] | None = None
+
     # Logging
     log_requests: bool = True
     log_file: str | None = None
