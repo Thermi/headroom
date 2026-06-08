@@ -1240,6 +1240,11 @@ class StreamingMixin:
                 except httpx.TransportError as e:
                     last_connect_error = e
                     if attempt >= retry_attempts - 1:
+                        from headroom.proxy.upstream_diagnostics import diagnose_upstream
+
+                        asyncio.ensure_future(
+                            diagnose_upstream(url, correlation_id=request_id)
+                        )
                         raise
 
                     delay_with_jitter = jitter_delay_ms(
