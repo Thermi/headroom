@@ -807,6 +807,25 @@ except ValueError:
 MAX_COMPRESSION_CACHE_SESSIONS = 500
 
 
+def _fast_copy_message(msg: dict[str, Any]) -> dict[str, Any]:
+    """Fast copy a single message dict without deepcopy overhead."""
+    new_msg: dict[str, Any] = dict(msg)
+    content = msg.get("content")
+    if isinstance(content, list):
+        new_msg["content"] = [dict(b) if isinstance(b, dict) else b for b in content]
+    return new_msg
+
+
+def _fast_copy_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Fast copy messages without deepcopy overhead.
+
+    Messages are always ``list[dict]`` with ``str``/``list`` content.
+    Deepcopy is expensive (~10x slower) because it tracks the full object
+    graph, memo, and circular references we never have.
+    """
+    return [_fast_copy_message(msg) for msg in messages]
+
+
 # ---------------------------------------------------------------------------
 # Compression-failure escape hatch
 # ---------------------------------------------------------------------------
@@ -1103,7 +1122,9 @@ def _setup_file_logging() -> None:
     try:
         log_dir.mkdir(parents=True, exist_ok=True)
     except OSError as exc:
-        warnings.warn(f"Logging to {log_dir} failed ({exc}), falling back to temp directory", stacklevel=2)
+        warnings.warn(
+            f"Logging to {log_dir} failed ({exc}), falling back to temp directory", stacklevel=2
+        )
         try:
             log_dir = Path(tempfile.mkdtemp(prefix="headroom-logs-"))
         except OSError as exc2:
