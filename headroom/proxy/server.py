@@ -3139,36 +3139,46 @@ def create_app(config: ProxyConfig | None = None) -> FastAPI:
     # requests so telemetry can segment by integration surface. Registered
     # before extension middleware so any extension-level auth/guards run
     # outermost and we don't count requests they reject.
-    @app.middleware("http")
-    async def _record_headroom_stack(request, call_next):
+    #
+    # NOTE: This is a raw ASGI middleware (not @app.middleware("http") /
+    # BaseHTTPMiddleware) because BaseHTTPMiddleware wraps responses in a
+    # _StreamingResponse that reads from a memory channel — it asserts that
+    # only ``http.response.body`` messages arrive, but route handlers that
+    # send their own response via ``request._send`` (e.g. the MCP handler)
+    # can trigger a second ``http.response.start``, crashing the connection.
+    # See https://github.com/anomalyco/headroom/issues/… for details.
+    _existing_stack = app.middleware_stack
+    if _existing_stack is None:
+        _existing_stack = app.build_middleware_stack()
+
+    async def _record_headroom_stack_asgi(scope, receive, send):
+        if scope["type"] != "http":
+            await _existing_stack(scope, receive, send)
+            return
+
         started = time.perf_counter()
         inbound_id = f"inbound-{time.time_ns()}"
-        # Project attribution: an explicit X-Headroom-Project header wins
-        # (claude/codex wraps); otherwise a /p/<name> base-URL prefix (aider,
-        # Copilot BYOK, Cursor — clients that cannot send custom headers).
-        # The prefix strip mutates the scope, so it must happen before
-        # request.url is first accessed (Starlette caches the URL).
-        prefix_project = strip_project_path_prefix(request.scope)
-        path = request.url.path
-        method = request.method
-        query = request.url.query
-        headers = dict(request.headers.items())
-        set_current_project(classify_project(headers) or prefix_project)
-        # Path-based Codex identification: stamp X-Client: codex on the
-        # Responses endpoint for callers that don't otherwise classify (e.g.
-        # Codex Desktop, whose User-Agent isn't a known codex UA). Without it
-        # the backend refuses oversized
-        # requests with a 413 on a compression timeout, which Codex treats as a
-        # hard connection failure. Mutating scope["headers"] before call_next
-        # makes every downstream classify_client(headers) read "codex".
-        if should_stamp_codex_client(path, headers):
-            request.scope["headers"].append((b"x-client", b"codex"))
-        client = getattr(request, "client", None)
+        path = scope.get("path", "")
+        method = scope.get("method", "")
+        query_bytes = scope.get("query_string", b"")
+        query = query_bytes.decode() if query_bytes else ""
+
+        headers_raw = scope.get("headers", [])
+        headers = {}
+        content_length = ""
+        for key_bytes, value_bytes in headers_raw:
+            key = key_bytes.decode()
+            value = value_bytes.decode()
+            if key == "content-length":
+                content_length = value
+            headers[key] = value
+
+        client_info = scope.get("client")
         client_addr = ""
-        if client is not None:
-            client_host = getattr(client, "host", None)
-            client_port = getattr(client, "port", None)
-            client_addr = f"{client_host}:{client_port}" if client_port else str(client_host)
+        if client_info:
+            client_host, client_port = client_info
+            client_addr = f"{client_host}:{client_port}"
+
         try:
             proxy.metrics.record_inbound_request(method=method, path=path)
         except Exception:
@@ -3190,18 +3200,27 @@ def create_app(config: ProxyConfig | None = None) -> FastAPI:
             path,
             query,
             client_addr,
-            request.headers.get("content-length", ""),
+            content_length,
             json.dumps(safe_headers, ensure_ascii=False, default=str),
         )
-        if request.url.path.startswith("/v1/"):
-            stack = request.headers.get("x-headroom-stack")
+        if path.startswith("/v1/"):
+            stack = headers.get("x-headroom-stack")
             if stack:
                 try:
                     proxy.metrics.record_stack(stack)
                 except Exception:
                     logger.debug("record_stack failed", exc_info=True)
+
+        status_code = None
+
+        async def wrapped_send(message):
+            nonlocal status_code
+            if message["type"] == "http.response.start":
+                status_code = message["status"]
+            await send(message)
+
         try:
-            response = await call_next(request)
+            await _existing_stack(scope, receive, wrapped_send)
         except asyncio.CancelledError:
             try:
                 proxy.metrics.record_inbound_aborted(reason="cancelled")
@@ -3232,20 +3251,23 @@ def create_app(config: ProxyConfig | None = None) -> FastAPI:
                 exc_info=True,
             )
             raise
-        try:
-            proxy.metrics.record_inbound_response(status_code=response.status_code)
-        except Exception:
-            logger.debug("record_inbound_response failed", exc_info=True)
-        logger.log(
-            _log_level,
-            "event=proxy_inbound_response id=%s method=%s path=%s status=%s duration_ms=%.2f",
-            inbound_id,
-            method,
-            path,
-            response.status_code,
-            (time.perf_counter() - started) * 1000.0,
-        )
-        return response
+        else:
+            if status_code is not None:
+                try:
+                    proxy.metrics.record_inbound_response(status_code=status_code)
+                except Exception:
+                    logger.debug("record_inbound_response failed", exc_info=True)
+                logger.log(
+                    _log_level,
+                    "event=proxy_inbound_response id=%s method=%s path=%s status=%s duration_ms=%.2f",
+                    inbound_id,
+                    method,
+                    path,
+                    status_code,
+                    (time.perf_counter() - started) * 1000.0,
+                )
+
+    app.middleware_stack = _record_headroom_stack_asgi
 
     # ── Security gate (registered last → runs outermost) ──────────────────
     # Three concerns, kept together because they all wrap every inbound
