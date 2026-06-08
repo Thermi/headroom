@@ -2643,6 +2643,7 @@ class OpenAIHandlerMixin:
             COMPRESSION_TIMEOUT_SECONDS,
             MAX_MESSAGE_ARRAY_LENGTH,
             MAX_REQUEST_BODY_SIZE,
+            _headroom_no_inline_tool_injection,
             _read_request_json,
         )
         from headroom.proxy.modes import is_cache_mode, is_token_mode
@@ -2743,6 +2744,13 @@ class OpenAIHandlerMixin:
         _bypass = self._headroom_bypass_enabled(request.headers)
         if _bypass:
             logger.info(f"[{request_id}] Bypass: skipping compression (header)")
+
+        _no_inline_tools = (
+            self.config.no_inline_tools
+            or _headroom_no_inline_tool_injection(
+                request.headers, dict(request.query_params)
+            )
+        )
 
         # Image compression: tile alignment + ML-based technique routing.
         # Gated on ImageCompressionDecision — same value-type pattern
@@ -3337,7 +3345,8 @@ class OpenAIHandlerMixin:
                     session_id=openai_session_id,
                     request_id=request_id,
                     existing_tools=tools,
-                    has_compressed_content_this_turn=has_new_compressed_content,
+has_compressed_content_this_turn=has_new_compressed_content,
+                    disable_inline_tool_injection=_no_inline_tools,
                 )
                 if ccr_tool_injected:
                     logger.debug(
@@ -3444,6 +3453,7 @@ class OpenAIHandlerMixin:
                     existing_tools=tools,
                     memory_tools_to_inject=memory_tool_defs,
                     inject_this_turn=bool(self.memory_handler.config.inject_tools),
+                    disable_inline_tool_injection=_no_inline_tools,
                 )
                 if mem_tools_injected:
                     memory_tools_injected = True
