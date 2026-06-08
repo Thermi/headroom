@@ -542,6 +542,8 @@ class CodeCompressorConfig:
     # Language handling
     language_hint: str | None = None
     fallback_to_kompress: bool = True
+    # When False, skip Kompress fallback entirely (e.g. --no-kompress).
+    kompress_enabled: bool = True
 
     # Semantic analysis (symbol importance scoring)
     semantic_analysis: bool = True
@@ -2102,25 +2104,26 @@ class CodeAwareCompressor(Transform):
 
     def _fallback_compress(self, code: str, original_tokens: int) -> CodeCompressionResult:
         """Fall back to Kompress compression."""
-        try:
-            from .kompress_compressor import KompressCompressor, is_kompress_available
+        if self.config.kompress_enabled:
+            try:
+                from .kompress_compressor import KompressCompressor, is_kompress_available
 
-            if is_kompress_available():
-                compressor = KompressCompressor()
-                result = compressor.compress(code)
-                return CodeCompressionResult(
-                    compressed=result.compressed,
-                    original=code,
-                    original_tokens=result.original_tokens,
-                    compressed_tokens=result.compressed_tokens,
-                    compression_ratio=result.compression_ratio,
-                    language=CodeLanguage.UNKNOWN,
-                    language_confidence=0.0,
-                    # Kompress does NOT guarantee syntax validity
-                    syntax_valid=False,
-                )
-        except ImportError:
-            pass
+                if is_kompress_available():
+                    compressor = KompressCompressor()
+                    result = compressor.compress(code)
+                    return CodeCompressionResult(
+                        compressed=result.compressed,
+                        original=code,
+                        original_tokens=result.original_tokens,
+                        compressed_tokens=result.compressed_tokens,
+                        compression_ratio=result.compression_ratio,
+                        language=CodeLanguage.UNKNOWN,
+                        language_confidence=0.0,
+                        # Kompress does NOT guarantee syntax validity
+                        syntax_valid=False,
+                    )
+            except ImportError:
+                pass
 
         # No fallback available, return original
         return CodeCompressionResult(

@@ -3819,11 +3819,10 @@ class ContentRouter(Transform):
                 )
 
                 if _check_tree_sitter_available():
-                    self._code_compressor = CodeAwareCompressor(
-                        CodeCompressorConfig(
-                            enable_ccr=self.config.ccr_inject_marker,
-                        )
+                    cc_config = CodeCompressorConfig(
+                        kompress_enabled=self.config.enable_kompress,
                     )
+                    self._code_compressor = CodeAwareCompressor(config=cc_config)
                 else:
                     logger.debug("tree-sitter not available")
             except ImportError:
