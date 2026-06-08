@@ -749,6 +749,9 @@ class HeadroomMCPServer:
                     )
                 ]
 
+        self._call_tool_handler = call_tool
+        self._list_tools_handler = list_tools
+
     async def _handle_compress(self, arguments: dict[str, Any]) -> list[TextContent]:
         """Handle headroom_compress tool call."""
         content = arguments.get("content")
