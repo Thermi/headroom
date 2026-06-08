@@ -1266,6 +1266,10 @@ class HeadroomProxy(
                 bridge_md_format=config.memory_bridge_md_format,
                 bridge_auto_import=config.memory_bridge_auto_import,
                 bridge_export_path=config.memory_bridge_export_path,
+                # When kompress is disabled, skip loading the ONNX
+                # embedding model too — both are ONNX models and
+                # neither should be downloaded/loaded at startup.
+                embedder_backend_override="none" if not config.kompress_enabled else None,
             )
             self.memory_handler = MemoryHandler(
                 memory_config,
