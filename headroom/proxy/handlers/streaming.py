@@ -1546,6 +1546,20 @@ class StreamingMixin:
                                 f"({len(tool_results)} results saved, SSE streaming — "
                                 "continuation handled by client)"
                             )
+                            # Push memory operation notifications back to the caller
+                            # as custom SSE events.  Clients can listen for
+                            # ``event: memory_op`` to learn what was saved/found
+                            # without needing a continuation API call.
+                            memory_events = (
+                                self.memory_handler.format_memory_events(tool_results)
+                            )
+                            for mem_event in memory_events:
+                                sse_payload = f"event: memory_op\ndata: {json.dumps(mem_event)}\n\n"
+                                yield sse_payload.encode()
+                                logger.debug(
+                                    f"[{request_id}] Memory: Pushed event op={mem_event['op']} "
+                                    f"status={mem_event['status']}"
+                                )
 
                 # CCR Feedback: Record headroom_retrieve tool calls for TOIN learning.
                 # In streaming mode, the client handles actual retrieval, but we
