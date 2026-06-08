@@ -1,0 +1,6 @@
+# --- Headroom MCP server ---
+# Points at the proxy's built-in MCP SSE endpoint.  The proxy runs inside
+# Docker; stdio-based subprocess servers are not available on the host.
+[mcp_servers.headroom]
+url = "http://localhost:10001/v1/mcp"
+# --- end Headroom MCP server ---

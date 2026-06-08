@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "headroom": {
+      "url": "http://localhost:10001/v1/mcp"
+    }
+  }
+}
