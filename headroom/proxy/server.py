@@ -53,6 +53,14 @@ if TYPE_CHECKING:
 import httpx
 
 try:
+    from mcp.server.streamable_http import StreamableHTTPServerTransport
+
+    MCP_STREAMABLE_HTTP_AVAILABLE = True
+except ImportError:
+    MCP_STREAMABLE_HTTP_AVAILABLE = False
+    StreamableHTTPServerTransport = None  # type: ignore[assignment,misc]
+
+try:
     import uvicorn
     from fastapi import Depends, FastAPI, HTTPException, Request, Response
     from fastapi.middleware.cors import CORSMiddleware
@@ -4953,6 +4961,70 @@ def create_app(config: ProxyConfig | None = None) -> FastAPI:
         return await proxy.handle_compress(request)
 
     register_provider_routes(app, proxy)
+
+    # ------------------------------------------------------------------
+    # MCP (Model Context Protocol) endpoint — lets MCP-compatible hosts
+    # (Claude Code, Cursor, Codex, etc.) call headroom_retrieve and
+    # other injected tools natively via the Model Context Protocol
+    # using the Streamable HTTP transport (RFC 2119).
+    #
+    # Single catch-all route:
+    #   /v1/mcp  — GET  (SSE stream, session establishment)
+    #              POST (JSON-RPC messages)
+    #              DELETE (session teardown)
+    #
+    # Requires the ``mcp`` and ``httpx`` packages.
+    # ------------------------------------------------------------------
+    if MCP_STREAMABLE_HTTP_AVAILABLE:
+        from headroom.ccr.mcp_server import DEFAULT_PROXY_URL as _MCP_DEFAULT_PROXY
+        from headroom.ccr.mcp_server import HeadroomMCPServer
+
+        _mcp_server_instance: HeadroomMCPServer | None = None
+
+        def _get_mcp_server() -> HeadroomMCPServer:
+            nonlocal _mcp_server_instance
+            if _mcp_server_instance is None:
+                _mcp = HeadroomMCPServer(
+                    proxy_url=_MCP_DEFAULT_PROXY,
+                    check_proxy=False,
+                )
+                _mcp_server_instance = _mcp
+            return _mcp_server_instance
+
+        # Transport per request. ``connect()`` yields the read/write
+        # streams that the MCP server loop processes; ``handle_request``
+        # dispatches GET/POST/DELETE by method and feeds messages into
+        # those streams.
+        @app.api_route("/v1/mcp", methods=["GET", "POST", "DELETE"])
+        async def mcp_handler(request: Request):
+            """Handle MCP messages via the Streamable HTTP transport."""
+            mcp_server = _get_mcp_server()
+            transport = StreamableHTTPServerTransport(
+                mcp_session_id=None,
+                is_json_response_enabled=True,
+            )
+
+            async with transport.connect() as streams:
+                read_stream, write_stream = streams
+                mcp_task = asyncio.create_task(
+                    mcp_server.server.run(
+                        read_stream,
+                        write_stream,
+                        mcp_server.server.create_initialization_options(),
+                    )
+                )
+                try:
+                    await transport.handle_request(
+                        request.scope, request.receive, request._send
+                    )
+                finally:
+                    mcp_task.cancel()
+                    try:
+                        await mcp_task
+                    except (asyncio.CancelledError, Exception):
+                        pass
+
+        logger.info("MCP Streamable HTTP endpoint: /v1/mcp")
 
     return app
 
