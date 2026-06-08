@@ -1506,6 +1506,53 @@ your responses, not to drive new actions."""
         )
 
     # =========================================================================
+    # Memory Event Notifications (push back to callers)
+    # =========================================================================
+
+    @staticmethod
+    def format_memory_events(
+        tool_results: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Convert memory tool results into structured notification events.
+
+        Each event contains ``op`` (operation type), ``status``, and
+        operation-specific fields (``memory_id``, ``content``, …).  These
+        are suitable for SSE ``event: memory_op`` payloads or for
+        ``X-Memory-*`` response headers.
+
+        The input is the list returned by :meth:`handle_memory_tool_calls`.
+        """
+        events: list[dict[str, Any]] = []
+        for result in tool_results:
+            content_str = result.get("content", "")
+            if not content_str:
+                continue
+            try:
+                data = json.loads(content_str) if isinstance(content_str, str) else content_str
+            except (json.JSONDecodeError, TypeError):
+                continue
+
+            status = data.get("status", "")
+            op = {
+                "saved": "memory_save",
+                "found": "memory_search",
+                "updated": "memory_update",
+                "deleted": "memory_delete",
+                "not_found": "memory_delete",
+                "ok": "memory_list",
+                "error": "memory_error",
+            }.get(status, "memory_unknown")
+
+            event: dict[str, Any] = {"op": op, "status": status}
+            for key in ("memory_id", "content", "count", "note", "error"):
+                if key in data:
+                    event[key] = data[key]
+
+            events.append(event)
+
+        return events
+
+    # =========================================================================
     # Native Memory Tool (Anthropic's memory_20250818)
     # =========================================================================
     #
