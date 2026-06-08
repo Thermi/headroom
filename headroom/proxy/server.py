@@ -5021,6 +5021,10 @@ def create_app(config: ProxyConfig | None = None) -> FastAPI:
         # streams that the MCP server loop processes; ``handle_request``
         # dispatches GET/POST/DELETE by method and feeds messages into
         # those streams.
+        class _TransportHandledResponse(Response):
+            async def __call__(self, scope, receive, send):
+                pass
+
         @app.api_route("/v1/mcp", methods=["GET", "POST", "DELETE"])
         async def mcp_handler(request: Request):
             """Handle MCP messages via the Streamable HTTP transport."""
@@ -5049,6 +5053,8 @@ def create_app(config: ProxyConfig | None = None) -> FastAPI:
                         await mcp_task
                     except (asyncio.CancelledError, Exception):
                         pass
+
+            return _TransportHandledResponse()
 
         logger.info("MCP Streamable HTTP endpoint: /v1/mcp")
 
