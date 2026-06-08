@@ -150,22 +150,17 @@ class LocalBackend:
         if self._initialized:
             return
 
-        lock = self._get_init_lock()
-        async with lock:
-            # Double-check after acquiring the lock — another task may have
-            # finished the init while we were waiting.
-            if self._initialized:
-                return
-            try:
-                await self._init_locked()
-            except asyncio.CancelledError:
-                # Cancellation (e.g. wait_for timeout) can leave a partial
-                # backend. Reset so the next call re-inits from scratch and
-                # never sees a half-built ``_hierarchical_memory``.
-                self._hierarchical_memory = None
-                self._graph = None
-                self._initialized = False
-                raise
+            # Map string embedder_backend to enum
+            embedder_backend_map = {
+                "local": EmbedderBackend.LOCAL,
+                "onnx": EmbedderBackend.ONNX,
+                "openai": EmbedderBackend.OPENAI,
+                "ollama": EmbedderBackend.OLLAMA,
+                "none": EmbedderBackend.NONE,
+            }
+            embedder_backend = embedder_backend_map.get(
+                self._config.embedder_backend, EmbedderBackend.LOCAL
+            )
 
     async def _init_locked(self) -> None:
         """Actual init body. Must be called with ``_init_lock`` held."""

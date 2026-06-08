@@ -213,6 +213,11 @@ def _create_embedder(config: MemoryConfig) -> Embedder:
                 base_url=config.ollama_base_url,
                 model_name=config.embedder_model,
             )
+
+        elif config.embedder_backend == EmbedderBackend.NONE:
+            from headroom.memory.adapters.embedders import NoopEmbedder
+
+            embedder = NoopEmbedder()
         else:
             raise ValueError(f"Unknown embedder backend: {config.embedder_backend}")
 

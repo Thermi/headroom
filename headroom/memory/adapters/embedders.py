@@ -172,6 +172,47 @@ def _normalize_embeddings_batch(embeddings: np.ndarray) -> np.ndarray:
 
 
 # =============================================================================
+# NoopEmbedder - passthrough (no model loaded, returns zero vectors)
+# =============================================================================
+
+
+class NoopEmbedder:
+    """No-op embedder that returns zero vectors without loading any model.
+
+    Analogue of the Kompress ``_passthrough()`` for the embedding path:
+    the system remains operational but returns no signal, so memory
+    searches gracefully return empty results. Useful when ONNX model
+    loading should be skipped (e.g. when ``--no-kompress`` is active).
+    """
+
+    DEFAULT_DIMENSION = 384
+    DEFAULT_MAX_TOKENS = 256
+
+    async def embed(self, text: str) -> np.ndarray:
+        return np.zeros(self.DEFAULT_DIMENSION, dtype=np.float32)
+
+    async def embed_batch(self, texts: list[str]) -> list[np.ndarray]:
+        if not texts:
+            return []
+        return [np.zeros(self.DEFAULT_DIMENSION, dtype=np.float32) for _ in texts]
+
+    @property
+    def dimension(self) -> int:
+        return self.DEFAULT_DIMENSION
+
+    @property
+    def model_name(self) -> str:
+        return "none"
+
+    @property
+    def max_tokens(self) -> int:
+        return self.DEFAULT_MAX_TOKENS
+
+    async def close(self) -> None:
+        pass
+
+
+# =============================================================================
 # LocalEmbedder - sentence-transformers
 # =============================================================================
 
