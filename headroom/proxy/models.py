@@ -191,6 +191,13 @@ class ProxyConfig:
     # tool). Threaded into the router in server.py; default preserves current behavior.
     ccr_inject_marker: bool = True
 
+    # Disable all inline tool injection (CCR headroom_retrieve + memory tools).
+    # When True, neither the CCR retrieval tool nor memory tools are injected
+    # into client request bodies, regardless of per-session sticky state.
+    # CLI: --no-inline-tools; env: HEADROOM_NO_INLINE_TOOLS=1.
+    # Per-request override: x-headroom-no-inline-tools header or ?no_inline_tools=1 query param.
+    no_inline_tools: bool = False
+
     # CCR Response Handling
     ccr_handle_responses: bool = True
     ccr_max_retrieval_rounds: int = 3

@@ -702,22 +702,16 @@ def dashboard(port: int, no_open: bool) -> None:
     ),
 )
 @click.option(
-    "--no-memory-tools",
+    "--no-inline-tools",
     is_flag=True,
-    envvar="HEADROOM_NO_MEMORY_TOOLS",
+    envvar="HEADROOM_NO_INLINE_TOOLS",
     help=(
-        "Disable automatic injection of memory_save/memory_search tools into requests. "
-        "Env: HEADROOM_NO_MEMORY_TOOLS."
+        "Disable all inline tool injection (CCR headroom_retrieve + memory tools). "
+        "Env: HEADROOM_NO_INLINE_TOOLS."
     ),
 )
 @click.option(
-    "--no-memory-context",
-    is_flag=True,
-    envvar="HEADROOM_NO_MEMORY_CONTEXT",
-    help=(
-        "Disable automatic injection of relevant past memories into the system prompt. "
-        "Env: HEADROOM_NO_MEMORY_CONTEXT."
-    ),
+    "--no-memory-context", is_flag=True, help="Disable automatic memory context injection"
 )
 @click.option(
     "--memory-top-k",
@@ -966,6 +960,7 @@ def proxy(
     memory_storage: str,
     memory_project_root: str,
     no_memory_tools: bool,
+    no_inline_tools: bool,
     no_memory_context: bool,
     memory_top_k: int,
     memory_qdrant_url: str | None,
@@ -1290,6 +1285,7 @@ def proxy(
         memory_project_root_override=memory_project_root,
         memory_inject_tools=not no_memory_tools,
         memory_inject_context=not no_memory_context,
+        no_inline_tools=no_inline_tools,
         memory_top_k=memory_top_k,
         **qdrant_overrides,
         # Traffic Learning: only with --learn, never with --no-learn
