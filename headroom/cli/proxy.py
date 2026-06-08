@@ -262,7 +262,7 @@ def dashboard(port: int, no_open: bool) -> None:
     ),
 )
 @click.option("--no-optimize", is_flag=True, help="Disable optimization (passthrough mode)")
-@click.option("--no-kompress", is_flag=True, help="Disable Kompress ML text compression")
+@click.option("--no-kompress", is_flag=True, envvar="HEADROOM_NO_KOMPRESS", help="Disable Kompress ML text compression")
 @click.option("--no-cache", is_flag=True, help="Disable semantic caching")
 @click.option("--no-rate-limit", is_flag=True, help="Disable rate limiting")
 @click.option(
