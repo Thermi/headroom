@@ -62,7 +62,9 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # without building the headroom package itself.  Only pyproject.toml and
 # the lockfile invalidate this cache; source-code edits do not.
 COPY pyproject.toml uv.lock ./
-RUN python <<SCRIPT > /tmp/runtime-deps.txt
+RUN --mount=type=cache,target=/root/.cache/uv \
+    python <<SCRIPT \
+    | uv pip install --system -r /dev/stdin
 import tomllib, pathlib
 p = tomllib.loads(pathlib.Path('pyproject.toml').read_text())
 deps = list(p['project'].get('dependencies', []))
@@ -71,8 +73,6 @@ for name, group in p['project'].get('optional-dependencies', {}).items():
         deps.extend(group)
 print('\n'.join(deps))
 SCRIPT
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install --system -r /tmp/runtime-deps.txt
 
 #ARG HEADROOM_EXTRAS=code,proxy,memory
 ARG HEADROOM_EXTRAS=all
@@ -97,12 +97,12 @@ RUN GIT="${GIT_COMMIT:-$(git rev-parse --short HEAD 2>/dev/null || echo unknown)
 # Remove .git to keep the builder layer lean — it is not needed at runtime.
 RUN rm -rf .git
 
-RUN echo "setuptools<82" > /tmp/uv-constraints.txt
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=cache,target=/root/.cargo/registry \
     --mount=type=cache,target=/build/target \
-    uv pip install --system --no-build-isolation --no-deps \
-        --constraint /tmp/uv-constraints.txt ".[${HEADROOM_EXTRAS}]"
+    echo "setuptools<82" \
+    | uv pip install --system --no-build-isolation --no-deps \
+        --constraint /dev/stdin ".[${HEADROOM_EXTRAS}]"
 
 RUN --mount=type=bind,source=.,target=/context,readonly \
     HEADROOM_BUILD_VERSION="${HEADROOM_BUILD_VERSION}" PYTHON_SITE_PACKAGES="${PYTHON_SITE_PACKAGES}" python - <<'PY'
