@@ -317,6 +317,127 @@ def _headroom_bypass_enabled(headers: Any) -> bool:
     return bypass or passthrough
 
 
+_NO_INLINE_TOOLS_HEADER = "x-headroom-no-inline-tools"
+_NO_INLINE_TOOLS_QUERY_PARAM = "no_inline_tools"
+
+
+def _headroom_no_inline_tool_injection(
+    headers: Any, query_params: dict[str, str] | None = None
+) -> bool:
+    """Return True when the request asks to skip inline tool injection.
+
+    Inline tools (CCR retrieval tool, memory tools) are injected into the
+    client's request body before forwarding to the upstream LLM.  Clients
+    that do not want their tool list mutated can opt out via:
+
+    * HTTP header: ``x-headroom-no-inline-tools: true``
+    * URL query parameter: ``?no_inline_tools=true``
+
+    Checking both header and query param lets clients that cannot set custom
+    headers (browser-based copilots, restrictive SDKs) still opt out.
+    """
+    try:
+        header_val = str(headers.get(_NO_INLINE_TOOLS_HEADER, "")).strip().lower()
+        if header_val in ("true", "1", "yes"):
+            return True
+    except AttributeError:
+        pass
+
+    if query_params:
+        try:
+            qp_val = str(query_params.get(_NO_INLINE_TOOLS_QUERY_PARAM, "")).strip().lower()
+            if qp_val in ("true", "1", "yes"):
+                return True
+        except (AttributeError, TypeError):
+            pass
+
+    return False
+
+
+def serialize_body_canonical(body: dict[str, Any]) -> bytes:
+    """Re-serialize a request body deterministically with cache-stable formatting.
+
+    Uses compact separators and preserves UTF-8 (no ``\\uXXXX`` escapes), so
+    byte output matches what well-behaved API clients (Claude Code, Codex
+    CLI) emit. Python 3.7+ dict insertion order is preserved by
+    ``json.dumps`` so message ordering is stable.
+
+    This is the canonical re-serialization for any forwarder path that did
+    mutate the body (memory injection, compression, etc.).
+    """
+    return json.dumps(body, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+
+
+class BodyMutationTracker:
+    """Records whether a request body was mutated and why.
+
+    The forwarder reads ``mutated`` to decide between byte-faithful
+    passthrough and canonical re-serialization. Reasons are logged with
+    each outbound request to make cache-affecting decisions auditable.
+
+    Thread-safety: a single tracker instance is owned by exactly one
+    request task. No locking needed.
+    """
+
+    __slots__ = ("_mutated", "_reasons")
+
+    def __init__(self) -> None:
+        self._mutated: bool = False
+        self._reasons: list[str] = []
+
+    def mark_mutated(self, reason: str) -> None:
+        """Mark the body as mutated and record the reason.
+
+        ``reason`` should be a stable identifier (snake_case) suitable for
+        log aggregation, e.g. ``memory_injection`` or
+        ``compression_smart_crusher``.
+        """
+        if not reason:
+            raise ValueError("BodyMutationTracker.mark_mutated: reason must be non-empty")
+        self._mutated = True
+        if reason not in self._reasons:
+            self._reasons.append(reason)
+
+    @property
+    def mutated(self) -> bool:
+        return self._mutated
+
+    @property
+    def reasons(self) -> list[str]:
+        return list(self._reasons)
+
+
+def prepare_outbound_body_bytes(
+    *,
+    body: dict[str, Any],
+    original_body_bytes: bytes | None,
+    body_mutated: bool,
+    forwarder_mode: PythonForwarderMode | None = None,
+) -> tuple[bytes, str]:
+    """Pick the outbound body bytes for a forwarder call.
+
+    Returns ``(outbound_bytes, source)`` where ``source`` is one of
+    ``passthrough`` (original bytes verbatim), ``canonical`` (re-serialized
+    deterministically because body was mutated), or ``legacy`` (rollback
+    mode — old ``json=body`` behavior).
+
+    * ``forwarder_mode == "byte_faithful"`` (default): unmutated → passthrough,
+      mutated → canonical.
+    * ``forwarder_mode == "legacy_json_kwarg"``: always re-encode via the old
+      httpx-style separators (operator opt-in, for rollback only).
+    """
+    mode = forwarder_mode if forwarder_mode is not None else get_python_forwarder_mode()
+    if mode == "legacy_json_kwarg":
+        # Old httpx default: separators=(", ", ": "), ensure_ascii=True.
+        legacy_bytes = json.dumps(body, separators=(", ", ": "), ensure_ascii=True).encode("utf-8")
+        return legacy_bytes, "legacy"
+
+    # byte_faithful path
+    if body_mutated or original_body_bytes is None:
+        return serialize_body_canonical(body), "canonical"
+    return original_body_bytes, "passthrough"
+
+
 def log_outbound_request(
     *,
     forwarder: str,
@@ -1506,6 +1627,7 @@ def apply_session_sticky_memory_tools(
     existing_tools: list[dict[str, Any]] | None,
     memory_tools_to_inject: list[dict[str, Any]],
     inject_this_turn: bool,
+    disable_inline_tool_injection: bool = False,
 ) -> tuple[list[dict[str, Any]], bool]:
     """Apply sticky-on memory tool injection per `SessionToolTracker`.
 
@@ -1513,6 +1635,9 @@ def apply_session_sticky_memory_tools(
     (Anthropic custom tools, Anthropic native tool, OpenAI function tools).
 
     Logic (guide §6.3 #2):
+
+      * If ``disable_inline_tool_injection`` is True: skip all tool
+        injection unconditionally (caller opt-out via header or query param).
 
       * If ``HEADROOM_TOOL_INJECTION_STICKY=disabled``: bypass tracker,
         inject only when ``inject_this_turn`` is True. Diagnostic mode.
@@ -1541,7 +1666,18 @@ def apply_session_sticky_memory_tools(
     if provider not in ("anthropic", "openai"):
         raise ValueError(f"unsupported provider: {provider!r}")
 
-    tools_out: list[dict[str, Any]] = list(existing_tools) if existing_tools else []
+    if disable_inline_tool_injection:
+        tools_out: list[dict[str, Any]] = list(existing_tools) if existing_tools else []
+        log_tool_injection_decision(
+            provider=provider,
+            session_id=session_id,
+            decision="skip",
+            tool_definition_bytes_count=0,
+            request_id=request_id,
+        )
+        return tools_out, False
+
+    tools_out = list(existing_tools) if existing_tools else []
     existing_names: set[str] = set()
     for t in tools_out:
         n = _extract_tool_name(t)
@@ -1764,6 +1900,7 @@ def apply_session_sticky_ccr_tool(
     request_id: str | None,
     existing_tools: list[dict[str, Any]] | None,
     has_compressed_content_this_turn: bool,
+    disable_inline_tool_injection: bool = False,
 ) -> tuple[list[dict[str, Any]], bool]:
     """Apply sticky-on CCR retrieval-tool injection per :class:`SessionCcrTracker`.
 
@@ -1772,6 +1909,9 @@ def apply_session_sticky_ccr_tool(
     off" behaviour.
 
     Logic:
+
+      * If ``disable_inline_tool_injection`` is True: skip all tool
+        injection unconditionally (caller opt-out via header or query param).
 
       * If ``session_id`` is None: tracker is bypassed and the per-turn
         ``has_compressed_content_this_turn`` flag drives the decision
@@ -1794,7 +1934,18 @@ def apply_session_sticky_ccr_tool(
     if provider not in ("anthropic", "openai", "google"):
         raise ValueError(f"unsupported provider: {provider!r}")
 
-    tools_out: list[dict[str, Any]] = list(existing_tools) if existing_tools else []
+    if disable_inline_tool_injection:
+        tools_out: list[dict[str, Any]] = list(existing_tools) if existing_tools else []
+        log_tool_injection_decision(
+            provider=provider,
+            session_id=session_id,
+            decision="skip",
+            tool_definition_bytes_count=0,
+            request_id=request_id,
+        )
+        return tools_out, False
+
+    tools_out = list(existing_tools) if existing_tools else []
     existing_names: set[str] = set()
     for t in tools_out:
         n = _extract_tool_name(t)
