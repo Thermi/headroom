@@ -778,6 +778,14 @@ def dashboard(port: int, no_open: bool) -> None:
         "cost of slower learning. Default: 5. (env: HEADROOM_MIN_EVIDENCE)"
     ),
 )
+@click.option(
+    "--auto-extract-memories",
+    is_flag=True,
+    help="Analyze model responses and extract memories automatically "
+    "(no need for model to call memory_save). Implies --memory. "
+    "Uses inline <memory> blocks first (zero-cost), "
+    "then falls back to LLM extraction if configured.",
+)
 # Backend configuration
 @click.option(
     "--backend",
@@ -970,6 +978,7 @@ def proxy(
     learn: bool,
     no_learn: bool,
     min_evidence: int | None,
+    auto_extract_memories: bool,
     backend: str,
     anyllm_provider: str,
     anthropic_api_url: str | None,
@@ -1279,7 +1288,7 @@ def proxy(
         # Memory System (Multi-Provider with auto-detection)
         # --learn implies --memory (need backend for storing patterns)
         # Stateless mode disables memory (requires SQLite on disk)
-        memory_enabled=False if is_stateless else (memory or (learn and not no_learn)),
+        memory_enabled=False if is_stateless else (memory or (learn and not no_learn) or auto_extract_memories),
         memory_db_path=memory_db_path,
         memory_storage_mode=cast(Literal["project", "user", "global"], memory_storage.lower()),
         memory_project_root_override=memory_project_root,
@@ -1290,6 +1299,7 @@ def proxy(
         **qdrant_overrides,
         # Traffic Learning: only with --learn, never with --no-learn
         # Stateless mode disables learning (requires filesystem)
+        auto_extract_memories=False if is_stateless else auto_extract_memories,
         traffic_learning_enabled=False if is_stateless else (learn and not no_learn),
         traffic_learning_agent_type=os.environ.get("HEADROOM_AGENT_TYPE", "unknown"),
         traffic_learning_min_evidence=min_evidence if min_evidence is not None else 5,

@@ -387,6 +387,7 @@ class ProxyConfig:
     memory_project_root_override: str = ""
     memory_inject_tools: bool = True
     traffic_learning_enabled: bool = False
+    auto_extract_memories: bool = False  # Analyze responses to auto-generate memories
     traffic_learning_agent_type: str = "unknown"  # Which agent is being wrapped
     # Minimum evidence count before a learned pattern is persisted to memory.
     # Higher values reduce one-shot noise at the cost of slower learning.
