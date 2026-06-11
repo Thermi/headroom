@@ -107,6 +107,48 @@ _TOOLS = [
             "required": [],
         },
     ),
+    Tool(
+        name="memory_analyze",
+        description=(
+            "Analyze a conversation turn (user message + assistant response) "
+            "and extract facts worth remembering. Saves extracted memories "
+            "automatically. Use this when you've just had a conversation that "
+            "contained important information, decisions, or preferences."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "messages": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "role": {"type": "string", "description": "user or assistant"},
+                            "content": {"type": "string", "description": "Message content"},
+                        },
+                    },
+                    "description": "Conversation messages to analyze.",
+                },
+                "response_text": {
+                    "type": "string",
+                    "description": "The assistant's response text to analyze.",
+                },
+                "api_key": {
+                    "type": "string",
+                    "description": "Optional API key for extraction LLM. Defaults to OPENAI_API_KEY env.",
+                },
+                "base_url": {
+                    "type": "string",
+                    "description": "Optional base URL for extraction LLM. Defaults to OpenAI.",
+                },
+                "model": {
+                    "type": "string",
+                    "description": "Extraction model. Default: gpt-4o-mini",
+                },
+            },
+            "required": ["messages", "response_text"],
+        },
+    ),
 ]
 
 
@@ -240,6 +282,8 @@ def create_memory_server(db_path: str, user_id: str = "default") -> Server:
             return await _handle_search(backend, arguments, user_id)
         elif name == "memory_save":
             return await _handle_save(backend, arguments, user_id)
+        elif name == "memory_analyze":
+            return await _handle_analyze(backend, arguments, user_id)
 
         return [TextContent(type="text", text=f"Unknown tool: {name}")]
 
@@ -348,6 +392,65 @@ async def _handle_save(
     except Exception as e:
         logger.error(f"memory_save failed: {e}")
         return [TextContent(type="text", text=f"Save error: {e}")]
+
+
+async def _handle_analyze(
+    backend: LocalBackend, arguments: dict[str, Any], user_id: str
+) -> list[TextContent]:
+    """Analyze a conversation turn and extract memories."""
+    from headroom.memory.response_extractor import extract_memories_from_turn
+
+    messages = arguments.get("messages", [])
+    response_text = arguments.get("response_text", "")
+    model = arguments.get("model", "gpt-4o-mini")
+    api_key = arguments.get("api_key") or os.environ.get("OPENAI_API_KEY")
+    base_url = arguments.get("base_url") or os.environ.get("OPENAI_BASE_URL")
+
+    if not messages or not response_text:
+        return [TextContent(type="text", text="Error: messages and response_text are required")]
+
+    use_llm = bool(api_key)
+
+    try:
+        result = await extract_memories_from_turn(
+            messages,
+            response_text,
+            model=model,
+            api_key=api_key,
+            base_url=base_url,
+            use_llm=use_llm,
+        )
+
+        if not result.memories:
+            if result.strategy == "none" and not use_llm:
+                msg = (
+                    "No memories extracted via inline <memory> block. "
+                    "To enable LLM-based extraction, set OPENAI_API_KEY or "
+                    "pass an api_key parameter."
+                )
+            else:
+                msg = "No memories worth extracting from this conversation."
+            return [TextContent(type="text", text=msg)]
+
+        saved_count = 0
+        for mem in result.memories:
+            await backend.save_memory(
+                content=mem.content,
+                user_id=user_id,
+                importance=mem.importance,
+            )
+            saved_count += 1
+
+        lines = [
+            f"Extracted and saved {saved_count} memories (strategy: {result.strategy}):"
+        ]
+        for mem in result.memories:
+            lines.append(f"  [{mem.importance:.1f}] {mem.content}")
+
+        return [TextContent(type="text", text="\n".join(lines))]
+    except Exception as e:
+        logger.error(f"memory_analyze failed: {e}")
+        return [TextContent(type="text", text=f"Analysis error: {e}")]
 
 
 # ---------------------------------------------------------------------------
