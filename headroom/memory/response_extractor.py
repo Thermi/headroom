@@ -171,10 +171,10 @@ async def extract_with_llm(
     ]
 
     try:
-        from openai import OpenAI
+        from openai import AsyncOpenAI
 
-        client = OpenAI(api_key=api_key, base_url=base_url)
-        response = client.chat.completions.create(
+        client = AsyncOpenAI(api_key=api_key, base_url=base_url)
+        response = await client.chat.completions.create(
             model=model,
             messages=extraction_messages,  # type: ignore[arg-type]
             temperature=0.1,
