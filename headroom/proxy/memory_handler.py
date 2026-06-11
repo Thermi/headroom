@@ -1183,6 +1183,83 @@ your responses, not to drive new actions."""
             logger.error(f"Memory: Tool {tool_name} failed: {e}")
             return json.dumps({"status": "error", "error": str(e)})
 
+    async def extract_from_response(
+        self,
+        response_body: dict[str, Any],
+        messages: list[dict[str, Any]],
+        user_id: str,
+        provider: str = "anthropic",
+        *,
+        extraction_model: str = "gpt-4o-mini",
+        use_llm: bool = False,
+        api_key: str | None = None,
+        base_url: str | None = None,
+        request_context: RequestContext | None = None,
+    ) -> list[dict[str, Any]]:
+        """Analyze a model response and extract memories.
+
+        Tries inline ``<memory>`` block parsing first (zero-cost).
+        If ``use_llm=True`` and no inline blocks found, falls back to
+        LLM-based extraction.
+
+        Args:
+            response_body: The model response body.
+            messages: The conversation messages.
+            user_id: User identifier.
+            provider: Provider format.
+            extraction_model: Model to use for LLM extraction.
+            use_llm: Whether to fall back to LLM extraction.
+            api_key: API key for extraction model.
+            base_url: Base URL for extraction model provider.
+            request_context: Optional request envelope for workspace routing.
+
+        Returns:
+            List of saved memory results (empty if nothing extracted).
+        """
+        from headroom.memory.response_extractor import (
+            _extract_text_from_anthropic_response,
+            _extract_text_from_openai_response,
+            extract_memories_from_turn,
+        )
+
+        if provider == "anthropic":
+            response_text = _extract_text_from_anthropic_response(response_body)
+        elif provider == "openai":
+            response_text = _extract_text_from_openai_response(response_body)
+        else:
+            return []
+
+        if not response_text:
+            return []
+
+        result = await extract_memories_from_turn(
+            messages,
+            response_text,
+            model=extraction_model,
+            api_key=api_key,
+            base_url=base_url,
+            use_llm=use_llm,
+        )
+
+        if not result.memories:
+            return []
+
+        saved: list[dict[str, Any]] = []
+        for mem in result.memories:
+            input_data = mem.to_save_input()
+            save_result = await self._execute_save(
+                input_data, user_id, provider, request_context
+            )
+            saved.append({"strategy": result.strategy, "content": mem.content, "save": save_result})
+
+        logger.info(
+            "Auto-extracted %d memories from %s response (strategy=%s)",
+            len(result.memories),
+            provider,
+            result.strategy,
+        )
+        return saved
+
     async def _execute_save(
         self,
         input_data: dict[str, Any],

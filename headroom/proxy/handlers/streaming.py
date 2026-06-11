@@ -1566,6 +1566,24 @@ class StreamingMixin:
                                     f"status={mem_event['status']}"
                                 )
 
+                # Auto-extract memories from response (if enabled)
+                if (
+                    self.config.auto_extract_memories
+                    and memory_enabled
+                    and parsed_response
+                    and original_messages
+                ):
+                    try:
+                        await self.memory_handler.extract_from_response(
+                            parsed_response,
+                            original_messages,
+                            memory_user_id,
+                            provider=provider,
+                            request_context=memory_request_ctx,
+                        )
+                    except Exception as exc:
+                        logger.warning(f"[{request_id}] Auto-extraction failed: {exc}")
+
                 # CCR Feedback: Record headroom_retrieve tool calls for TOIN learning.
                 # In streaming mode, the client handles actual retrieval, but we
                 # still need to record the event so TOIN learns which fields matter.
