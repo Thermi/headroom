@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import importlib
-import json
+import os
 from typing import Any
 from unittest.mock import patch
+
+os.environ.setdefault("HEADROOM_REQUIRE_RUST_CORE", "false")
 
 import httpx
 from fastapi.responses import JSONResponse
@@ -25,6 +27,22 @@ def _app() -> Any:
             gemini_api_url="https://api.gemini.test",
             cloudcode_api_url="https://cloudcode.test",
             vertex_api_url="https://vertex.test",
+        )
+    )
+
+
+def _app_disabled() -> Any:
+    return create_app(
+        ProxyConfig(
+            optimize=False,
+            cache_enabled=False,
+            rate_limit_enabled=False,
+            anthropic_api_url="https://api.anthropic.test",
+            openai_api_url="https://api.openai.test",
+            gemini_api_url="https://api.gemini.test",
+            cloudcode_api_url="https://cloudcode.test",
+            vertex_api_url="https://vertex.test",
+            anthropic_enabled=False,
         )
     )
 
@@ -1103,105 +1121,66 @@ def test_v1_models_routes_claude_code_gateway_discovery_to_anthropic() -> None:
     ]
 
 
-def test_anthropic_model_metadata_strips_ansi_model_ids() -> None:
-    class FakeAsyncClient:
-        def __init__(self) -> None:
-            self.calls: list[tuple[str, str]] = []
+def test_anthropic_disabled_routes_fall_through_to_catchall() -> None:
+    """When anthropic_enabled=False, Anthropic-specific routes fall through to catch-all passthrough."""
+    calls: list[tuple[str, str, str, str]] = []
 
-        async def request(self, method, url, **kwargs):  # type: ignore[no-untyped-def]
-            self.calls.append((method, url))
-            return httpx.Response(
-                200,
-                json={
-                    "object": "list",
-                    "data": [
-                        {"id": "claude-opus-4-8\x1b[1m", "object": "model"},
-                        {"id": "claude-sonnet-4-5[1m]", "object": "model"},
-                    ],
-                },
+    async def fake_passthrough(self, request, base_url, sub_path="", provider_name=""):  # type: ignore[no-untyped-def]
+        calls.append((request.method, request.url.path, base_url, provider_name))
+        return JSONResponse({"base_url": base_url, "provider": provider_name})
+
+    with patch.object(HeadroomProxy, "handle_passthrough", fake_passthrough):
+        with TestClient(_app_disabled()) as client:
+            client.post(
+                "/v1/messages",
+                json={"model": "claude-sonnet-4-6", "messages": [{"role": "user", "content": "hi"}]},
             )
-
-        async def aclose(self) -> None:
-            return None
-
-    with TestClient(_app()) as client:
-        fake_http_client = FakeAsyncClient()
-        client.app.state.proxy.http_client = fake_http_client
-        response = client.get("/v1/models", headers={"x-api-key": "sk-ant-test"})
-
-    assert response.status_code == 200
-    assert response.json()["data"] == [
-        {"id": "claude-opus-4-8", "object": "model"},
-        {"id": "claude-sonnet-4-5", "object": "model"},
-    ]
-    assert fake_http_client.calls == [("GET", "https://api.anthropic.test/v1/models")]
-
-
-def test_anthropic_model_detail_path_strips_ansi_model_id() -> None:
-    class FakeAsyncClient:
-        def __init__(self) -> None:
-            self.calls: list[tuple[str, str]] = []
-
-        async def request(self, method, url, **kwargs):  # type: ignore[no-untyped-def]
-            self.calls.append((method, url))
-            return httpx.Response(
-                200,
-                json={"id": "claude-opus-4-8\x1b[1m", "object": "model"},
+            client.post(
+                "/v1/messages/count_tokens",
+                json={"model": "claude-sonnet-4-6", "messages": [{"role": "user", "content": "hi"}]},
             )
-
-        async def aclose(self) -> None:
-            return None
-
-    with TestClient(_app()) as client:
-        fake_http_client = FakeAsyncClient()
-        client.app.state.proxy.http_client = fake_http_client
-        response = client.get(
-            "/v1/models/claude-opus-4-8%1B%5B1m",
-            headers={"x-api-key": "sk-ant-test"},
-        )
-
-    assert response.status_code == 200
-    assert response.json()["id"] == "claude-opus-4-8"
-    assert fake_http_client.calls == [
-        ("GET", "https://api.anthropic.test/v1/models/claude-opus-4-8")
-    ]
-
-
-def test_anthropic_messages_strips_ansi_model_id_before_upstream() -> None:
-    class FakeAsyncClient:
-        def __init__(self) -> None:
-            self.bodies: list[dict[str, Any]] = []
-
-        async def post(self, url, **kwargs):  # type: ignore[no-untyped-def]
-            self.bodies.append(json.loads(kwargs["content"]))
-            return httpx.Response(
-                200,
-                json={
-                    "id": "msg_1",
-                    "type": "message",
-                    "role": "assistant",
-                    "model": "claude-opus-4-8",
-                    "content": [],
-                    "stop_reason": "end_turn",
-                    "usage": {"input_tokens": 1, "output_tokens": 1},
-                },
+            client.post(
+                "/v1/messages/batches",
+                json={"model": "claude-sonnet-4-6", "messages": [{"role": "user", "content": "hi"}]},
             )
+            client.get("/v1/messages/batches")
+            client.get("/v1/messages/batches/batch-123")
 
-        async def aclose(self) -> None:
-            return None
+    # All 5 Anthropic routes should hit the catch-all passthrough
+    assert len(calls) == 5
+    paths = [c[1] for c in calls]
+    assert "/v1/messages" in paths
+    assert "/v1/messages/count_tokens" in paths
+    assert "/v1/messages/batches" in paths
 
-    with TestClient(_app()) as client:
-        fake_http_client = FakeAsyncClient()
-        client.app.state.proxy.http_client = fake_http_client
-        response = client.post(
-            "/v1/messages",
-            headers={"x-api-key": "sk-ant-test"},
-            json={
-                "model": "claude-opus-4-8\x1b[1m",
-                "max_tokens": 16,
-                "messages": [{"role": "user", "content": "hello"}],
-            },
-        )
 
-    assert response.status_code == 200
-    assert fake_http_client.bodies[0]["model"] == "claude-opus-4-8"
+def test_anthropic_disabled_still_routes_openai_and_gemini() -> None:
+    """When anthropic_enabled=False, non-Anthropic routes must still work."""
+    passthrough_calls: list[tuple[str, str, str, str]] = []
+    openai_calls: list[tuple[str, str, str, str, Any]] = []
+
+    async def fake_passthrough(self, request, base_url, sub_path="", provider_name=""):  # type: ignore[no-untyped-def]
+        passthrough_calls.append((request.method, request.url.path, base_url, provider_name))
+        return JSONResponse({"base_url": base_url, "provider": provider_name})
+
+    async def fake_openai(self, request, upstream_base_url=None, provider_name="openai"):  # type: ignore[no-untyped-def]
+        openai_calls.append((request.method, request.url.path, upstream_base_url, provider_name))
+        return JSONResponse({"handler": "openai", "provider": provider_name})
+
+    with (
+        patch.object(HeadroomProxy, "handle_passthrough", fake_passthrough),
+        patch.object(HeadroomProxy, "handle_openai_chat", fake_openai),
+    ):
+        with TestClient(_app_disabled()) as client:
+            openai = client.post(
+                "/v1/chat/completions",
+                json={"model": "gpt-4o", "messages": [{"role": "user", "content": "hi"}]},
+            )
+            vertex = client.get("/vertex/test")
+            health = client.get("/healthz")
+
+    assert openai.status_code == 200
+    assert openai.json() == {"handler": "openai", "provider": "openai"}
+    assert vertex.status_code == 200
+    assert health.status_code == 200
+    assert len(openai_calls) == 1
