@@ -1564,30 +1564,28 @@ def _project_for_pattern(pattern: ExtractedPattern, roots: list[ProjectInfo]) ->
     if not roots:
         return None
 
-    # Collect candidate absolute paths from content and entity_refs
+    # Collect candidate absolute paths from content and entity_refs.
+    # Normalise to forward slashes so the string prefix checks below
+    # work on Windows where Path("/x/a/b") -> ``\x\a\b``.
     candidates: list[str] = []
     for match in _ABS_PATH_RE.findall(pattern.content or ""):
-        candidates.append(match)
+        candidates.append(match.replace("\\", "/"))
     for ref in pattern.entity_refs or []:
         if ref and (ref.startswith("/") or (len(ref) > 2 and ref[1] == ":")):
-            candidates.append(ref)
+            candidates.append(ref.replace("\\", "/"))
 
     if not candidates:
         return None
 
-    # Longest root first — most specific wins
+    # Longest root first - most specific wins
     roots_sorted = sorted(roots, key=lambda p: len(str(p.project_path)), reverse=True)
 
     for cand in candidates:
         for root in roots_sorted:
-            root_str = str(root.project_path).rstrip("/\\")
+            root_str = str(root.project_path).replace("\\", "/").rstrip("/")
             if not root_str:
                 continue
-            if (
-                cand == root_str
-                or cand.startswith(root_str + "/")
-                or cand.startswith(root_str + "\\")
-            ):
+            if cand == root_str or cand.startswith(root_str + "/"):
                 return root
     return None
 
