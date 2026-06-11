@@ -774,6 +774,131 @@ class TestCLIProxyEnvVars:
         assert captured["kwargs"].get("print_banner") is False
 
 
+class TestCLIProxyAnthropicEnabled:
+    """Test that --no-anthropic and HEADROOM_ANTHROPIC_ENABLED are respected."""
+
+    def test_anthropic_enabled_defaults_true(self, runner):
+        """Without --no-anthropic or env var, anthropic_enabled should be True."""
+        captured_config = {}
+
+        def mock_run_server(config, **kwargs):
+            captured_config["config"] = config
+
+        env = {k: v for k, v in os.environ.items() if k != "HEADROOM_ANTHROPIC_ENABLED"}
+
+        with (
+            patch("headroom.proxy.server.run_server", mock_run_server),
+            patch.dict(os.environ, env, clear=True),
+        ):
+            result = runner.invoke(main, ["proxy"], catch_exceptions=False)
+
+        assert result.exit_code == 0, result.output
+        assert captured_config["config"].anthropic_enabled is True
+
+    def test_no_anthropic_flag_disables_anthropic(self, runner):
+        """--no-anthropic should set anthropic_enabled=False."""
+        captured_config = {}
+
+        def mock_run_server(config, **kwargs):
+            captured_config["config"] = config
+
+        with patch("headroom.proxy.server.run_server", mock_run_server):
+            result = runner.invoke(
+                main, ["proxy", "--no-anthropic"], catch_exceptions=False
+            )
+
+        assert result.exit_code == 0, result.output
+        assert captured_config["config"].anthropic_enabled is False
+
+    def test_anthropic_enabled_from_env(self, runner):
+        """HEADROOM_ANTHROPIC_ENABLED=false should set anthropic_enabled=False."""
+        captured_config = {}
+
+        def mock_run_server(config, **kwargs):
+            captured_config["config"] = config
+
+        with patch("headroom.proxy.server.run_server", mock_run_server):
+            result = runner.invoke(
+                main,
+                ["proxy"],
+                env={"HEADROOM_ANTHROPIC_ENABLED": "false"},
+                catch_exceptions=False,
+            )
+
+        assert result.exit_code == 0, result.output
+        assert captured_config["config"].anthropic_enabled is False
+
+    def test_cli_flag_overrides_env_var(self, runner):
+        """--no-anthropic should win over HEADROOM_ANTHROPIC_ENABLED=true."""
+        captured_config = {}
+
+        def mock_run_server(config, **kwargs):
+            captured_config["config"] = config
+
+        with patch("headroom.proxy.server.run_server", mock_run_server):
+            result = runner.invoke(
+                main,
+                ["proxy", "--no-anthropic"],
+                env={"HEADROOM_ANTHROPIC_ENABLED": "true"},
+                catch_exceptions=False,
+            )
+
+        assert result.exit_code == 0, result.output
+        assert captured_config["config"].anthropic_enabled is False
+
+
+class TestCLIProxyAutoExtract:
+    """Test that --auto-extract-memories flag is respected."""
+
+    def test_auto_extract_defaults_false(self, runner):
+        """Without --auto-extract-memories, auto_extract_memories should be False."""
+        captured_config = {}
+
+        def mock_run_server(config, **kwargs):
+            captured_config["config"] = config
+
+        env = {k: v for k, v in os.environ.items() if k != "HEADROOM_AUTO_EXTRACT_MEMORIES"}
+
+        with (
+            patch("headroom.proxy.server.run_server", mock_run_server),
+            patch.dict(os.environ, env, clear=True),
+        ):
+            result = runner.invoke(main, ["proxy"], catch_exceptions=False)
+
+        assert result.exit_code == 0, result.output
+        assert captured_config["config"].auto_extract_memories is False
+
+    def test_auto_extract_flag_enables(self, runner):
+        """--auto-extract-memories should set auto_extract_memories=True."""
+        captured_config = {}
+
+        def mock_run_server(config, **kwargs):
+            captured_config["config"] = config
+
+        with patch("headroom.proxy.server.run_server", mock_run_server):
+            result = runner.invoke(
+                main, ["proxy", "--auto-extract-memories"], catch_exceptions=False
+            )
+
+        assert result.exit_code == 0, result.output
+        assert captured_config["config"].auto_extract_memories is True
+
+    def test_auto_extract_implies_memory(self, runner):
+        """--auto-extract-memories should also enable memory."""
+        captured_config = {}
+
+        def mock_run_server(config, **kwargs):
+            captured_config["config"] = config
+
+        with patch("headroom.proxy.server.run_server", mock_run_server):
+            result = runner.invoke(
+                main, ["proxy", "--auto-extract-memories"], catch_exceptions=False
+            )
+
+        assert result.exit_code == 0, result.output
+        assert captured_config["config"].memory_enabled is True
+
+
 class TestCLIProxyBackend:
     """Test that litellm-* backends are accepted by the CLI."""
 
