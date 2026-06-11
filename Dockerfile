@@ -45,6 +45,7 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
 
 ARG GIT_COMMIT=
 ARG BUILD_TIME=
+ARG VERSION=unknown
 
 # ---- Build stage: compile native extensions, build wheel ----
 FROM rust-toolchain AS builder
@@ -89,10 +90,18 @@ COPY README.md ./
 # When .git is available (build context from a git checkout), pull the short
 # commit hash directly.  Otherwise fall back to the GIT_COMMIT / BUILD_TIME
 # build args (CI / docker-compose).
-RUN GIT="${GIT_COMMIT:-$(git rev-parse --short HEAD 2>/dev/null || echo unknown)}" \
-    BUILD="${BUILD_TIME:-$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo unknown)}" && \
+RUN GIT="${GIT_COMMIT}" && \
+    if [ -z "$GIT" ] || [ "$GIT" = "unknown" ]; then \
+      GIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown"); \
+    fi && \
+    BUILD="${BUILD_TIME}" && \
+    if [ -z "$BUILD" ] || [ "$BUILD" = "unknown" ]; then \
+      BUILD=$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo "unknown"); \
+    fi && \
     sed -i "s/BUILD_GIT_COMMIT: str = ''/BUILD_GIT_COMMIT: str = '$GIT'/" headroom/_build_info.py && \
     sed -i "s/BUILD_TIME: str = ''/BUILD_TIME: str = '$BUILD'/" headroom/_build_info.py && \
+    echo -n "$GIT" > /tmp/.git_commit && \
+    echo -n "$BUILD" > /tmp/.build_time && \
     echo "headroom/_build_info.py injected: commit=$GIT build=$BUILD"
 # Remove .git to keep the builder layer lean — it is not needed at runtime.
 RUN rm -rf .git
@@ -205,6 +214,16 @@ FROM python:${PYTHON_VERSION}-slim AS runtime-slim-base
 ARG RUNTIME_USER=nonroot
 ARG RUNTIME_HOME=/home/nonroot
 ARG PYTHON_SITE_PACKAGES
+ARG GIT_COMMIT
+ARG BUILD_TIME
+ARG VERSION
+
+LABEL org.opencontainers.image.title="headroom" \
+      org.opencontainers.image.description="Universal prompt engineering toolkit" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.revision="${GIT_COMMIT}" \
+      org.opencontainers.image.created="${BUILD_TIME}" \
+      org.opencontainers.image.source="https://github.com/chopratejas/headroom"
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends curl htop iputils-ping iputils-tracepath traceroute && \
@@ -218,6 +237,12 @@ COPY --from=cuda-libs /usr/local/cuda-12.6 /usr/local/cuda-12.6
 # nvidia/cuda image, not inside the CUDA toolkit directory.  Copy it into
 # the CUDA lib path so onnxruntime's CUDAExecutionProvider can find it.
 COPY --from=cuda-libs /usr/lib/x86_64-linux-gnu/libcudnn* /usr/local/cuda-12.6/lib64/
+
+RUN mkdir -p /opt/headroom && python3 <<SCRIPT
+import json, pathlib, headroom._build_info as bi
+info = {'git_commit': bi.BUILD_GIT_COMMIT, 'build_time': bi.BUILD_TIME}
+pathlib.Path('/opt/headroom/build-info.json').write_text(json.dumps(info))
+SCRIPT
 
 RUN mkdir -p /home/nonroot /data && \
     if [ "$RUNTIME_USER" = "nonroot" ]; then \
@@ -256,13 +281,31 @@ FROM ${DISTROLESS_IMAGE} AS runtime-slim
 
 ARG RUNTIME_USER=nonroot
 ARG PYTHON_SITE_PACKAGES
+ARG GIT_COMMIT
+ARG BUILD_TIME
+ARG VERSION
+
+LABEL org.opencontainers.image.title="headroom" \
+      org.opencontainers.image.description="Universal prompt engineering toolkit" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.revision="${GIT_COMMIT}" \
+      org.opencontainers.image.created="${BUILD_TIME}" \
+      org.opencontainers.image.source="https://github.com/chopratejas/headroom"
 
 COPY --from=builder ${PYTHON_SITE_PACKAGES} ${PYTHON_SITE_PACKAGES}
 COPY --from=builder /root/.headroom/bin/rtk /usr/local/bin/rtk
 COPY --from=cuda-libs /usr/local/cuda-12.6 /usr/local/cuda-12.6
 
+RUN mkdir -p /opt/headroom && python3 <<SCRIPT
+import json, pathlib, headroom._build_info as bi
+info = {'git_commit': bi.BUILD_GIT_COMMIT, 'build_time': bi.BUILD_TIME}
+pathlib.Path('/opt/headroom/build-info.json').write_text(json.dumps(info))
+SCRIPT
+
 USER ${RUNTIME_USER}
 WORKDIR /app
+
+RUN apt-get update && apt install -y htop ping traceroute tracepath && rm -rf /var/lib/apt/lists/*
 
 ENV HEADROOM_HOST=0.0.0.0 \
     PYTHONUNBUFFERED=1 \
