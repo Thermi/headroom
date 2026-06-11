@@ -1375,6 +1375,7 @@ prefer_code_aware_for_code=_get_env_bool("HEADROOM_PREFER_CODE_AWARE_FOR_CODE", 
                 user_id=os.environ.get("HEADROOM_USER_ID", os.environ.get("USER", "default")),
                 agent_type=config.traffic_learning_agent_type,
                 min_evidence=config.traffic_learning_min_evidence,
+                max_memory_bytes=config.traffic_learning_max_memory_bytes,
             )
 
         # Code graph file watcher (live reindex on file changes)

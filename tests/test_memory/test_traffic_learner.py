@@ -2435,3 +2435,101 @@ class TestExtractPreferencesSentenceBoundary:
         assert not out[0].content.endswith(".")
         assert not out[0].content.endswith("!")
         assert not out[0].content.endswith("?")
+
+
+# =============================================================================
+# Memory size limit (max_memory_bytes) tests
+# =============================================================================
+
+
+class TestTrimBySize:
+    """_trim_by_size drops lowest-value patterns when rendered size exceeds limit."""
+
+    def _make_pattern(self, content: str, evidence: int = 1, importance: float = 0.5) -> ExtractedPattern:
+        return ExtractedPattern(
+            category=PatternCategory.ENVIRONMENT,
+            content=content,
+            evidence_count=evidence,
+            importance=importance,
+        )
+
+    def test_no_limit_passthrough(self):
+        """No limit set → all patterns pass through."""
+        learner = TrafficLearner(backend=None, min_evidence=1, max_memory_bytes=None)
+        patterns = [self._make_pattern("a"), self._make_pattern("b")]
+        result = learner._trim_by_size(patterns)
+        assert result == patterns
+
+    def test_zero_limit_passthrough(self):
+        """Zero limit → all patterns pass through (treated as unlimited)."""
+        learner = TrafficLearner(backend=None, min_evidence=1, max_memory_bytes=0)
+        patterns = [self._make_pattern("a"), self._make_pattern("b")]
+        result = learner._trim_by_size(patterns)
+        assert result == patterns
+
+    def test_under_limit_passthrough(self):
+        """Total size under limit → all patterns pass through."""
+        learner = TrafficLearner(backend=None, min_evidence=1, max_memory_bytes=10_000)
+        patterns = [self._make_pattern("a"), self._make_pattern("b")]
+        result = learner._trim_by_size(patterns)
+        assert result == patterns
+
+    def test_trim_below_limit(self):
+        """Total size over limit → lowest-value patterns dropped."""
+        learner = TrafficLearner(backend=None, min_evidence=1, max_memory_bytes=50)
+        high = self._make_pattern("A" * 30, evidence=10, importance=0.9)
+        low = self._make_pattern("B" * 30, evidence=1, importance=0.1)
+        result = learner._trim_by_size([high, low])
+        assert len(result) == 1
+        assert result[0].content == high.content
+
+    def test_preserves_highest_value_first(self):
+        """Highest-value pattern preserved even when many low-value ones exist."""
+        learner = TrafficLearner(backend=None, min_evidence=1, max_memory_bytes=60)
+        high = self._make_pattern("HIGH" * 10, evidence=100, importance=0.9)
+        low_patterns = [self._make_pattern(f"low-{i}", evidence=1, importance=0.1) for i in range(50)]
+        result = learner._trim_by_size([high] + low_patterns)
+        assert result[0].content == high.content
+
+    def test_empty_patterns_list(self):
+        """Empty list → empty list."""
+        learner = TrafficLearner(backend=None, min_evidence=1, max_memory_bytes=100)
+        result = learner._trim_by_size([])
+        assert result == []
+
+    def test_single_pattern_fits(self):
+        """Single pattern under limit → kept."""
+        learner = TrafficLearner(backend=None, min_evidence=1, max_memory_bytes=100)
+        p = self._make_pattern("A" * 10)
+        result = learner._trim_by_size([p])
+        assert len(result) == 1
+        assert result[0].content == p.content
+
+    def test_single_pattern_exceeds_limit(self):
+        """Single pattern exceeding limit → dropped."""
+        learner = TrafficLearner(backend=None, min_evidence=1, max_memory_bytes=10)
+        p = self._make_pattern("A" * 100)
+        result = learner._trim_by_size([p])
+        assert result == []
+
+    def test_trim_by_value_equal_size(self):
+        """Two patterns of equal size → lower-value one dropped."""
+        learner = TrafficLearner(backend=None, min_evidence=1, max_memory_bytes=60)
+        high = self._make_pattern("X" * 30, evidence=5, importance=0.9)
+        low = self._make_pattern("Y" * 30, evidence=5, importance=0.1)
+        result = learner._trim_by_size([high, low])
+        assert len(result) == 1
+        assert result[0].content == high.content
+
+    def test_trim_logs_message(self, caplog):
+        """Trimming logs a message with before/after counts."""
+        import logging
+        caplog.set_level(logging.INFO)
+        learner = TrafficLearner(backend=None, min_evidence=1, max_memory_bytes=30)
+        high = self._make_pattern("A" * 10, evidence=10, importance=0.9)
+        low = self._make_pattern("B" * 10, evidence=1, importance=0.1)
+        mid = self._make_pattern("C" * 10, evidence=5, importance=0.5)
+        learner._trim_by_size([high, low, mid])
+        assert "trimmed" in caplog.text
+        assert "3" in caplog.text
+

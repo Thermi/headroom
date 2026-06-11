@@ -805,6 +805,16 @@ def dashboard(port: int, no_open: bool) -> None:
     ),
 )
 @click.option(
+    "--max-memory-bytes",
+    type=int,
+    default=None,
+    envvar="HEADROOM_MAX_MEMORY_BYTES",
+    help=(
+        "Maximum byte size of rendered memory content before trimming "
+        "lowest-value patterns. Default: unlimited. (env: HEADROOM_MAX_MEMORY_BYTES)"
+    ),
+)
+@click.option(
     "--auto-extract-memories",
     is_flag=True,
     help="Analyze model responses and extract memories automatically "
@@ -1003,6 +1013,7 @@ def proxy(
     learn: bool,
     no_learn: bool,
     min_evidence: int | None,
+    max_memory_bytes: int | None,
     auto_extract_memories: bool,
     backend: str,
     anyllm_provider: str,
@@ -1331,6 +1342,7 @@ def proxy(
         traffic_learning_enabled=False if is_stateless else (learn and not no_learn),
         traffic_learning_agent_type=os.environ.get("HEADROOM_AGENT_TYPE", "unknown"),
         traffic_learning_min_evidence=min_evidence if min_evidence is not None else 5,
+        traffic_learning_max_memory_bytes=max_memory_bytes,
         # Backend (Anthropic direct, Bedrock, LiteLLM, or any-llm)
         backend=backend,
         bedrock_region=bedrock_region or region,

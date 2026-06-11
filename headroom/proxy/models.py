@@ -455,6 +455,10 @@ class ProxyConfig:
     # Minimum evidence count before a learned pattern is persisted to memory.
     # Higher values reduce one-shot noise at the cost of slower learning.
     traffic_learning_min_evidence: int = 5
+    # Maximum byte size of rendered memory content before trimming kicks in.
+    # When the rendered output exceeds this limit, lowest-value patterns are
+    # dropped. None means unlimited.
+    traffic_learning_max_memory_bytes: int | None = None
     memory_use_native_tool: bool = False
     memory_inject_context: bool = True
     memory_top_k: int = 10
