@@ -1566,6 +1566,35 @@ class StreamingMixin:
                                     f"status={mem_event['status']}"
                                 )
 
+                # Traffic Learner: Extract patterns from inbound tool results
+                if self.traffic_learner:
+                    try:
+                        # Wire backend on first use (lazy init after memory handler is ready)
+                        if (
+                            self.traffic_learner._backend is None
+                            and self.memory_handler
+                            and self.memory_handler.initialized
+                            and self.memory_handler.backend
+                        ):
+                            self.traffic_learner.set_backend(self.memory_handler.backend)
+
+                        # Extract tool results from messages and learn from them
+                        tool_results = self.traffic_learner.extract_tool_results_from_messages(
+                            original_messages or []
+                        )
+                        for tr in tool_results[-5:]:  # Only recent results
+                            await self.traffic_learner.on_tool_result(
+                                tool_name=tr["tool_name"],
+                                tool_input=tr["input"],
+                                tool_output=tr["output"],
+                                is_error=tr["is_error"],
+                            )
+
+                        # Also extract preference signals from user messages
+                        await self.traffic_learner.on_messages(original_messages or [])
+                    except Exception as e:
+                        logger.debug(f"[{request_id}] Traffic learner: {e}")
+
                 # Auto-extract memories from response (if enabled)
                 if (
                     self.config.auto_extract_memories
