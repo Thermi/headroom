@@ -3158,25 +3158,27 @@ def create_app(config: ProxyConfig | None = None) -> FastAPI:
 
         started = time.perf_counter()
         inbound_id = f"inbound-{time.time_ns()}"
+        # Project attribution: an explicit X-Headroom-Project header wins
+        # (claude/codex wraps); otherwise a /p/<name> base-URL prefix (aider,
+        # Copilot BYOK, Cursor — clients that cannot send custom headers).
+        # The prefix strip mutates the scope, so it must happen before
+        # request.url is first accessed (Starlette caches the URL).
+        prefix_project = strip_project_path_prefix(scope)
         path = scope.get("path", "")
         method = scope.get("method", "")
-        query_bytes = scope.get("query_string", b"")
-        query = query_bytes.decode() if query_bytes else ""
-
+        raw_query = scope.get("query_string", b"")
+        query = raw_query.decode() if raw_query else ""
         headers_raw = scope.get("headers", [])
         headers = {}
-        content_length = ""
         for key_bytes, value_bytes in headers_raw:
             key = key_bytes.decode()
-            value = value_bytes.decode()
-            if key == "content-length":
-                content_length = value
-            headers[key] = value
-
-        client_info = scope.get("client")
+            headers[key] = value_bytes.decode()
+        content_length = headers.get("content-length", "")
+        set_current_project(classify_project(headers) or prefix_project)
+        client = scope.get("client")
         client_addr = ""
-        if client_info:
-            client_host, client_port = client_info
+        if client:
+            client_host, client_port = client
             client_addr = f"{client_host}:{client_port}"
 
         try:

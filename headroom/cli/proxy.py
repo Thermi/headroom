@@ -906,6 +906,21 @@ def dashboard(port: int, no_open: bool) -> None:
         "the OpenAI endpoint (env: OPENAI_TARGET_API_HEADERS)"
     ),
 )
+@click.option(
+    "--embedding-server/--no-embedding-server",
+    default=False,
+    help="Run a dedicated embedding server sidecar (Option E). "
+    "Shares a single ONNX embedder + HNSW index across all worker processes, "
+    "saving ~600 MB RSS. Default: disabled (opt-in for testing). "
+    "(env: HEADROOM_EMBEDDING_SERVER=true)",
+)
+@click.option(
+    "--embedding-server-socket",
+    default=None,
+    help="Unix socket path for the embedding server sidecar. "
+    "Default: /tmp/headroom-embed-{port}.sock. "
+    "(env: HEADROOM_EMBEDDING_SERVER_SOCKET)",
+)
 @click.pass_context
 def proxy(
     ctx: click.Context,

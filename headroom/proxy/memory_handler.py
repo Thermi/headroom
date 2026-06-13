@@ -343,14 +343,15 @@ class MemoryHandler:
                 vector_dimension = 384
 
                 # Check if ONNX runtime is available (should be — it's in proxy deps)
-                try:
-                    import onnxruntime  # noqa: F401
-                except ImportError:
-                    # Fall back to sentence-transformers (requires torch)
-                    embedder_backend = "local"
-                    logger.info(
-                        "Memory: onnxruntime not available, falling back to sentence-transformers"
-                    )
+                if embedder_backend == "onnx":
+                    try:
+                        import onnxruntime  # noqa: F401
+                    except ImportError:
+                        # Fall back to sentence-transformers (requires torch)
+                        embedder_backend = "local"
+                        logger.info(
+                            "Memory: onnxruntime not available, falling back to sentence-transformers"
+                        )
 
             backend_config = LocalBackendConfig(
                 db_path=self.config.db_path,
