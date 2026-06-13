@@ -24,7 +24,6 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import contextlib
 import json
 import logging
 import os
@@ -75,6 +74,10 @@ COMPRESS_TOOL_NAME = "headroom_compress"
 STATS_TOOL_NAME = "headroom_stats"
 READ_TOOL_NAME = "headroom_read"
 
+MEMORY_SEARCH_TOOL_NAME = "memory_search"
+MEMORY_SAVE_TOOL_NAME = "memory_save"
+MEMORY_ANALYZE_TOOL_NAME = "memory_analyze"
+
 logger = logging.getLogger("headroom.ccr.mcp")
 
 # Feature flag: enable headroom_read tool (file read caching via CCR)
@@ -88,12 +91,6 @@ _READ_ENABLED = os.environ.get("HEADROOM_MCP_READ", "off").lower().strip() in (
 )
 
 DEFAULT_PROXY_URL = os.environ.get("HEADROOM_PROXY_URL", "http://127.0.0.1:8787")
-
-# How often the parent-death watchdog polls os.getppid() (seconds). When the
-# launching MCP client is SIGKILLed, stdin EOF may never arrive and the SDK's
-# blocking stdin-reader thread wedges server.run() forever, orphaning this
-# process under init/launchd. The watchdog reaps us once we are reparented.
-PARENT_DEATH_POLL_INTERVAL = 5.0
 
 
 def _format_session_summary(
@@ -138,7 +135,6 @@ def _format_session_summary(
             "too_small": "Too small (< 500 tokens)",
             "passthrough": "Passthrough (token counting)",
             "no_compressible_content": "No compressible content (user/assistant only)",
-            "unknown_token_accounting": "Unknown token accounting",
         }
         for key, count in uncomp.items():
             label = reason_labels.get(key, key)
@@ -371,12 +367,17 @@ class HeadroomMCPServer:
         self,
         proxy_url: str = DEFAULT_PROXY_URL,
         check_proxy: bool = True,
+        memory_db_path: str | None = None,
+        memory_user_id: str = "default",
     ):
         self.proxy_url = proxy_url
         self.check_proxy = check_proxy
+        self.memory_db_path = memory_db_path
+        self.memory_user_id = memory_user_id
         self._http_client: httpx.AsyncClient | None = None  # type: ignore[assignment]
         self._stats = SessionStats()
         self._local_store: Any = None  # Lazy-initialized CompressionStore
+        self._memory_backend: Any = None  # Lazy-initialized LocalBackend
         self._compressor_initialized = False
         # File read cache: path → (content_hash, ccr_hash, line_count, token_count)
         self._file_cache: dict[str, tuple[str, str, int, int]] = {}
@@ -719,6 +720,10 @@ class HeadroomMCPServer:
                     )
                 )
 
+            # Conditionally add memory tools when a memory DB path is configured
+            if self.memory_db_path:
+                tools.extend(self._get_memory_tool_definitions())
+
             return tools
 
         @self.server.call_tool()
@@ -738,6 +743,12 @@ class HeadroomMCPServer:
                     result = await self._handle_stats()
                 elif name == READ_TOOL_NAME and _READ_ENABLED:
                     result = await self._handle_read(arguments)
+                elif name == MEMORY_SEARCH_TOOL_NAME:
+                    result = await self._handle_memory_search(arguments)
+                elif name == MEMORY_SAVE_TOOL_NAME:
+                    result = await self._handle_memory_save(arguments)
+                elif name == MEMORY_ANALYZE_TOOL_NAME:
+                    result = await self._handle_memory_analyze(arguments)
                 else:
                     result = [
                         TextContent(
@@ -1080,88 +1091,80 @@ class HeadroomMCPServer:
             )
         ]
 
-    async def _await_parent_death(self, interval: float) -> None:
-        """Resolve once the launching parent process is gone.
+    def _get_memory_tool_definitions(self) -> list[Tool]:
+        """Return memory tool definitions (lazy-imported schemas)."""
+        from headroom.memory.mcp_server import _TOOLS as _MEMORY_TOOLS
 
-        We are started with a real parent (the MCP client, over stdio). If our
-        ppid changes we have been reparented — the client died — and stdin EOF
-        may never come (SIGKILL leaves the SDK's blocking stdin reader wedged),
-        so ``server.run`` would hang forever. Detecting the reparent lets the
-        caller shut down instead of orphaning. Watching for *any* change to the
-        captured ppid is more portable than hard-coding ``== 1``: POSIX reparents
-        to init/launchd (pid 1), but a Linux subreaper can adopt us instead.
-        """
-        initial_ppid = os.getppid()
-        while os.getppid() == initial_ppid:
-            await asyncio.sleep(interval)
-        logger.warning(
-            "parent process gone (ppid %s -> %s); shutting down MCP server",
-            initial_ppid,
-            os.getppid(),
-        )
+        return _MEMORY_TOOLS
 
-    async def run_stdio(
-        self,
-        parent_death_poll_interval: float = PARENT_DEATH_POLL_INTERVAL,
-    ) -> None:
-        """Run the server with stdio transport.
+    async def _get_memory_backend(self) -> Any:
+        """Lazy-initialize and return the memory LocalBackend."""
+        if self._memory_backend is not None:
+            return self._memory_backend
+        if self.memory_db_path is None:
+            return None
+        from headroom.memory.backends.local import LocalBackend, LocalBackendConfig
 
-        Normally the server stops on stdin EOF when the client disconnects. A
-        parent-death watchdog runs alongside it because an abrupt client SIGKILL
-        leaves the SDK's stdin reader wedged and ``server.run`` never returns; the
-        watchdog forces shutdown once we are reparented.
-        """
+        config = LocalBackendConfig(db_path=self.memory_db_path, embedder_backend="onnx")
+        backend = LocalBackend(config)
+        await backend._ensure_initialized()
+        self._memory_backend = backend
+        return backend
+
+    async def _handle_memory_search(
+        self, arguments: dict[str, Any]
+    ) -> list[TextContent]:
+        backend = await self._get_memory_backend()
+        if backend is None:
+            return [
+                TextContent(
+                    type="text",
+                    text=json.dumps({"error": "Memory backend not available"}),
+                )
+            ]
+        from headroom.memory.mcp_server import _handle_search
+
+        return await _handle_search(backend, arguments, self.memory_user_id)
+
+    async def _handle_memory_save(
+        self, arguments: dict[str, Any]
+    ) -> list[TextContent]:
+        backend = await self._get_memory_backend()
+        if backend is None:
+            return [
+                TextContent(
+                    type="text",
+                    text=json.dumps({"error": "Memory backend not available"}),
+                )
+            ]
+        from headroom.memory.mcp_server import _handle_save
+
+        return await _handle_save(backend, arguments, self.memory_user_id)
+
+    async def _handle_memory_analyze(
+        self, arguments: dict[str, Any]
+    ) -> list[TextContent]:
+        backend = await self._get_memory_backend()
+        if backend is None:
+            return [
+                TextContent(
+                    type="text",
+                    text=json.dumps({"error": "Memory backend not available"}),
+                )
+            ]
+        from headroom.memory.mcp_server import _handle_analyze
+
+        return await _handle_analyze(backend, arguments, self.memory_user_id)
+
+    async def run_stdio(self) -> None:
+        """Run the server with stdio transport."""
         async with stdio_server() as (read_stream, write_stream):
             logger.info(f"Headroom MCP Server starting (proxy: {self.proxy_url})")
-            serve_task = asyncio.create_task(
-                self.server.run(
-                    read_stream,
-                    write_stream,
-                    self.server.create_initialization_options(),
-                )
+            await self.server.run(
+                read_stream,
+                write_stream,
+                self.server.create_initialization_options(),
             )
-            watchdog = asyncio.create_task(self._await_parent_death(parent_death_poll_interval))
-            done, _pending = await asyncio.wait(
-                {serve_task, watchdog},
-                return_when=asyncio.FIRST_COMPLETED,
-            )
-
-            if watchdog in done:
-                # Parent died. stdin EOF may never arrive — a client SIGKILL
-                # leaves the SDK's stdin-reader thread blocked, so both
-                # ``server.run`` and the ``stdio_server`` context-manager exit
-                # can hang forever. Reap from *inside* the context manager:
-                # os._exit skips the (wedged) async teardown and guarantees this
-                # orphan dies. Reached only once the parent is already gone.
-                watchdog.result()  # surface a watchdog error, if any
-                await self.cleanup()
-                os._exit(0)
-
-            # Normal shutdown: the client closed stdin and ``server.run``
-            # returned. Cancel the watchdog and let the context manager unwind
-            # cleanly — the reader is not wedged in this path.
-            watchdog.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await watchdog
-            serve_task.result()  # re-raise a real server error; no-op on clean EOF
-
-    async def run_streamable_http(
-        self,
-        host: str,
-        port: int,
-        path: str,
-        debug: bool = False,
-    ) -> None:
-        """Run the server with Streamable HTTP transport."""
-        from .mcp_http import serve_streamable_http
-
-        await serve_streamable_http(
-            self,
-            host=host,
-            port=port,
-            path=path,
-            debug=debug,
-        )
 
     async def run_streamable_http(
         self,
