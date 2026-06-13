@@ -5010,9 +5010,18 @@ def create_app(config: ProxyConfig | None = None) -> FastAPI:
         def _get_mcp_server() -> HeadroomMCPServer:
             nonlocal _mcp_server_instance
             if _mcp_server_instance is None:
+                # Resolve memory DB path from proxy config so memory tools
+                # (memory_search, memory_save, memory_analyze) are available
+                # on the /v1/mcp endpoint when --memory is enabled.
+                _mem_db_path = None
+                if config.memory_enabled:
+                    _mem_db_path = config.memory_db_path
+                    if not _mem_db_path:
+                        _mem_db_path = str(Path.cwd() / ".headroom" / "memory.db")
                 _mcp = HeadroomMCPServer(
                     proxy_url=_MCP_DEFAULT_PROXY,
                     check_proxy=False,
+                    memory_db_path=_mem_db_path,
                 )
                 _mcp_server_instance = _mcp
             return _mcp_server_instance
