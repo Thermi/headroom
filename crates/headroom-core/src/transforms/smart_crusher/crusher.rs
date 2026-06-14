@@ -939,7 +939,12 @@ impl SmartCrusher {
             let h = hash_canonical(&canonical);
             let marker = format!("<<ccr:{h} {dropped_count}_rows_offloaded>>");
             if let Some(store) = &self.ccr_store {
-                store.put(&h, &canonical);
+                // Rough token estimates (4 chars ~= 1 token) consistent
+                // with the Python-side heuristic. Stored alongside the
+                // payload so /v1/retrieve/stats can report savings.
+                let original_tokens = canonical.len() / 4;
+                let compressed_tokens = marker.len() / 4;
+                store.put_with_metadata(&h, &canonical, original_tokens, compressed_tokens);
             }
             (Some(h), marker)
         } else {

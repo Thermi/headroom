@@ -902,6 +902,20 @@ impl PySmartCrusher {
     fn ccr_len(&self) -> usize {
         self.inner.ccr_store().map(|s| s.len()).unwrap_or(0)
     }
+
+    /// Look up token metadata for a CCR hash.
+    ///
+    /// Returns a dict with ``original_tokens`` and ``compressed_tokens``
+    /// if the hash exists and hasn't expired, or ``None`` if missing.
+    /// Token counts are estimates computed at store time (len // 4).
+    #[pyo3(signature = (hash))]
+    fn ccr_get_metadata(&self, py: Python<'_>, hash: &str) -> Option<Py<PyDict>> {
+        let meta = self.inner.ccr_store()?.get_metadata(hash)?;
+        let dict = PyDict::new(py);
+        dict.set_item("original_tokens", meta.original_tokens).ok()?;
+        dict.set_item("compressed_tokens", meta.compressed_tokens).ok()?;
+        Some(dict.into())
+    }
 }
 
 // ─── ContentDetector ───────────────────────────────────────────────────────
