@@ -1497,6 +1497,15 @@ Memory (Multi-Provider):
     else:
         tuning_section = ""
 
+    from headroom._version import __version__
+    try:
+        from headroom._build_info import BUILD_GIT_COMMIT, BUILD_TIME
+        _commit = BUILD_GIT_COMMIT or "unknown"
+        _build = BUILD_TIME or "unknown"
+    except ImportError:
+        _commit = "unknown"
+        _build = "unknown"
+
     click.echo(f"""
 ╔═══════════════════════════════════════════════════════════════════════╗
 ║                         HEADROOM PROXY                                 ║
@@ -1504,6 +1513,10 @@ Memory (Multi-Provider):
 ╚═══════════════════════════════════════════════════════════════════════╝
 
 Starting proxy server...
+
+  Version:     {__version__}
+  Commit:      {_commit}
+  Build:       {_build}
 
   URL:          http://{config.host}:{config.port}
   Mode:         {config.mode}
