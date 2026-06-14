@@ -1014,6 +1014,9 @@ class SmartCrusher(Transform):
         `rendered` may be a JSON string (the standard SmartCrusher
         output format) or arbitrary text. We try the structured walk
         first; if that fails we fall back to a non-regex token scan.
+
+        Token counts are read from the Rust store's metadata (stored at
+        put time) rather than estimated here.
         """
         # Cheap pre-filter — most outputs have no marker at all.
         if "<<ccr:" not in rendered:
@@ -1117,6 +1120,8 @@ class SmartCrusher(Transform):
         strategy: str,
         query_context: str,
         tool_name: str | None,
+        original_tokens: int = 0,
+        compressed_tokens: int = 0,
     ) -> None:
         """Mirror a single Rust-stored CCR entry into the Python
         compression_store, keyed by `ccr_hash`. Best-effort.
@@ -1132,6 +1137,16 @@ class SmartCrusher(Transform):
                 ccr_hash,
             )
             return
+        # Read actual token metadata from the Rust store (stored by the
+        # crusher at put time). Falls back to the heuristic estimates
+        # passed from the call site if metadata isn't available.
+        try:
+            meta = self._rust.ccr_get_metadata(ccr_hash)
+            if meta is not None:
+                original_tokens = meta["original_tokens"]
+                compressed_tokens = meta["compressed_tokens"]
+        except Exception:
+            pass
         try:
             from ..cache.compression_store import get_compression_store
         except ImportError:
@@ -1160,6 +1175,8 @@ class SmartCrusher(Transform):
                 query_context=query_context if query_context else None,
                 compression_strategy=strategy,
                 explicit_hash=ccr_hash,
+                original_tokens=original_tokens,
+                compressed_tokens=compressed_tokens,
             )
         except ValueError:
             # explicit_hash validation failed — the marker had a
