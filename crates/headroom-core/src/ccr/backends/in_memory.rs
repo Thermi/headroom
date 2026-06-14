@@ -15,16 +15,13 @@ use std::time::{Duration, Instant};
 
 use dashmap::DashMap;
 
-use crate::ccr::{max_lifetime_for, CcrStore, DEFAULT_CAPACITY, DEFAULT_TTL};
+use crate::ccr::{CcrMetadata, CcrStore, DEFAULT_CAPACITY, DEFAULT_TTL};
 
 /// In-memory CCR store backed by [`DashMap`] for sharded concurrent
 /// access.
 ///
-/// - **TTL**: 30 minutes by default, treated as an **idle window** —
-///   every successful `get` restarts the entry's clock (#2604), bounded
-///   by an absolute max lifetime of 8x the idle TTL measured from
-///   insertion. Entries past their window are dropped on the next `get`
-///   (lazy expiry — no background reaper thread).
+/// - **TTL**: 5 minutes by default. Entries past their TTL are dropped
+///   on the next `get` (lazy expiry — no background reaper thread).
 /// - **Capacity**: 1000 entries by default. When `put` would push us
 ///   past capacity, the oldest entry (per insertion order) is evicted.
 /// - **Concurrency**: gets and puts on distinct keys do not contend.
@@ -39,46 +36,28 @@ pub struct InMemoryCcrStore {
     /// they actually evict a real entry.
     order: Mutex<VecDeque<String>>,
     ttl: Duration,
-    max_lifetime: Duration,
     capacity: usize,
 }
 
 #[derive(Clone)]
 struct Entry {
     payload: String,
+    original_tokens: usize,
+    compressed_tokens: usize,
     inserted: Instant,
-    last_accessed: Instant,
-}
-
-impl Entry {
-    /// Expired when idle past `ttl` OR older (since insertion) than
-    /// `max_lifetime` — the absolute ceiling that keeps constant access
-    /// from pinning an entry forever.
-    fn is_expired(&self, ttl: Duration, max_lifetime: Duration) -> bool {
-        self.last_accessed.elapsed() > ttl || self.inserted.elapsed() > max_lifetime
-    }
 }
 
 impl InMemoryCcrStore {
-    /// Default: 1000 entries, 30-minute idle TTL (8x max lifetime).
+    /// Default: 1000 entries, 5-minute TTL.
     pub fn new() -> Self {
         Self::with_capacity_and_ttl(DEFAULT_CAPACITY, DEFAULT_TTL)
     }
 
-    /// `ttl` is the idle window; the absolute max lifetime defaults to
-    /// 8x that (see [`crate::ccr::DEFAULT_MAX_LIFETIME_MULTIPLIER`]).
     pub fn with_capacity_and_ttl(capacity: usize, ttl: Duration) -> Self {
-        Self::with_capacity_and_ttls(capacity, ttl, max_lifetime_for(ttl))
-    }
-
-    /// Full-control constructor: idle window and absolute max lifetime
-    /// specified independently.
-    pub fn with_capacity_and_ttls(capacity: usize, ttl: Duration, max_lifetime: Duration) -> Self {
         Self {
             map: DashMap::with_capacity(capacity),
             order: Mutex::new(VecDeque::with_capacity(capacity)),
             ttl,
-            max_lifetime,
             capacity,
         }
     }
@@ -107,15 +86,15 @@ impl Default for InMemoryCcrStore {
 }
 
 impl CcrStore for InMemoryCcrStore {
-    fn put(&self, hash: &str, payload: &str) {
+    fn put_with_metadata(&self, hash: &str, payload: &str, original_tokens: usize, compressed_tokens: usize) {
         // Idempotent re-store fast-path: same hash → overwrite payload
         // in place, leave the order queue alone. Common when the same
         // tool output flows through multiple times in a session.
         if let Some(mut existing) = self.map.get_mut(hash) {
-            let now = Instant::now();
             existing.payload = payload.to_string();
-            existing.inserted = now;
-            existing.last_accessed = now;
+            existing.original_tokens = original_tokens;
+            existing.compressed_tokens = compressed_tokens;
+            existing.inserted = Instant::now();
             return;
         }
 
@@ -124,11 +103,11 @@ impl CcrStore for InMemoryCcrStore {
         if self.map.len() >= self.capacity {
             self.evict_until_under_capacity();
         }
-        let now = Instant::now();
         let entry = Entry {
             payload: payload.to_string(),
-            inserted: now,
-            last_accessed: now,
+            original_tokens,
+            compressed_tokens,
+            inserted: Instant::now(),
         };
         let prev = self.map.insert(hash.to_string(), entry);
         if prev.is_none() {
@@ -144,12 +123,9 @@ impl CcrStore for InMemoryCcrStore {
     }
 
     fn get(&self, hash: &str) -> Option<String> {
-        // Hit path: shard write-lock (get_mut), check the idle window +
-        // max-lifetime ceiling, refresh `last_accessed`, clone payload
-        // out. The TTL is a sliding idle window (#2604): every hit
-        // restarts the clock, so an entry a session keeps touching does
-        // not expire mid-burst. Distinct hashes hash to distinct shards
-        // and never contend.
+        // Read path: shard read-lock, check TTL, clone payload out.
+        // No global lock involvement at all — distinct hashes hash to
+        // distinct shards and never contend.
         //
         // Lazy expiry uses DashMap's `remove_if` so the check-and-remove
         // is atomic on the shard. An earlier 2-step (drop read lock,
@@ -160,9 +136,8 @@ impl CcrStore for InMemoryCcrStore {
         // load this manifested as "I just stored it; why is it gone?"
         // `remove_if` closes the window because the shard write lock
         // is held across both the predicate evaluation and the removal.
-        if let Some(mut entry) = self.map.get_mut(hash) {
-            if !entry.is_expired(self.ttl, self.max_lifetime) {
-                entry.last_accessed = Instant::now();
+        if let Some(entry) = self.map.get(hash) {
+            if entry.inserted.elapsed() <= self.ttl {
                 return Some(entry.payload.clone());
             }
         } else {
@@ -174,9 +149,7 @@ impl CcrStore for InMemoryCcrStore {
         // and re-fetch its payload.
         let was_removed = self
             .map
-            .remove_if(hash, |_, entry| {
-                entry.is_expired(self.ttl, self.max_lifetime)
-            })
+            .remove_if(hash, |_, entry| entry.inserted.elapsed() > self.ttl)
             .is_some();
         if was_removed {
             None
@@ -184,6 +157,19 @@ impl CcrStore for InMemoryCcrStore {
             // Concurrent refresh — return the fresh payload.
             self.map.get(hash).map(|e| e.payload.clone())
         }
+    }
+
+    fn get_metadata(&self, hash: &str) -> Option<CcrMetadata> {
+        self.map.get(hash).and_then(|entry| {
+            if entry.inserted.elapsed() <= self.ttl {
+                Some(CcrMetadata {
+                    original_tokens: entry.original_tokens,
+                    compressed_tokens: entry.compressed_tokens,
+                })
+            } else {
+                None
+            }
+        })
     }
 
     fn len(&self) -> usize {
@@ -209,12 +195,49 @@ mod tests {
     }
 
     #[test]
+    fn get_metadata_returns_stored_token_counts() {
+        let store = InMemoryCcrStore::new();
+        store.put_with_metadata("h", "some content", 100, 25);
+        let meta = store.get_metadata("h").unwrap();
+        assert_eq!(meta.original_tokens, 100);
+        assert_eq!(meta.compressed_tokens, 25);
+    }
+
+    #[test]
+    fn get_metadata_missing_hash_returns_none() {
+        let store = InMemoryCcrStore::new();
+        assert!(store.get_metadata("nonexistent").is_none());
+    }
+
+    #[test]
+    fn put_defaults_tokens_to_zero() {
+        let store = InMemoryCcrStore::new();
+        store.put("h", "content");
+        let meta = store.get_metadata("h").unwrap();
+        assert_eq!(meta.original_tokens, 0);
+        assert_eq!(meta.compressed_tokens, 0);
+    }
+
+    #[test]
+    fn get_metadata_updates_on_overwrite() {
+        let store = InMemoryCcrStore::new();
+        store.put_with_metadata("h", "first", 10, 2);
+        store.put_with_metadata("h", "second", 50, 10);
+        let meta = store.get_metadata("h").unwrap();
+        assert_eq!(meta.original_tokens, 50);
+        assert_eq!(meta.compressed_tokens, 10);
+    }
+
+    #[test]
     fn put_overwrites_under_same_hash() {
         let store = InMemoryCcrStore::new();
-        store.put("h", "first");
-        store.put("h", "second");
+        store.put_with_metadata("h", "first", 1, 1);
+        store.put_with_metadata("h", "second", 2, 2);
         assert_eq!(store.get("h"), Some("second".to_string()));
         assert_eq!(store.len(), 1);
+        let meta = store.get_metadata("h").unwrap();
+        assert_eq!(meta.original_tokens, 2);
+        assert_eq!(meta.compressed_tokens, 2);
     }
 
     #[test]

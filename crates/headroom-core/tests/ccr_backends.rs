@@ -26,6 +26,69 @@ fn sqlite_round_trip() {
 }
 
 #[test]
+fn sqlite_get_metadata_round_trip() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("ccr.sqlite");
+    let store = SqliteCcrStore::open(&path, 300).expect("open sqlite store");
+    let payload = r#"[{"id":1}]"#;
+    let hash = compute_key(payload.as_bytes());
+    store.put_with_metadata(&hash, payload, 200, 50);
+    let meta = store.get_metadata(&hash).unwrap();
+    assert_eq!(meta.original_tokens, 200);
+    assert_eq!(meta.compressed_tokens, 50);
+}
+
+#[test]
+fn sqlite_get_metadata_missing_returns_none() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("ccr.sqlite");
+    let store = SqliteCcrStore::open(&path, 300).expect("open sqlite store");
+    assert!(store.get_metadata("nonexistent").is_none());
+}
+
+#[test]
+fn sqlite_get_metadata_expired_returns_none() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("ccr.sqlite");
+    let store = SqliteCcrStore::open(&path, 0).expect("open sqlite store");
+    let hash = compute_key(b"expired meta");
+    store.put_with_metadata(&hash, "expired meta", 100, 20);
+    std::thread::sleep(Duration::from_millis(1_100));
+    assert!(store.get_metadata(&hash).is_none());
+}
+
+#[test]
+fn sqlite_put_defaults_tokens_to_zero() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("ccr.sqlite");
+    let store = SqliteCcrStore::open(&path, 300).expect("open sqlite store");
+    let payload = "default zero tokens";
+    let hash = compute_key(payload.as_bytes());
+    store.put(&hash, payload);
+    let meta = store.get_metadata(&hash).unwrap();
+    assert_eq!(meta.original_tokens, 0);
+    assert_eq!(meta.compressed_tokens, 0);
+}
+
+#[test]
+fn sqlite_get_metadata_persists_across_restart() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("ccr.sqlite");
+    let payload = "persistent metadata";
+    let hash = compute_key(payload.as_bytes());
+    {
+        let store = SqliteCcrStore::open(&path, 300).expect("open sqlite store (turn 1)");
+        store.put_with_metadata(&hash, payload, 150, 30);
+    }
+    {
+        let store = SqliteCcrStore::open(&path, 300).expect("re-open sqlite store (turn 2)");
+        let meta = store.get_metadata(&hash).unwrap();
+        assert_eq!(meta.original_tokens, 150);
+        assert_eq!(meta.compressed_tokens, 30);
+    }
+}
+
+#[test]
 fn sqlite_ttl_purge() {
     let dir = tempfile::tempdir().expect("tempdir");
     let path = dir.path().join("ccr.sqlite");
