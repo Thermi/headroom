@@ -98,8 +98,8 @@ RUN GIT="${GIT_COMMIT}" && \
     if [ -z "$BUILD" ] || [ "$BUILD" = "unknown" ]; then \
       BUILD=$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo "unknown"); \
     fi && \
-    sed -i "s/BUILD_GIT_COMMIT: str = ''/BUILD_GIT_COMMIT: str = '$GIT'/" headroom/_build_info.py && \
-    sed -i "s/BUILD_TIME: str = ''/BUILD_TIME: str = '$BUILD'/" headroom/_build_info.py && \
+    sed -i "s/BUILD_GIT_COMMIT: str = \"\"/BUILD_GIT_COMMIT: str = \"$GIT\"/" headroom/_build_info.py && \
+    sed -i "s/BUILD_TIME: str = \"\"/BUILD_TIME: str = \"$BUILD\"/" headroom/_build_info.py && \
     echo -n "$GIT" > /tmp/.git_commit && \
     echo -n "$BUILD" > /tmp/.build_time && \
     echo "headroom/_build_info.py injected: commit=$GIT build=$BUILD"
