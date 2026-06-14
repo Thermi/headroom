@@ -23,6 +23,7 @@ RUN apt-get update && \
     curl \
     ca-certificates \
     patchelf \
+    git \
   && rm -rf /var/lib/apt/lists/*
 
 RUN python -m pip install --no-cache-dir uv==${UV_VERSION}
