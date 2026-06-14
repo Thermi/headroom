@@ -35,16 +35,40 @@ use std::time::Duration;
 
 pub use backends::{from_config, CcrBackendConfig, CcrBackendInitError, InMemoryCcrStore};
 
+/// Metadata stored alongside each CCR entry for observability.
+/// Token counts are estimates (len // 4) computed at store time.
+#[derive(Debug, Clone, Copy)]
+pub struct CcrMetadata {
+    pub original_tokens: usize,
+    pub compressed_tokens: usize,
+}
+
 /// Pluggable CCR storage backend. `Send + Sync` so it can sit behind an
 /// `Arc` and be shared across threads in the proxy.
 pub trait CcrStore: Send + Sync {
-    /// Stash `payload` under `hash`. If the hash already exists, the
-    /// new payload overwrites — same hash should mean same content, so
-    /// re-storing is idempotent.
-    fn put(&self, hash: &str, payload: &str);
+    /// Stash `payload` under `hash` with token metadata.
+    /// If the hash already exists, the new payload overwrites — same
+    /// hash should mean same content, so re-storing is idempotent.
+    fn put_with_metadata(
+        &self,
+        hash: &str,
+        payload: &str,
+        original_tokens: usize,
+        compressed_tokens: usize,
+    );
+
+    /// Stash `payload` under `hash` without token metadata (counts
+    /// default to 0). Convenience wrapper around `put_with_metadata`.
+    fn put(&self, hash: &str, payload: &str) {
+        self.put_with_metadata(hash, payload, 0, 0);
+    }
 
     /// Look up `hash`. Returns `None` if missing or expired.
     fn get(&self, hash: &str) -> Option<String>;
+
+    /// Look up token metadata for `hash`. Returns `None` if missing,
+    /// expired, or the backend doesn't track metadata (default impl).
+    fn get_metadata(&self, hash: &str) -> Option<CcrMetadata>;
 
     /// Number of live entries. Informational; used by tests + telemetry.
     /// Some backends (notably Redis) cannot answer this efficiently and
