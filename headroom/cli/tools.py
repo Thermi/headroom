@@ -27,7 +27,7 @@ import json as _json
 import logging
 
 from headroom import binaries
-from headroom.transforms.kompress_compressor import _available_gpu_providers, is_kompress_available
+from headroom.transforms.kompress_compressor import is_kompress_available
 
 from .main import main
 
@@ -143,7 +143,7 @@ def tools_doctor_cmd(emit_json: bool) -> None:
     rows = binaries.status()
     # Append GPU status row
     kompress = is_kompress_available()
-    gpu_providers = _available_gpu_providers() if kompress else []
+    gpu_providers: list[str] = []
     if gpu_providers:
         rows.append({"tool": "gpu", "state": "available", "version": "", "platform": gpu_providers[0], "path": gpu_providers[0]})
     elif kompress:
