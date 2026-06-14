@@ -245,6 +245,8 @@ class CompressionStore:
         # Threshold for triggering heap rebuild (when 50% are stale)
         self._heap_rebuild_threshold = 0.5
 
+        self._scorer = BM25Scorer()
+
     @property
     def default_ttl_seconds(self) -> int:
         """Default TTL applied to new entries when callers do not override it."""

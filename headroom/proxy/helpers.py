@@ -1882,55 +1882,59 @@ def apply_session_sticky_ccr_tool(
 async def _read_request_body_bytes(request: Request) -> bytes:
     """Read and (if needed) decompress the request body, returning raw UTF-8 bytes.
 
-    Mirrors ``_read_request_json`` but returns the bytes pre-parse so
-    forwarders can implement byte-faithful passthrough (PR-A3, fixes P0-2).
+    Decompression (zstd, gzip, deflate, brotli) is CPU-bound; it is offloaded
+    to a default thread-pool executor so it does not block the async event loop.
     Raises ``ValueError`` on any decompression failure.
     """
     encoding = (request.headers.get("content-encoding") or "").lower().strip()
     raw = await request.body()
 
-    if encoding in ("zstd", "zstandard"):
-        try:
+    if not encoding or encoding == "identity":
+        return cast(bytes, raw)
+
+    loop = asyncio.get_running_loop()
+
+    def _decompress(data: bytes) -> bytes:
+        if encoding in ("zstd", "zstandard"):
             import zstandard
 
             dctx = zstandard.ZstdDecompressor()
-            reader = dctx.stream_reader(raw)
-            raw = reader.read()
-            reader.close()
-        except ImportError:
-            raise ValueError(
-                "Request body is zstd-compressed but the 'zstandard' package is not installed. "
-                "Install it with: pip install zstandard"
-            ) from None
-        except Exception as exc:
-            raise ValueError(f"Failed to decompress zstd request body: {exc}") from exc
-    elif encoding == "gzip":
-        import gzip as _gzip
+            reader = dctx.stream_reader(data)
+            try:
+                result: bytes = reader.read()
+                return result
+            finally:
+                reader.close()
+        elif encoding == "gzip":
+            import gzip as _gzip
 
-        try:
-            raw = _gzip.decompress(raw)
-        except Exception as exc:
-            raise ValueError(f"Failed to decompress gzip request body: {exc}") from exc
-    elif encoding == "deflate":
-        import zlib
+            result = _gzip.decompress(data)
+            return result
+        elif encoding == "deflate":
+            import zlib
 
-        try:
-            raw = zlib.decompress(raw)
-        except Exception as exc:
-            raise ValueError(f"Failed to decompress deflate request body: {exc}") from exc
-    elif encoding == "br":
-        try:
+            result = zlib.decompress(data)
+            return result
+        elif encoding == "br":
             import brotli
 
-            raw = brotli.decompress(raw)
-        except ImportError:
-            raise ValueError(
-                "Request body is brotli-compressed but the 'brotli' package is not installed."
-            ) from None
-        except Exception as exc:
-            raise ValueError(f"Failed to decompress brotli request body: {exc}") from exc
-    elif encoding and encoding != "identity":
-        raise ValueError(f"Unsupported Content-Encoding: {encoding}")
+            result = brotli.decompress(data)
+            return result
+        else:
+            raise ValueError(f"Unsupported Content-Encoding: {encoding}")
+
+    try:
+        raw = await loop.run_in_executor(None, _decompress, raw)
+    except ImportError as exc:
+        pkg = {"zstd": "zstandard", "br": "brotli"}.get(encoding, encoding)
+        raise ValueError(
+            f"Request body is {encoding}-compressed but the '{pkg}' package is not installed. "
+            f"Install it with: pip install {pkg}"
+        ) from exc
+    except ValueError:
+        raise
+    except Exception as exc:
+        raise ValueError(f"Failed to decompress {encoding} request body: {exc}") from exc
 
     return cast(bytes, raw)
 

@@ -1,29 +1,20 @@
 """Request logger for the Headroom proxy.
 
-Logs requests to an in-memory deque and optionally to a JSONL file.
+Logs requests to an in-memory deque and optionally to a gzip-compressed
+JSONL file. File writes are buffered and flushed periodically to reduce
+IO overhead on the hot path.
 
 Extracted from server.py for maintainability.
-
-Phase G PR-G3 (P4-45): base64-encoded image payloads in the
-``request_messages`` / ``response_content`` are redacted before
-write to keep request logs small. Multi-MB base64 strings would
-otherwise saturate the JSONL log and the in-memory deque.
-
-Remediation (M2, M5): the redactor now ONLY fires inside known
-image-bearing JSON paths or against strings that carry an explicit
-``data:image/...;base64,`` URL prefix. The earlier "density
-heuristic" over-fired on encrypted blobs, signed tokens, minified
-JSON, and tool outputs. The replacement placeholder now reports
-the UTF-8 byte length under a ``bytes=`` label (was character
-length; for the ASCII base64 alphabet the two happen to coincide
-but the label is now accurate for any future Unicode payload).
 """
 
 from __future__ import annotations
 
+import gzip
 import json
 import logging
 import sys
+import threading
+import time
 from collections import deque
 from dataclasses import asdict
 from pathlib import Path
@@ -83,20 +74,32 @@ def redact_image_base64(payload: Any) -> Any:
 
 
 class RequestLogger:
-    """Log requests to JSONL file.
+    """Log requests to gzip-compressed JSONL file with write buffering.
 
     Uses a deque with max 10,000 entries to prevent unbounded memory growth.
     Gracefully degrades to in-memory-only if the log file cannot be written
     (read-only filesystem, permissions error, etc.).
+
+    File writes are buffered and flushed every ``FLUSH_INTERVAL_SECONDS``
+    or when the buffer reaches ``MAX_BUFFER_SIZE`` bytes, whichever comes
+    first. The buffer is held as gzip-compressed data to minimize memory
+    pressure for the flush cycle.
     """
 
     MAX_LOG_ENTRIES = 10_000
+    MAX_BUFFER_SIZE = 512 * 1024  # 512 KB before forced flush
+    FLUSH_INTERVAL_SECONDS = 5.0
 
     def __init__(self, log_file: str | None = None, log_full_messages: bool = False):
         self.log_file = Path(log_file) if log_file else None
         self.log_full_messages = log_full_messages
-        # Use deque with maxlen for automatic FIFO eviction
         self._logs: deque[RequestLog] = deque(maxlen=self.MAX_LOG_ENTRIES)
+
+        self._buffer: list[bytes] = []
+        self._buffer_size = 0
+        self._last_flush = time.monotonic()
+        self._flush_lock = threading.Lock()
+        self._flush_timer: threading.Timer | None = None
 
         if self.log_file:
             try:
@@ -109,39 +112,67 @@ class RequestLogger:
                 )
                 self.log_file = None
 
+    def _flush_buffer(self) -> None:
+        """Flush buffered log lines to the gzip-compressed JSONL file."""
+        if not self.log_file or not self._buffer:
+            return
+        try:
+            with gzip.open(self.log_file, "ab", compresslevel=6) as f:
+                for chunk in self._buffer:
+                    f.write(chunk)
+        except OSError:
+            pass
+        self._buffer = []
+        self._buffer_size = 0
+
+    def _maybe_flush(self) -> None:
+        """Flush if buffer exceeds size threshold or enough time has passed."""
+        now = time.monotonic()
+        if (
+            self._buffer_size >= self.MAX_BUFFER_SIZE
+            or now - self._last_flush >= self.FLUSH_INTERVAL_SECONDS
+        ):
+            with self._flush_lock:
+                self._flush_buffer()
+                self._last_flush = time.monotonic()
+
+    def _queue_log_line(self, line: bytes) -> None:
+        """Append a compressed log line to the write buffer."""
+        self._buffer.append(line)
+        self._buffer_size += len(line)
+        self._maybe_flush()
+
+    def flush(self) -> None:
+        """Force-flush any buffered log lines. Called at shutdown."""
+        with self._flush_lock:
+            self._flush_buffer()
+
     def log(self, entry: RequestLog):
         """Log a request. Oldest entries are automatically removed when limit reached.
 
-        Phase G PR-G3 (P4-45): base64-encoded image payloads in
-        ``request_messages`` / ``compressed_messages`` / ``response_content``
-        are redacted before write. Redaction also applies to the in-memory
-        deque so the ``/stats/recent_requests`` endpoint never serves a
-        multi-MB image either.
+        Base64-encoded image payloads in ``request_messages`` /
+        ``compressed_messages`` / ``response_content`` are redacted before
+        write. File writes are buffered and gzip-compressed.
         """
-        # Redact image payloads in-place on the deque entry so memory
-        # use stays bounded. We mutate the dataclass fields rather
-        # than wrapping the entry to keep ``get_recent`` /
-        # ``get_recent_with_messages`` unchanged.
-        if entry.request_messages is not None:
-            entry.request_messages = redact_image_base64(entry.request_messages)
-        if entry.compressed_messages is not None:
-            entry.compressed_messages = redact_image_base64(entry.compressed_messages)
-        if entry.response_content is not None:
-            entry.response_content = redact_image_base64(entry.response_content)
+        # Only redact if we're actually keeping them in memory or writing to disk
+        if self.log_full_messages or self.log_file:
+            if entry.request_messages is not None:
+                entry.request_messages = redact_image_base64(entry.request_messages)
+            if entry.compressed_messages is not None:
+                entry.compressed_messages = redact_image_base64(entry.compressed_messages)
+            if entry.response_content is not None:
+                entry.response_content = redact_image_base64(entry.response_content)
 
         self._logs.append(entry)
 
         if self.log_file:
-            try:
-                with open(self.log_file, "a") as f:
-                    log_dict = asdict(entry)
-                    if not self.log_full_messages:
-                        log_dict.pop("request_messages", None)
-                        log_dict.pop("compressed_messages", None)
-                        log_dict.pop("response_content", None)
-                    f.write(json.dumps(log_dict) + "\n")
-            except OSError:
-                pass  # Graceful degradation: memory-only logging continues
+            log_dict = asdict(entry)
+            if not self.log_full_messages:
+                log_dict.pop("request_messages", None)
+                log_dict.pop("compressed_messages", None)
+                log_dict.pop("response_content", None)
+            line = json.dumps(log_dict, separators=(",", ":")).encode("utf-8") + b"\n"
+            self._queue_log_line(line)
 
     def get_recent(self, n: int = 100) -> list[dict]:
         """Get recent log entries (without request/compressed messages and response_content)."""

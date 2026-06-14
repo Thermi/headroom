@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -71,16 +72,27 @@ class SQLiteMemoryStore:
             db_path: Path to SQLite database file. Created if it doesn't exist.
         """
         self.db_path = Path(db_path)
+        # Thread-local connection pool: one connection per thread avoids
+        # SQLite's single-connection limitation and eliminates per-call
+        # connect() overhead.
+        self._local = threading.local()
         self._init_db()
 
     def _get_conn(self) -> sqlite3.Connection:
-        """Get a new database connection (thread-safe pattern).
+        """Get a thread-local connection (connection-pooling pattern).
+
+        Each calling thread gets its own connection so SQLite's
+        single-writer semantics are not contended and we avoid the
+        overhead of ``sqlite3.connect()`` on every call.
 
         Returns:
-            A new SQLite connection with row factory configured.
+            A SQLite connection with row factory configured.
         """
-        conn = sqlite3.connect(str(self.db_path))
-        conn.row_factory = sqlite3.Row
+        conn: sqlite3.Connection | None = getattr(self._local, "conn", None)
+        if conn is None:
+            conn = sqlite3.connect(str(self.db_path))
+            conn.row_factory = sqlite3.Row
+            self._local.conn = conn
         return conn
 
     def _init_db(self) -> None:
