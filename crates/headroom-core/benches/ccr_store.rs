@@ -59,7 +59,7 @@ impl LegacyMutexStore {
 }
 
 impl CcrStore for LegacyMutexStore {
-    fn put(&self, hash: &str, payload: &str) {
+    fn put_with_metadata(&self, hash: &str, payload: &str, _original_tokens: usize, _compressed_tokens: usize) {
         let mut g = self.inner.lock().unwrap();
         if g.map.contains_key(hash) {
             g.map.insert(
@@ -98,6 +98,10 @@ impl CcrStore for LegacyMutexStore {
             return None;
         }
         g.map.get(hash).map(|e| e.payload.clone())
+    }
+
+    fn get_metadata(&self, _hash: &str) -> Option<crate::ccr::CcrMetadata> {
+        None
     }
 
     fn len(&self) -> usize {
