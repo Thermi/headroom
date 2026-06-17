@@ -480,7 +480,6 @@ impl PySmartCrusherConfig {
         relevance_threshold = 0.3,
         lossless_min_savings_ratio = 0.15,
         enable_ccr_marker = true,
-        lossless_only = false,
         compaction_core_field_fraction = 0.8,
         compaction_heterogeneous_core_ratio = 0.6,
         compaction_max_flatten_inner_keys = 6,
@@ -507,7 +506,6 @@ impl PySmartCrusherConfig {
         relevance_threshold: f64,
         lossless_min_savings_ratio: f64,
         enable_ccr_marker: bool,
-        lossless_only: bool,
         compaction_core_field_fraction: f64,
         compaction_heterogeneous_core_ratio: f64,
         compaction_max_flatten_inner_keys: usize,
@@ -534,7 +532,6 @@ impl PySmartCrusherConfig {
                 relevance_threshold,
                 lossless_min_savings_ratio,
                 enable_ccr_marker,
-                lossless_only,
                 compaction_core_field_fraction,
                 compaction_heterogeneous_core_ratio,
                 compaction_max_flatten_inner_keys,
@@ -611,10 +608,6 @@ impl PySmartCrusherConfig {
     #[getter]
     fn enable_ccr_marker(&self) -> bool {
         self.inner.enable_ccr_marker
-    }
-    #[getter]
-    fn lossless_only(&self) -> bool {
-        self.inner.lossless_only
     }
     #[getter]
     fn lossless_min_savings_ratio(&self) -> f64 {

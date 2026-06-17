@@ -191,13 +191,6 @@ class SmartCrusherConfig:
     # and KV experiments — KV repeats field names per row, so it clears
     # the gate less often than CSV.
     lossless_min_savings_ratio: float = 0.15
-    # Strict lossless mode. When True, lossless tabular compaction still
-    # applies, but any path that would otherwise emit a CCR marker — the
-    # lossy row-drop sentinel AND opaque-blob offload — leaves the content
-    # uncompacted instead. The output is always marker-free and fully
-    # byte-recoverable: rows are never dropped and opaque cells render
-    # inline. Default False (markers allowed). Mirrors the Rust default.
-    lossless_only: bool = False
 
     # Compaction heuristics (mirror Rust CompactConfig; see
     # crates/headroom-core/src/transforms/smart_crusher/compaction/compactor.rs).
@@ -372,46 +365,39 @@ class SmartCrusher(Transform):
         # Build the Rust crusher with every field from the Python
         # config, plus the relevance_threshold default (0.3) — the
         # Python dataclass doesn't carry that field; it lives on
-        # `RelevanceScorerConfig` instead. Kept as a kwargs dict so the
-        # per-call `crush(..., lossless_only=...)` override can rebuild an
-        # alternate crusher with just that one field flipped.
-        self._RustSmartCrusher = _RustSmartCrusher
-        self._RustSmartCrusherConfig = _RustSmartCrusherConfig
-        self._rust_cfg_kwargs = {
-            "enabled": cfg.enabled,
-            "min_items_to_analyze": cfg.min_items_to_analyze,
-            "min_tokens_to_crush": cfg.min_tokens_to_crush,
-            "variance_threshold": cfg.variance_threshold,
-            "uniqueness_threshold": cfg.uniqueness_threshold,
-            "similarity_threshold": cfg.similarity_threshold,
-            "max_items_after_crush": cfg.max_items_after_crush,
-            "preserve_change_points": cfg.preserve_change_points,
-            "factor_out_constants": cfg.factor_out_constants,
-            "include_summaries": cfg.include_summaries,
-            "use_feedback_hints": cfg.use_feedback_hints,
-            "toin_confidence_threshold": cfg.toin_confidence_threshold,
-            "dedup_identical_items": cfg.dedup_identical_items,
-            "first_fraction": cfg.first_fraction,
-            "last_fraction": cfg.last_fraction,
-            "relevance_threshold": 0.3,
-            "enable_ccr_marker": (
+        # `RelevanceScorerConfig` instead.
+        rust_cfg = _RustSmartCrusherConfig(
+            enabled=cfg.enabled,
+            min_items_to_analyze=cfg.min_items_to_analyze,
+            min_tokens_to_crush=cfg.min_tokens_to_crush,
+            variance_threshold=cfg.variance_threshold,
+            uniqueness_threshold=cfg.uniqueness_threshold,
+            similarity_threshold=cfg.similarity_threshold,
+            max_items_after_crush=cfg.max_items_after_crush,
+            preserve_change_points=cfg.preserve_change_points,
+            factor_out_constants=cfg.factor_out_constants,
+            include_summaries=cfg.include_summaries,
+            use_feedback_hints=cfg.use_feedback_hints,
+            toin_confidence_threshold=cfg.toin_confidence_threshold,
+            dedup_identical_items=cfg.dedup_identical_items,
+            first_fraction=cfg.first_fraction,
+            last_fraction=cfg.last_fraction,
+            relevance_threshold=0.3,
+            enable_ccr_marker=(
                 self._ccr_config.enabled and self._ccr_config.inject_retrieval_marker
             ),
-            "lossless_only": self._lossless_only,
             # getattr fallbacks: callers may pass the structurally-similar
             # `headroom.config.SmartCrusherConfig` (MCP server, SDK) or a
             # pre-existing config object that predates these fields.
-            "lossless_min_savings_ratio": getattr(cfg, "lossless_min_savings_ratio", 0.15),
-            "compaction_core_field_fraction": getattr(cfg, "compaction_core_field_fraction", 0.8),
-            "compaction_heterogeneous_core_ratio": getattr(
+            lossless_min_savings_ratio=getattr(cfg, "lossless_min_savings_ratio", 0.15),
+            compaction_core_field_fraction=getattr(cfg, "compaction_core_field_fraction", 0.8),
+            compaction_heterogeneous_core_ratio=getattr(
                 cfg, "compaction_heterogeneous_core_ratio", 0.6
             ),
-            "compaction_max_flatten_inner_keys": getattr(
-                cfg, "compaction_max_flatten_inner_keys", 6
-            ),
-            "compaction_min_buckets": getattr(cfg, "compaction_min_buckets", 2),
-            "compaction_max_buckets": getattr(cfg, "compaction_max_buckets", 8),
-        }
+            compaction_max_flatten_inner_keys=getattr(cfg, "compaction_max_flatten_inner_keys", 6),
+            compaction_min_buckets=getattr(cfg, "compaction_min_buckets", 2),
+            compaction_max_buckets=getattr(cfg, "compaction_max_buckets", 8),
+        )
         # Default: lossless-first compaction (PR4). Lossless wins for
         # cleanly tabular input where it saves ≥ 30% bytes; otherwise
         # falls through to the lossy path with CCR-Dropped retrieval

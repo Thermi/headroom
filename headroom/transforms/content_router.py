@@ -1664,15 +1664,6 @@ class ContentRouterConfig:
     # the crusher themselves.
     smart_crusher: Any | None = None
 
-    # Structural compressor configuration overrides. None preserves each
-    # compressor's dataclass defaults. The proxy wires environment-backed
-    # overrides into these objects, while ccr_inject_marker/search grouping are
-    # still enforced by ContentRouter so global safety flags win consistently.
-    search_compressor: Any | None = None
-    log_compressor: Any | None = None
-    diff_compressor: Any | None = None
-    text_crusher: Any | None = None
-
     # Group search-compressor output by file (`rg --heading` style).
     # Default False; the proxy enables it in token mode.
     search_group_by_file: bool = False
@@ -3865,13 +3856,9 @@ class ContentRouter(Transform):
             try:
                 from .search_compressor import SearchCompressor, SearchCompressorConfig
 
-                cfg = self.config.search_compressor or SearchCompressorConfig()
-                cfg = replace(
-                    cfg,
-                    group_by_file=self.config.search_group_by_file,
-                    enable_ccr=self.config.ccr_inject_marker,
+                self._search_compressor = SearchCompressor(
+                    SearchCompressorConfig(group_by_file=self.config.search_group_by_file)
                 )
-                self._search_compressor = SearchCompressor(cfg)
             except ImportError:
                 logger.debug("SearchCompressor not available")
         return self._search_compressor

@@ -202,13 +202,6 @@ impl SmartCrusher {
             max_flatten_inner_keys: config.compaction_max_flatten_inner_keys,
             min_buckets: config.compaction_min_buckets,
             max_buckets: config.compaction_max_buckets,
-            // Honor the CCR marker gate for opaque-blob cells too (not just
-            // the row-drop path), so `enable_ccr_marker=false` yields
-            // marker-free, lossless output. Fixes #1091.
-            classify: ClassifyConfig {
-                emit_opaque_markers: config.opaque_markers_enabled(),
-                ..ClassifyConfig::default()
-            },
             ..CompactConfig::default()
         };
         SmartCrusherBuilder::new(config)
