@@ -746,3 +746,93 @@ for m in client.memory.get_all():
 5. **Use importance scores** - Higher importance = more likely to be retrieved
 6. **Leverage categories** - Helps with debugging and selective retrieval
 7. **Consider supersession** - Use `supersede()` when facts change, not `add()`
+
+---
+
+## Per-Project Memory (MCP Tools)
+
+When using the Headroom Memory MCP server directly (not through the proxy), the `memory_save`, `memory_search`, and `memory_analyze` tools accept an optional `projectPath` parameter. When provided, each project receives its own isolated SQLite database at `<project>/.headroom/memory.db`, making cross-project memory bleed structurally impossible.
+
+```json
+{
+  "facts": ["Repo owner is Alice", "Uses Python 3.12"],
+  "importance": 0.8,
+  "projectPath": "/Users/alice/code/my-project"
+}
+```
+
+Key behaviours:
+
+- **File isolation**: Each project directory gets its own `memory.db` under `.headroom/`
+- **Backend caching**: Repeated calls for the same `projectPath` reuse a warm backend instance
+- **Zero-config default**: When `projectPath` is omitted, the server uses the global database passed via `--db`
+- **Agent-readable**: The `.headroom/memory.db` file lives inside the project tree, visible to the agent
+
+This is useful when the MCP server is started with a global default DB but callers want project-scoped persistence without running separate server instances.
+
+---
+
+## Local Memory File Writer
+
+When the Headroom proxy runs with `--auto-extract-memories` (or `--memory` with inline extraction enabled), auto-extracted memories are normally saved only to the vector database. For **localhost clients** (127.0.0.1, ::1, localhost), the proxy can also write them as plain markdown files directly into the project's directory.
+
+This makes memories accessible to the agent **without any tool calls** — the agent can `read` or `grep` the files from the project tree just like any other source file.
+
+### How it works
+
+After each auto-extraction, the proxy:
+
+1. Checks if the client IP is a loopback address
+2. Extracts the project root path from the request (`x-headroom-cwd` header, `--memory-project-root` CLI flag, or system prompt `cwd:` line)
+3. Writes each extracted memory as a `.md` file in `<project>/.headroom/memories/`
+
+### File format
+
+Each memory file contains YAML-like frontmatter for easy parsing:
+
+```markdown
+---
+importance: 0.8
+user: alice
+source: inline
+created_at: 2026-06-17T02:30:00Z
+fact_count: 2
+---
+User prefers Python over JavaScript for backend work
+
+## Facts
+1. User prefers Python
+2. User prefers JavaScript
+
+## Entities
+- **Python** (technology)
+```
+
+### Docker volume mount support
+
+When the proxy runs inside Docker on Windows, the host filesystem is accessible only through bind-mounted volumes. Configure mount mappings via the `HEADROOM_VOLUME_MOUNTS` environment variable:
+
+```yaml
+# docker-compose.native.yml
+environment:
+  HEADROOM_VOLUME_MOUNTS: "F:/noel/projects:/workspace,G:/data:/data"
+```
+
+Format: `host_path1:container_path1,host_path2:container_path2`
+
+- Windows drive letters (e.g., `F:/projects`) are handled correctly
+- Multiple mounts are comma-separated
+- When no mounts are configured (native/local mode), all paths are writable
+
+The proxy checks that the resolved project path is a subdirectory of a configured mount before writing. If it's not, the write is skipped with a log message — no error is raised.
+
+### Enabling
+
+This feature activates automatically when:
+
+1. The proxy runs with `--auto-extract-memories` (or equivalent `auto_extract_memories=true`)
+2. The client connects from a loopback address
+3. The project root can be determined from the request
+4. (Docker only) The project path is under a configured `HEADROOM_VOLUME_MOUNTS` entry
+
+No additional configuration flags are needed.
