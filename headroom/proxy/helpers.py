@@ -438,6 +438,20 @@ def prepare_outbound_body_bytes(
     return original_body_bytes, "passthrough"
 
 
+def _summarize_reasons(reasons: list[str]) -> str:
+    """Collapse repeated reasons into counted summary.
+
+    e.g. ['router:excluded:tool', 'router:excluded:tool', 'stream_options_injected']
+      -> 'router:excluded:tool*2,stream_options_injected'
+    """
+    if not reasons:
+        return ""
+    counts: dict[str, int] = {}
+    for r in reasons:
+        counts[r] = counts.get(r, 0) + 1
+    return ",".join(f"{k}*{v}" if v > 1 else k for k, v in counts.items())
+
+
 def log_outbound_request(
     *,
     forwarder: str,
@@ -463,7 +477,7 @@ def log_outbound_request(
         path,
         body_bytes_count,
         "true" if body_mutated else "false",
-        ",".join(mutation_reasons) if mutation_reasons else "",
+        _summarize_reasons(mutation_reasons) if mutation_reasons else "",
         source,
         request_id or "",
     )

@@ -118,6 +118,17 @@ def _get_env_float_optional(name: str) -> float | None:
         raise click.ClickException(f"{name} must be a number, got {val!r}") from None
 
 
+def _memory_storage_label(mode: str, db_path: str) -> str:
+    from pathlib import Path
+    if mode == "project":
+        root = Path(db_path).resolve().parent / "memories"
+        return f"per-project DBs under {root}/projects/<id>/memory.db"
+    elif mode == "user":
+        root = Path(db_path).resolve().parent / "memories"
+        return f"per-user DBs under {root}/users/<id>/memory.db"
+    return "legacy / global-mode DB"
+
+
 def _selected_context_tool() -> str:
     raw = os.environ.get(_CONTEXT_TOOL_ENV, "").strip().lower().replace("_", "-")
     if not raw:
@@ -1434,7 +1445,7 @@ Memory (Multi-Provider):
   - Storage mode: {config.memory_storage_mode} (per-project DB by default — set x-headroom-project-id / x-headroom-cwd to override)
   - Tools: {"ENABLED" if config.memory_inject_tools else "DISABLED"}
   - Context injection: {"ENABLED" if config.memory_inject_context else "DISABLED"}
-  - Database: {config.memory_db_path} (legacy / global-mode DB)
+  - Database: {config.memory_db_path} ({_memory_storage_label(config.memory_storage_mode, config.memory_db_path)})
 """
 
     # Stateless mode warning
