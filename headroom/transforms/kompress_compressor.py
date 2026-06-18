@@ -641,6 +641,17 @@ class _OnnxModel:
     def __init__(self, session: Any):
         self._session = session
 
+    def close(self) -> None:
+        """Release the ONNX Runtime session and its allocated memory.
+
+        Safe to call multiple times. After calling, the model must not be
+        used for inference.
+        """
+        session = getattr(self, "_session", None)
+        if session is not None:
+            self._session = None
+            del session
+
     def get_scores(self, input_ids: Any, attention_mask: Any) -> Any:
         """Return [batch, seq] scores via ONNX Runtime."""
         import numpy as np
@@ -663,7 +674,18 @@ class _OnnxModel:
 
 
 def _onnx_filename_candidates() -> tuple[str, ...]:
-    """ONNX repo paths to try, honoring an optional exact-file override."""
+    """ONNX repo paths to try, honoring an optional exact-file override.
+
+    Resolution order:
+      1. ``HEADROOM_KOMPRESS_ONNX_PATH`` — absolute filesystem path
+         (e.g. a Docker bind-mount). Used as-is when set and the file exists.
+      2. ``HEADROOM_KOMPRESS_ONNX_FILENAME`` — repo-relative path override.
+      3. Default candidates (int8-wo → fp32 → int8).
+    """
+    local_path = os.environ.get("HEADROOM_KOMPRESS_ONNX_PATH", "").strip()
+    if local_path:
+        return (local_path,)
+
     override = os.environ.get(KOMPRESS_ONNX_FILENAME_ENV, "").strip()
     if override:
         # Put the override first but keep the defaults as a safety net.
@@ -717,15 +739,22 @@ def _create_onnx_session(
     cache_miss = False
     ort: Any = None
     for filename in _onnx_filename_candidates():
-        try:
-            onnx_path = hf_hub_download_local_first(
-                model_id, filename, allow_network=allow_download
-            )
-        except Exception as exc:
-            last_err = exc
-            cache_miss = cache_miss or isinstance(exc, _NOT_CACHED_ERRORS)
-            logger.debug("ONNX artifact %r unavailable for %s: %s", filename, model_id, exc)
-            continue
+        is_local_path = os.path.isabs(filename)
+        if is_local_path:
+            if not os.path.isfile(filename):
+                last_err = FileNotFoundError(f"Local ONNX path not found: {filename}")
+                continue
+            onnx_path = filename
+        else:
+            try:
+                onnx_path = hf_hub_download_local_first(
+                    model_id, filename, allow_network=allow_download
+                )
+            except Exception as exc:
+                last_err = exc
+                cache_miss = cache_miss or isinstance(exc, _NOT_CACHED_ERRORS)
+                logger.debug("ONNX artifact %r unavailable for %s: %s", filename, model_id, exc)
+                continue
         if ort is None:
             import onnxruntime
 
@@ -1090,6 +1119,16 @@ def _load_kompress(
     )
 
 
+def _unload_cache_entry(model_id: str) -> None:
+    """Release model resources for one cache entry. Must be called with lock held."""
+    entry = _kompress_cache.pop(model_id, None)
+    if entry is None:
+        return
+    model, _tokenizer, _ = entry
+    if isinstance(model, _OnnxModel):
+        model.close()
+
+
 def unload_kompress_model(model_id: str | None = None) -> bool:
     """Unload Kompress model(s) to free memory.
 
@@ -1098,12 +1137,12 @@ def unload_kompress_model(model_id: str | None = None) -> bool:
     """
     with _kompress_lock:
         if model_id is not None:
-            if model_id in _kompress_cache:
-                del _kompress_cache[model_id]
-            else:
+            if model_id not in _kompress_cache:
                 return False
+            _unload_cache_entry(model_id)
         elif _kompress_cache:
-            _kompress_cache.clear()
+            for mid in list(_kompress_cache):
+                _unload_cache_entry(mid)
         else:
             return False
 
@@ -1372,6 +1411,15 @@ class KompressCompressor(Transform):
         # Consecutive inference failures — reset by any success, so a transient
         # error can't accumulate toward the latch across a healthy run.
         self._inference_failures: int = 0
+
+    def unload(self) -> bool:
+        """Unload the model(s) for this compressor instance to free memory.
+
+        Releases the ONNX Runtime session and tokenizer. After calling this
+        the next ``compress()`` call re-loads the model from cache (or from
+        HuggingFace if the cache was purged).
+        """
+        return unload_kompress_model(self.config.model_id)
 
     def preload(self, *, allow_download: bool = True) -> str:
         """Load the backing model/tokenizer and return the selected backend.
