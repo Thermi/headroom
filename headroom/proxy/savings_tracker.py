@@ -14,6 +14,7 @@ import os
 import tempfile
 import threading
 import time
+import urllib.parse
 from csv import DictWriter
 from datetime import datetime, timedelta, timezone
 from io import StringIO
