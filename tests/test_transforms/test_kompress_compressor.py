@@ -100,7 +100,7 @@ class TestKompressBackendSelection:
         import headroom.transforms.kompress_compressor as kmod
 
         with caplog.at_level(logging.WARNING, logger=kmod.logger.name):
-            for value in ("auto", "onnx", "cpu", "coreml", "mps", "torch", "ONNX-CPU"):
+            for value in ("auto", "onnx", "cpu", "coreml", "mps", "torch", "gpu", "cuda", "onnx-gpu", "ONNX-CPU"):
                 monkeypatch.setenv("HEADROOM_KOMPRESS_BACKEND", value)
                 kmod._selected_backend()
             monkeypatch.delenv("HEADROOM_KOMPRESS_BACKEND", raising=False)
