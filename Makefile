@@ -7,7 +7,7 @@ MATURIN ?= maturin
 PYTHON ?= python3
 FIXTURES ?= tests/parity/fixtures
 
-.PHONY: help test test-parity bench build-proxy build-wheel fmt fmt-check lint clippy clean ci-precheck ci-precheck-rust ci-precheck-python ci-precheck-commitlint install-git-hooks verify-rust-core
+.PHONY: help test test-parity bench build-proxy build-wheel build-image fmt fmt-check lint clippy clean ci-precheck ci-precheck-rust ci-precheck-python ci-precheck-commitlint install-git-hooks verify-rust-core
 
 help:
 	@echo "Headroom Rust targets:"
@@ -22,9 +22,9 @@ help:
 	@echo "  make lint               - cargo clippy --workspace -- -D warnings"
 	@echo "  make clean              - cargo clean"
 	@echo ""
-	@echo "E2e targets:"
-	@echo "  make build-e2e-wrap     - build the wrap-e2e Docker image"
-	@echo "  make run-e2e-wrap       - build + run the wrap-e2e Docker container"
+	@echo "Docker image:"
+	@echo "  make build-image [TAG=...] [EXTRAS=...] - build Docker image with"
+	@echo "    GIT_COMMIT, BUILD_TIME, and VERSION injected automatically"
 	@echo ""
 	@echo "Pre-push verification (run BEFORE git push to catch CI failures locally):"
 	@echo "  make ci-precheck        - run all CI gates (rust + python + commitlint)"
@@ -68,6 +68,25 @@ verify-rust-core:
 		exit 1; \
 	fi
 	bash scripts/build_rust_extension.sh
+
+TAG ?= headroom:latest
+EXTRAS ?= all
+
+build-image:
+	@echo "Building Docker image: $(TAG)"; \
+	echo "  HEADROOM_EXTRAS=$(EXTRAS)"; \
+	GIT_COMMIT=$$(git rev-parse --short HEAD 2>/dev/null || echo "unknown"); \
+	BUILD_TIME=$$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo "unknown"); \
+	echo "  GIT_COMMIT=$$GIT_COMMIT"; \
+	echo "  BUILD_TIME=$$BUILD_TIME"; \
+	docker build \
+		--build-arg GIT_COMMIT="$$GIT_COMMIT" \
+		--build-arg BUILD_TIME="$$BUILD_TIME" \
+		--build-arg HEADROOM_EXTRAS="$(EXTRAS)" \
+		-t "$(TAG)" \
+		-f Dockerfile .; \
+	echo ""; \
+	echo "✅ Built: $(TAG)"
 
 fmt:
 	$(CARGO) fmt --all

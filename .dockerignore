@@ -8,6 +8,7 @@
 .github/*
 !.github/plugin/
 !.github/plugin/**
+.git
 .gitignore
 
 # Python artifacts
