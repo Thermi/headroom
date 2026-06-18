@@ -72,21 +72,25 @@ verify-rust-core:
 TAG ?= headroom:latest
 EXTRAS ?= all
 
+# Compute build metadata at parse time using Make's shell function (works
+# with both bash and cmd.exe).  On Windows `2>nul` suppresses stderr; on
+# Unix it creates a tiny harmless file named `nul` in cwd (gitignored).
+GIT_COMMIT ?= $(shell git rev-parse --short HEAD 2>nul || echo unknown)
+BUILD_TIME ?= $(shell $(PYTHON) -c "from datetime import datetime,timezone;print(datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'))" 2>nul || echo unknown)
+
 build-image:
-	@echo "Building Docker image: $(TAG)"; \
-	echo "  HEADROOM_EXTRAS=$(EXTRAS)"; \
-	GIT_COMMIT=$$(git rev-parse --short HEAD 2>/dev/null || echo "unknown"); \
-	BUILD_TIME=$$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo "unknown"); \
-	echo "  GIT_COMMIT=$$GIT_COMMIT"; \
-	echo "  BUILD_TIME=$$BUILD_TIME"; \
+	$(info Building Docker image: $(TAG))
+	$(info   HEADROOM_EXTRAS=$(EXTRAS))
+	$(info   GIT_COMMIT=$(GIT_COMMIT))
+	$(info   BUILD_TIME=$(BUILD_TIME))
 	docker build \
-		--build-arg GIT_COMMIT="$$GIT_COMMIT" \
-		--build-arg BUILD_TIME="$$BUILD_TIME" \
+		--build-arg GIT_COMMIT="$(GIT_COMMIT)" \
+		--build-arg BUILD_TIME="$(BUILD_TIME)" \
 		--build-arg HEADROOM_EXTRAS="$(EXTRAS)" \
 		-t "$(TAG)" \
-		-f Dockerfile .; \
-	echo ""; \
-	echo "✅ Built: $(TAG)"
+		-f Dockerfile .
+	$(info )
+	$(info Built: $(TAG))
 
 fmt:
 	$(CARGO) fmt --all
