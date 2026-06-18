@@ -6,6 +6,7 @@ that Codex (or any MCP-compatible client) can call natively.
 Tools:
     memory_search  — semantic search across stored memories
     memory_save    — persist a new fact/decision/convention
+    memory_delete  — remove a memory by ID
 
 Design:
     - Embedder is pre-loaded at startup (no cold-start on first query)
@@ -149,6 +150,33 @@ _TOOLS = [
             "required": ["messages", "response_text"],
         },
     ),
+    Tool(
+        name="memory_delete",
+        description=(
+            "Delete a memory by its ID permanently. Use this to remove "
+            "outdated, incorrect, or private information from persistent "
+            "storage. The memory must be retrieved via memory_search or "
+            "memory_list first to obtain its ID."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "memory_id": {
+                    "type": "string",
+                    "description": "The ID of the memory to delete.",
+                },
+                "reason": {
+                    "type": "string",
+                    "description": "Optional reason for deletion (for audit trail).",
+                },
+                "projectPath": {
+                    "type": "string",
+                    "description": "Optional project root path. When provided, the memory is deleted from the project-specific database at <projectPath>/.headroom/memory.db.",
+                },
+            },
+            "required": ["memory_id"],
+        },
+    ),
 ]
 
 
@@ -284,6 +312,8 @@ def create_memory_server(db_path: str, user_id: str = "default") -> Server:
             return await _handle_save(backend, arguments, user_id)
         elif name == "memory_analyze":
             return await _handle_analyze(backend, arguments, user_id)
+        elif name == "memory_delete":
+            return await _handle_delete(backend, arguments, user_id)
 
         return [TextContent(type="text", text=f"Unknown tool: {name}")]
 
@@ -451,6 +481,41 @@ async def _handle_analyze(
     except Exception as e:
         logger.error(f"memory_analyze failed: {e}")
         return [TextContent(type="text", text=f"Analysis error: {e}")]
+
+
+async def _handle_delete(
+    backend: LocalBackend, arguments: dict[str, Any], user_id: str
+) -> list[TextContent]:
+    """Delete a memory by ID."""
+    project_path = arguments.get("projectPath")
+    if project_path:
+        backend = _backend_for_project(project_path)
+
+    memory_id = arguments.get("memory_id", "")
+    if not memory_id:
+        return [TextContent(type="text", text="Error: memory_id is required")]
+
+    try:
+        existing = await backend.get_memory(memory_id)
+        if existing is None:
+            return [TextContent(type="text", text=f"Memory not found: {memory_id}")]
+
+        if existing.user_id != user_id:
+            return [TextContent(type="text", text="Permission denied: cannot delete memories belonging to other users.")]
+
+        deleted = await backend.delete_memory(
+            memory_id=memory_id,
+            reason=arguments.get("reason", "Deleted via MCP"),
+            user_id=user_id,
+        )
+
+        if not deleted:
+            return [TextContent(type="text", text=f"Failed to delete memory {memory_id}")]
+
+        return [TextContent(type="text", text=f"Deleted memory [{memory_id[:8]}]: {existing.content[:80]}")]
+    except Exception as e:
+        logger.error(f"memory_delete failed: {e}")
+        return [TextContent(type="text", text=f"Delete error: {e}")]
 
 
 # ---------------------------------------------------------------------------
