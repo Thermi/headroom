@@ -106,13 +106,12 @@ RUN GIT="${GIT_COMMIT}" && \
 # Remove .git to keep the builder layer lean — it is not needed at runtime.
 RUN rm -rf .git
 
-# Build the wheel with maturin directly (avoids uv pip install's RECORD
-# CSV issue on uv 0.11.x), then install from the pre-built artifact.
-RUN --mount=type=cache,target=/root/.cargo/registry \
-    --mount=type=cache,target=/build/target \
-    maturin build --release --out /tmp/wheelhouse
+# Build and install the headroom package (including the Rust _core extension).
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install --system --no-deps /tmp/wheelhouse/*.whl
+    --mount=type=cache,target=/root/.cargo/registry \
+    --mount=type=cache,target=/build/target \
+    uv pip install --system --no-build-isolation --no-deps \
+        ".[${HEADROOM_EXTRAS}]"
 
 RUN --mount=type=bind,source=.,target=/context,readonly \
     HEADROOM_BUILD_VERSION="${HEADROOM_BUILD_VERSION}" PYTHON_SITE_PACKAGES="${PYTHON_SITE_PACKAGES}" python - <<'PY'
