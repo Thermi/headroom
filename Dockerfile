@@ -106,12 +106,18 @@ RUN GIT="${GIT_COMMIT}" && \
 # Remove .git to keep the builder layer lean — it is not needed at runtime.
 RUN rm -rf .git
 
+# Pin setuptools <82 and wheel <0.45 — the base python:slim image may
+# ship versions that break wheel builds or generate a RECORD format
+# uv 0.11.x cannot parse.  With --no-build-isolation, --constraint
+# cannot downgrade already-installed packages, so we force compatible
+# versions before the build step.
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --system "setuptools<82" "wheel<0.45"
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=cache,target=/root/.cargo/registry \
     --mount=type=cache,target=/build/target \
-    printf "setuptools<82\nwheel<0.45\n" \
-    | uv pip install --system --no-build-isolation --no-deps \
-        --constraint /dev/stdin ".[${HEADROOM_EXTRAS}]"
+    uv pip install --system --no-build-isolation --no-deps \
+        ".[${HEADROOM_EXTRAS}]"
 
 RUN --mount=type=bind,source=.,target=/context,readonly \
     HEADROOM_BUILD_VERSION="${HEADROOM_BUILD_VERSION}" PYTHON_SITE_PACKAGES="${PYTHON_SITE_PACKAGES}" python - <<'PY'
