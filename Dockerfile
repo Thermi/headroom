@@ -109,7 +109,7 @@ RUN rm -rf .git
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=cache,target=/root/.cargo/registry \
     --mount=type=cache,target=/build/target \
-    echo "setuptools<82" \
+    printf "setuptools<82\nwheel<0.45\n" \
     | uv pip install --system --no-build-isolation --no-deps \
         --constraint /dev/stdin ".[${HEADROOM_EXTRAS}]"
 
