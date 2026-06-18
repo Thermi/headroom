@@ -67,7 +67,7 @@ HEADROOM_CONFIG_DIR: /tmp/headroom-home/.headroom/config
       OPENAI_TARGET_API_URL: https://api.deepseek.com
       HEADROOM_ANTHROPIC_ENABLED: "false"
       HEADROOM_SILENCE_HEALTH_PROBES: "true"
-      HEADROOM_KOMPRESS_BACKEND: onnx-gpu
+      HEADROOM_KOMPRESS_BACKEND: onnx_gpu
       HF_HOME: /tmp/hf-cache
       XDG_CACHE_HOME: /tmp/xdg-cache
       HEADROOM_KOMPRESS_ONNX_PATH: /opt/headroom/kompress-int8.onnx
