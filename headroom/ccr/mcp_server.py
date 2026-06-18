@@ -77,6 +77,7 @@ READ_TOOL_NAME = "headroom_read"
 MEMORY_SEARCH_TOOL_NAME = "memory_search"
 MEMORY_SAVE_TOOL_NAME = "memory_save"
 MEMORY_ANALYZE_TOOL_NAME = "memory_analyze"
+MEMORY_DELETE_TOOL_NAME = "memory_delete"
 
 logger = logging.getLogger("headroom.ccr.mcp")
 
@@ -749,6 +750,8 @@ class HeadroomMCPServer:
                     result = await self._handle_memory_save(arguments)
                 elif name == MEMORY_ANALYZE_TOOL_NAME:
                     result = await self._handle_memory_analyze(arguments)
+                elif name == MEMORY_DELETE_TOOL_NAME:
+                    result = await self._handle_memory_delete(arguments)
                 else:
                     result = [
                         TextContent(
@@ -1155,6 +1158,21 @@ class HeadroomMCPServer:
         from headroom.memory.mcp_server import _handle_analyze
 
         return await _handle_analyze(backend, arguments, self.memory_user_id)
+
+    async def _handle_memory_delete(
+        self, arguments: dict[str, Any]
+    ) -> list[TextContent]:
+        backend = await self._get_memory_backend()
+        if backend is None:
+            return [
+                TextContent(
+                    type="text",
+                    text=json.dumps({"error": "Memory backend not available"}),
+                )
+            ]
+        from headroom.memory.mcp_server import _handle_delete
+
+        return await _handle_delete(backend, arguments, self.memory_user_id)
 
     async def run_stdio(self) -> None:
         """Run the server with stdio transport."""
