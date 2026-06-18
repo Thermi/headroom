@@ -81,6 +81,18 @@ class TestKompressBackendSelection:
         monkeypatch.setenv("HEADROOM_KOMPRESS_BACKEND", "cpu")
         assert kmod._selected_backend() == "onnx_cpu"
 
+        monkeypatch.setenv("HEADROOM_KOMPRESS_BACKEND", "gpu")
+        assert kmod._selected_backend() == "onnx_gpu"
+
+        monkeypatch.setenv("HEADROOM_KOMPRESS_BACKEND", "cuda")
+        assert kmod._selected_backend() == "onnx_gpu"
+
+        monkeypatch.setenv("HEADROOM_KOMPRESS_BACKEND", "onnx_gpu")
+        assert kmod._selected_backend() == "onnx_gpu"
+
+        monkeypatch.setenv("HEADROOM_KOMPRESS_BACKEND", "onnx-gpu")
+        assert kmod._selected_backend() == "onnx_gpu"
+
         monkeypatch.setenv("HEADROOM_KOMPRESS_BACKEND", "unknown")
         assert kmod._selected_backend() == "auto"
 
@@ -141,6 +153,59 @@ class TestKompressBackendSelection:
 
         assert kmod._load_kompress("model-b") == ("model", "tokenizer", "onnx_coreml")
         assert calls == [("model-b", True)]
+
+    def test_forced_onnx_gpu_backend_calls_with_use_gpu(self, monkeypatch) -> None:
+        import headroom.transforms.kompress_compressor as kmod
+
+        calls: list[tuple[str, bool]] = []
+        monkeypatch.setenv("HEADROOM_KOMPRESS_BACKEND", "onnx_gpu")
+        monkeypatch.setattr(kmod, "_kompress_cache", {})
+        monkeypatch.setattr(
+            kmod,
+            "_load_kompress_onnx",
+            lambda model_id, *, use_coreml=False, use_gpu=False, allow_download=True: (
+                calls.append((model_id, use_gpu)) or ("model", "tokenizer", "onnx_gpu")
+            ),
+        )
+
+        assert kmod._load_kompress("model-c") == ("model", "tokenizer", "onnx_gpu")
+        assert calls == [("model-c", True)]
+
+    def test_forced_onnx_gpu_backend_uses_cuda_provider(self, monkeypatch) -> None:
+        import sys
+
+        import headroom.transforms.kompress_compressor as kmod
+
+        # transformers may not be installed; inject a minimal stub so the
+        # `from transformers import AutoTokenizer` inside _load_kompress_onnx
+        # does not raise.
+        fake_transformers = MagicMock()
+        fake_transformers.AutoTokenizer = MagicMock()
+        monkeypatch.setitem(sys.modules, "transformers", fake_transformers)
+
+        captured_providers: list[Any] = []
+        monkeypatch.setenv("HEADROOM_KOMPRESS_BACKEND", "onnx_gpu")
+        monkeypatch.setattr(kmod, "_is_onnx_available", lambda: True)
+        monkeypatch.setattr(kmod, "_kompress_cache", {})
+        monkeypatch.setattr(
+            kmod,
+            "_create_onnx_session",
+            lambda model_id, providers, *, allow_download=True: (
+                captured_providers.append(providers)
+                or MagicMock()
+            ),
+        )
+        monkeypatch.setattr(
+            kmod,
+            "_load_modernbert_tokenizer",
+            lambda auto_tokenizer, *, allow_download: MagicMock(),
+        )
+
+        result = kmod._load_kompress_onnx("model-d", use_gpu=True)
+        assert result[2] == "onnx_gpu"
+        assert len(captured_providers) == 1
+        providers = captured_providers[0]
+        assert providers == ["CUDAExecutionProvider", "CPUExecutionProvider"]
 
     def test_auto_backend_preserves_onnx_first(self, monkeypatch) -> None:
         import headroom.transforms.kompress_compressor as kmod
