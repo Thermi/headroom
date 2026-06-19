@@ -4129,59 +4129,16 @@ class ContentRouter(Transform):
             logger.debug("Magika pre-load skipped: %s", e)
             status["magika"] = "skipped"
 
-        # Surface which onnxruntime dylib the Rust detection chain will load.
-        # On Windows `headroom._ort` pins ORT_DYLIB_PATH at import time; an
-        # unset value there means the bare DLL search applies, which lands on
-        # the Windows ML System32 build known to deadlock ort session init
-        # (Win11 24H2+, see headroom/_ort.py).
-        if sys.platform.startswith("win"):
-            ort_dylib = os.environ.get("ORT_DYLIB_PATH")
-            if ort_dylib:
-                logger.info("ORT dylib for Rust detection: %s", ort_dylib)
-                status["ort_dylib"] = ort_dylib
-            else:
-                logger.warning(
-                    "ORT_DYLIB_PATH is unset: Rust ML detection will use the system "
-                    "DLL search, which deadlocks against the Windows ML System32 "
-                    "onnxruntime.dll on Windows 11 24H2+. Install the `onnxruntime` "
-                    "package or set ORT_DYLIB_PATH."
-                )
-                status["ort_dylib"] = "unset"
-
-        # 3. CodeAware compressor + common tree-sitter parsers
+        # 3. CodeAware compressor
         if self.config.enable_code_aware:
             code_compressor = self._get_code_compressor()
             if code_compressor:
                 status["code_aware"] = "enabled"
-                # Pre-load tree-sitter parsers for common languages
-                # Each parser is ~50ms to load; doing it here avoids 500ms+ on first code hit
-                try:
-                    from .code_compressor import _check_tree_sitter_available, _get_parser
-
-                    if _check_tree_sitter_available():
-                        common_languages = [
-                            "python",
-                            "javascript",
-                            "typescript",
-                            "go",
-                            "rust",
-                            "java",
-                            "c",
-                            "cpp",
-                        ]
-                        loaded = []
-                        for lang in common_languages:
-                            try:
-                                _get_parser(lang)
-                                loaded.append(lang)
-                            except (ValueError, ImportError):
-                                pass  # Language not available, skip
-                        if loaded:
-                            logger.info("Tree-sitter parsers pre-loaded: %s", ", ".join(loaded))
-                            status["tree_sitter"] = f"loaded ({len(loaded)} languages)"
-                except Exception as e:
-                    logger.debug("Tree-sitter pre-load skipped: %s", e)
-                    status["tree_sitter"] = "skipped"
+                # Tree-sitter parsers are NOT pre-loaded here because they use
+                # `threading.local()`  and compression runs in a dedicated
+                # `ThreadPoolExecutor`. Loading them on the main thread would be
+                # wasted work — each pool thread creates its own lazy cache on
+                # first use. See `_get_parser` in `code_compressor.py`.
             else:
                 status["code_aware"] = "not installed"
 
