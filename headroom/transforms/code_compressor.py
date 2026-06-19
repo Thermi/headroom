@@ -170,7 +170,7 @@ def _get_parser(language: str) -> Any:
                 raise ValueError(
                     "Version mismatch between tree-sitter and "
                     "tree-sitter-language-pack. Run: pip install "
-                    "'tree-sitter>=0.23.0,<0.25.0' "
+                    "'tree-sitter>=0.25.2' "
                     "'tree-sitter-language-pack>=0.10.0,<0.12.0'"
                 ) from e
             raise ValueError(f"tree-sitter type error for language {language!r}: {e}") from e

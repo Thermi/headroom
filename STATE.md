@@ -2,10 +2,10 @@
 
 Tracking concurrent work on the project.
 
-## Current: Lock tree-sitter version bounds to prevent AST runtime mismatch
+## Current: Fix tree-sitter version bounds for real
 
-- **Status:** Already applied by concurrent agent in `bc1cf2a7`
-- **Who:** Noel Kuntze (concurrent agent)
-- **What:** Added upper bounds (`<0.25.0`, `<0.12.0`) to `tree-sitter` and `tree-sitter-language-pack` in `pyproject.toml` to prevent AST runtime version mismatch. Also removed dead tree-sitter parser preload at startup.
-- **Files changed:** `pyproject.toml`, `headroom/transforms/content_router.py`
-- **Note:** My edit to `pyproject.toml` matched the concurrent commit — no further action needed.
+- **Status:** Applied
+- **Who:** headroom-agent
+- **What:** Fixed `tree-sitter` lower bound to `>=0.25.2` (all `tree-sitter-language-pack` 0.x versions require `>=0.25.2`). Previous incorrect upper bound `<0.25.0` made resolution impossible. Also fixed error message in `code_compressor.py` to match.
+- **Files changed:** `pyproject.toml`, `headroom/transforms/code_compressor.py`, `STATE.md`
+- **Commit:** TBD
