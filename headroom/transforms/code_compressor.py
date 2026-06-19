@@ -59,6 +59,10 @@ logger = logging.getLogger(__name__)
 # Lazy import for optional dependency
 _tree_sitter_available: bool | None = None
 _tree_sitter_local = threading.local()
+# Global language-grammar cache shared across all threads. The Language
+# objects from tree_sitter_language_pack are read-only grammar tables —
+# safe to share. Only the Parser instance must be per-thread.
+_language_cache: dict[str, Any] = {}
 
 
 def _check_tree_sitter_available() -> bool:
@@ -141,10 +145,14 @@ def _get_parser(language: str) -> Any:
             from tree_sitter import Parser
             from tree_sitter_language_pack import get_language
 
+            # Language grammars are read-only and shared across all threads.
+            # Only the Parser instances are per-thread (PyO3 unsendable).
+            if language not in _language_cache:
+                _language_cache[language] = get_language(language)
             parser = Parser()
             # `language` is a validated runtime str; get_language types its arg
             # as a Literal of supported names, which a dynamic str can't satisfy.
-            parser.language = get_language(language)  # type: ignore[arg-type]
+            parser.language = _language_cache[language]  # type: ignore[arg-type]
             parsers[language] = parser
             logger.debug(
                 "Loaded tree-sitter parser for %s (thread %s)",
