@@ -62,28 +62,15 @@ _tree_sitter_local = threading.local()
 
 
 def _check_tree_sitter_available() -> bool:
-    """Check if tree-sitter is available *and actually parses*.
-
-    The mere presence of ``tree_sitter_language_pack`` is not enough: prior
-    versions of this code green-lit a code path that raised ``TypeError`` at
-    parse time and silently fell back to a lossy stripper.  To stop misleading
-    callers, we now verify an end-to-end parse of a tiny snippet and only
-    return ``True`` if it yields a real AST.
-    """
+    """Check if tree-sitter packages (core + language pack) are available."""
     global _tree_sitter_available
     if _tree_sitter_available is None:
         try:
-            parser = _get_parser("python")
-            tree = parser.parse(b"def _probe():\n    return 1\n")
-            root = tree.root_node
-            # A real parse yields a non-error root with children.
-            _tree_sitter_available = (
-                root is not None
-                and root.type == "module"
-                and root.child_count > 0
-                and not _has_syntax_issues(root)
-            )
-        except Exception:
+            import tree_sitter  # noqa: F401
+            import tree_sitter_language_pack  # noqa: F401
+
+            _tree_sitter_available = True
+        except ImportError:
             _tree_sitter_available = False
     return _tree_sitter_available
 
@@ -164,6 +151,11 @@ def _get_parser(language: str) -> Any:
                 language,
                 threading.current_thread().name,
             )
+        except ImportError as e:
+            raise ImportError(
+                "tree-sitter is not installed. Install with: pip install headroom-ai[code]\n"
+                "This adds ~50MB for tree-sitter grammars."
+            ) from e
         except Exception as e:
             raise ValueError(
                 f"Language '{language}' is not supported by tree-sitter. "
