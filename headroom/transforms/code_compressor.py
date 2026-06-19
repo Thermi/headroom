@@ -156,6 +156,18 @@ def _get_parser(language: str) -> Any:
                 "tree-sitter is not installed. Install with: pip install headroom-ai[code]\n"
                 "This adds ~50MB for tree-sitter grammars."
             ) from e
+        except TypeError as e:
+            msg = str(e)
+            if "not builtins.Language" in msg or "tree_sitter.Language object" in msg:
+                raise ValueError(
+                    "Version mismatch between tree-sitter and "
+                    "tree-sitter-language-pack. Run: pip install "
+                    "'tree-sitter>=0.23.0,<0.25.0' "
+                    "'tree-sitter-language-pack>=0.10.0,<0.12.0'"
+                ) from e
+            raise ValueError(
+                f"tree-sitter type error for language {language!r}: {e}"
+            ) from e
         except Exception as e:
             raise ValueError(
                 f"Language '{language}' is not supported by tree-sitter. "
