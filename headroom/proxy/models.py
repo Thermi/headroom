@@ -311,6 +311,32 @@ class ProxyConfig:
     cache_ttl_seconds: int = 3600
     cache_max_entries: int = 1000
 
+    # Per-session CompressionCache max entries (default 10k)
+    # Each session has its own LRU cache mapping content hashes to compressed
+    # text. Higher values improve cache-hit rate at the cost of more memory
+    # per active session. CLI: --cache-session-max-entries; env: HEADROOM_CACHE_SESSION_MAX_ENTRIES.
+    cache_session_max_entries: int = 10000
+
+    # Max compression cache sessions before evicting oldest sessions (def: 500)
+    # Each session corresponds to one conversation (identified by x-headroom-session-id).
+    # Beyond this limit the oldest 25% of sessions are evicted. Lower to reduce
+    # memory under high session churn; higher for long-lived many-session deployments.
+    # CLI: --compression-cache-max-sessions; env: HEADROOM_COMPRESSION_CACHE_MAX_SESSIONS.
+    compression_cache_max_sessions: int = 500
+
+    # Max prefix-frozen session trackers before evicting oldest (def: 1000)
+    # Each tracker holds provider prefix-cache state for one active conversation.
+    # See also prefix_freeze_session_ttl for the idle timeout.
+    # CLI: --session-tracker-max-sessions; env: HEADROOM_SESSION_TRACKER_MAX_SESSIONS.
+    session_tracker_max_sessions: int = 1000
+
+    # Max unique tool patterns retained by TOIN (default: 5000)
+    # Each pattern captures compression intelligence for one unique tool
+    # structure shape. Beyond this limit the least-recently-seen patterns are
+    # evicted. Lower to reduce memory in deployments with many tool varieties.
+    # CLI: --toin-max-patterns; env: HEADROOM_TOIN_MAX_PATTERNS.
+    toin_max_patterns: int = 5000
+
     # Rate limiting
     rate_limit_enabled: bool = True
     rate_limit_requests_per_minute: int = 60

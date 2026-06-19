@@ -143,6 +143,31 @@ class TestProxyConfigDataclass:
         assert config.max_keepalive_connections == 200
         assert config.http2 is False
 
+    def test_proxy_config_memory_fields_have_defaults(self):
+        """New memory-limit config fields have sensible defaults."""
+        from headroom.proxy.models import ProxyConfig
+
+        config = ProxyConfig()
+        assert config.cache_session_max_entries == 10000
+        assert config.compression_cache_max_sessions == 500
+        assert config.session_tracker_max_sessions == 1000
+        assert config.toin_max_patterns == 5000
+
+    def test_proxy_config_memory_fields_custom(self):
+        """New memory-limit config fields accept custom values."""
+        from headroom.proxy.models import ProxyConfig
+
+        config = ProxyConfig(
+            cache_session_max_entries=2000,
+            compression_cache_max_sessions=100,
+            session_tracker_max_sessions=200,
+            toin_max_patterns=1000,
+        )
+        assert config.cache_session_max_entries == 2000
+        assert config.compression_cache_max_sessions == 100
+        assert config.session_tracker_max_sessions == 200
+        assert config.toin_max_patterns == 1000
+
 
 class TestConcurrencyPatterns:
     """Test async concurrency patterns used in proxy."""

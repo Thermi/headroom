@@ -1202,6 +1202,26 @@ def proxy(
         optimize=not no_optimize,
         kompress_enabled=not no_kompress,
         cache_enabled=not no_cache,
+        cache_session_max_entries=(
+            int(os.environ["HEADROOM_CACHE_SESSION_MAX_ENTRIES"])
+            if "HEADROOM_CACHE_SESSION_MAX_ENTRIES" in os.environ
+            else 10000
+        ),
+        compression_cache_max_sessions=(
+            int(os.environ["HEADROOM_COMPRESSION_CACHE_MAX_SESSIONS"])
+            if "HEADROOM_COMPRESSION_CACHE_MAX_SESSIONS" in os.environ
+            else 500
+        ),
+        session_tracker_max_sessions=(
+            int(os.environ["HEADROOM_SESSION_TRACKER_MAX_SESSIONS"])
+            if "HEADROOM_SESSION_TRACKER_MAX_SESSIONS" in os.environ
+            else 1000
+        ),
+        toin_max_patterns=(
+            int(os.environ["HEADROOM_TOIN_MAX_PATTERNS"])
+            if "HEADROOM_TOIN_MAX_PATTERNS" in os.environ
+            else 5000
+        ),
         rate_limit_enabled=not no_rate_limit,
         rate_limit_requests_per_minute=rpm if rpm is not None else 60,
         rate_limit_tokens_per_minute=tpm if tpm is not None else 100_000,

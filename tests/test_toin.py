@@ -430,6 +430,68 @@ class TestToolIntelligenceNetwork:
         assert stats["patterns_tracked"] == 0
         assert stats["total_compressions"] == 0
 
+    def test_max_patterns_evicts_oldest(self):
+        """When max_patterns is exceeded, oldest patterns are evicted."""
+        config = TOINConfig(max_patterns=3)
+        toin = ToolIntelligenceNetwork(config)
+
+        # Items must have structurally different keys — structure_hash
+        # is based on field names, not values.
+        sig_a = ToolSignature.from_items([{"field_a": 1}])
+        sig_b = ToolSignature.from_items([{"field_b": 1}])
+        sig_c = ToolSignature.from_items([{"field_c": 1}])
+        sig_d = ToolSignature.from_items([{"field_d": 1}])
+
+        for sig in (sig_a, sig_b, sig_c):
+            toin.record_compression(
+                tool_signature=sig,
+                original_count=100, compressed_count=50,
+                original_tokens=1000, compressed_tokens=500,
+                strategy="top_n",
+            )
+        assert toin.get_stats()["patterns_tracked"] == 3
+
+        # Adding a 4th pattern should evict the oldest (sig_a)
+        toin.record_compression(
+            tool_signature=sig_d,
+            original_count=100, compressed_count=50,
+            original_tokens=1000, compressed_tokens=500,
+            strategy="top_n",
+        )
+        stats = toin.get_stats()
+        assert stats["patterns_tracked"] == 3
+
+        # sig_a should be evicted
+        assert toin.get_pattern(sig_a.structure_hash) is None
+        # Later patterns survive
+        assert toin.get_pattern(sig_d.structure_hash) is not None
+
+    def test_max_patterns_zero_means_unlimited(self):
+        """max_patterns <= 0 disables eviction."""
+        config = TOINConfig(max_patterns=0)
+        toin = ToolIntelligenceNetwork(config)
+
+        for i in range(100):
+            sig = ToolSignature.from_items([{f"field_{i}": i}])
+            toin.record_compression(
+                tool_signature=sig,
+                original_count=100, compressed_count=50,
+                original_tokens=1000, compressed_tokens=500,
+                strategy="top_n",
+            )
+        assert toin.get_stats()["patterns_tracked"] == 100
+
+    def test_max_patterns_configurable_via_env(self, monkeypatch):
+        """TOINConfig reads max_patterns from HEADROOM_TOIN_MAX_PATTERNS env."""
+        monkeypatch.setenv("HEADROOM_TOIN_MAX_PATTERNS", "42")
+        config = TOINConfig()
+        assert config.max_patterns == 42
+
+    def test_max_patterns_default_when_env_not_set(self):
+        """When env var is unset, max_patterns defaults to 5000."""
+        config = TOINConfig()
+        assert config.max_patterns == 5000
+
 
 class TestTOINExportImport:
     """Test TOIN export/import for federated learning."""

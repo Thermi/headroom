@@ -108,6 +108,47 @@ class TestCompressionCache:
         h = CompressionCache.content_hash("test")
         assert len(h) == 16
 
+    def test_eviction_cleans_auxiliary_structures(self, small_cache: CompressionCache) -> None:
+        """When cache entries are evicted, _stable_hashes and _first_seen are cleaned."""
+        h1 = CompressionCache.content_hash("a")
+        h2 = CompressionCache.content_hash("b")
+        h3 = CompressionCache.content_hash("c")
+        h4 = CompressionCache.content_hash("d")
+
+        small_cache.store_compressed(h1, "ca", tokens_saved=1)
+        small_cache.store_compressed(h2, "cb", tokens_saved=1)
+        small_cache.store_compressed(h3, "cc", tokens_saved=1)
+
+        # Mark h1 stable and record first_seen for h1
+        small_cache.mark_stable(h1)
+        small_cache.should_defer_compression(h1, ttl_seconds=9999)
+
+        # Evict h1 by adding h4
+        small_cache.store_compressed(h4, "cd", tokens_saved=1)
+
+        # h1 should be removed from auxiliary structures
+        with small_cache._lock:
+            assert h1 not in small_cache._stable_hashes
+            assert h1 not in small_cache._first_seen
+
+    def test_mark_stable_bounds_hashes(self, small_cache: CompressionCache) -> None:
+        """mark_stable keeps _stable_hashes bounded when it exceeds 2x max_entries."""
+        small_cache.max_entries = 2
+        # Fill the cache with 2 entries
+        h1 = CompressionCache.content_hash("a")
+        h2 = CompressionCache.content_hash("b")
+        small_cache.store_compressed(h1, "ca", tokens_saved=1)
+        small_cache.store_compressed(h2, "cb", tokens_saved=1)
+
+        # Mark many hashes as stable (exceeding 2 * max_entries = 4)
+        for ch in ["c", "d", "e", "f", "g"]:
+            h = CompressionCache.content_hash(ch)
+            small_cache.mark_stable(h)
+
+        with small_cache._lock:
+            # Intersection with _cache keys should bring it back down
+            assert len(small_cache._stable_hashes) <= small_cache.max_entries * 2
+
 
 class TestCompressionCacheFrozenCount:
     def test_empty_cache_returns_zero(self, cache: CompressionCache) -> None:

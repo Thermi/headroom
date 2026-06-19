@@ -1403,8 +1403,6 @@ class StreamingMixin:
         async def generate():
             nonlocal body, memory_enabled  # May need to modify for continuation requests
 
-            # For memory mode, we buffer the response to check for tool calls
-            buffered_chunks: list[bytes] = []
             # Bytes-level mirror of the SSE stream for memory/prefix
             # tracking. PR-A8 / P1-8: keep this as bytes too — we
             # decode only after a complete `\n\n`-terminated event has
@@ -1470,8 +1468,6 @@ class StreamingMixin:
                             or (prefix_tracker is not None and provider == "anthropic")
                         )
                         if _track_sse:
-                            if memory_enabled:
-                                buffered_chunks.append(chunk)
                             full_sse_bytes.extend(chunk)
                             if len(full_sse_bytes) > MAX_SSE_BUFFER_SIZE:
                                 logger.warning(
@@ -2011,6 +2007,7 @@ class StreamingMixin:
         from fastapi.responses import StreamingResponse
 
         from headroom.proxy.handlers.openai import _infer_openai_cache_write_tokens
+        from headroom.proxy.helpers import MAX_SSE_BUFFER_SIZE
         from headroom.proxy.outcome import RequestOutcome
 
         # ``backend`` lets the caller serve this one request from somewhere
@@ -2051,6 +2048,8 @@ class StreamingMixin:
                     chunk_bytes = sse_chunk.encode() if isinstance(sse_chunk, str) else sse_chunk
                     stream_state["sse_buffer"].extend(chunk_bytes)
                     full_sse_bytes.extend(chunk_bytes)
+                    if len(full_sse_bytes) > MAX_SSE_BUFFER_SIZE:
+                        full_sse_bytes.clear()
                     _absorb(self._parse_sse_usage_from_buffer(stream_state, "openai"))
                     # Per-chunk fallback for upstreams that emit only
                     # ``completion_tokens`` and not a full usage frame.
