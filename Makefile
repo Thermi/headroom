@@ -4,7 +4,10 @@
 SHELL := /bin/bash
 CARGO ?= cargo
 MATURIN ?= maturin
-PYTHON ?= python3
+# Dockerfile uses ``python``, not ``python3``.  On Windows the venv only
+# has ``python.exe``; ``python3`` resolves to the Microsoft Store shim and
+# fails.  Stick with ``python`` for cross-platform consistency.
+PYTHON ?= python
 FIXTURES ?= tests/parity/fixtures
 
 .PHONY: help test test-parity bench build-proxy build-wheel build-image fmt fmt-check lint clippy clean ci-precheck ci-precheck-rust ci-precheck-python ci-precheck-commitlint install-git-hooks verify-rust-core
