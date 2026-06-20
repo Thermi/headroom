@@ -620,7 +620,10 @@ class HeadroomMCPServer:
                         "Use this on large tool outputs, file contents, search results, "
                         "or any content you want to shrink before reasoning over it. "
                         f"The original is stored and can be retrieved later via mcp__headroom__{CCR_TOOL_NAME}. "
-                        "Returns compressed text + a hash for retrieval."
+                        "Returns compressed text + a hash for retrieval.\n\n"
+                        "Note: The proxy also compresses content transparently (diffs, JSON arrays, "
+                        "search results). Those markers are retrievable via headroom_retrieve too — "
+                        "same system."
                     ),
                     inputSchema={
                         "type": "object",
@@ -641,8 +644,13 @@ class HeadroomMCPServer:
                     description=(
                         "Retrieve original uncompressed content by hash. "
                         "Use this when you need full details from previously compressed content. "
-                        "The hash comes from headroom_compress results or from compression "
-                        "markers like [N items compressed... hash=abc123]."
+                        "The proxy transparently compresses large tool outputs, diffs, search "
+                        "results, and JSON arrays to save context window space — the original "
+                        "is stored and retrievable here. "
+                        "Hashes appear in compression markers like "
+                        "``[N items compressed to M. Retrieve more: hash=abc123]`` "
+                        "embedded in the compressed output. "
+                        "Also works for content compressed explicitly via headroom_compress."
                     ),
                     inputSchema={
                         "type": "object",
