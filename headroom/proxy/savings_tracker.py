@@ -437,8 +437,8 @@ def _empty_display_session() -> dict[str, Any]:
         "total_input_tokens": 0,
         "total_input_cost_usd": 0.0,
         "savings_percent": 0.0,
-        "started_at": None,
-        "last_activity_at": None,
+        "started_at": "",
+        "last_activity_at": "",
     }
 
 
@@ -459,7 +459,7 @@ def _empty_project_entry() -> dict[str, Any]:
         "compression_savings_usd": 0.0,
         "total_input_tokens": 0,
         "total_input_cost_usd": 0.0,
-        "last_activity_at": None,
+        "last_activity_at": "",
     }
 
 
@@ -482,7 +482,7 @@ def _normalize_projects(raw: Any) -> dict[str, dict[str, Any]]:
             _coerce_float(entry.get("total_input_cost_usd")), 6
         )
         last_activity = _parse_timestamp(entry.get("last_activity_at"))
-        normalized["last_activity_at"] = _to_utc_iso(last_activity) if last_activity else None
+        normalized["last_activity_at"] = _to_utc_iso(last_activity) if last_activity else ""
         projects[cleaned_name] = normalized
     if len(projects) > DEFAULT_MAX_PROJECTS:
         # Oversized persisted maps (hand-edited or future versions) would
