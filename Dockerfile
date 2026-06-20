@@ -162,7 +162,7 @@ ARG RUNTIME_HOME=/home/nonroot
 ARG PYTHON_SITE_PACKAGES
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends curl && \
+    apt-get install -y --no-install-recommends curl htop iputils-ping iputils-tracepath traceroute && \
     rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder ${PYTHON_SITE_PACKAGES} ${PYTHON_SITE_PACKAGES}
