@@ -53,6 +53,9 @@ FROM rust-toolchain AS builder
 ARG GIT_COMMIT
 ARG BUILD_TIME
 
+# Skip .pyc generation — they'd be deleted before export anyway.
+ENV PYTHONDONTWRITEBYTECODE=1
+
 WORKDIR /build
 
 # Install build-time system deps (maturin, setuptools-rust) once.
@@ -207,6 +210,19 @@ RUN python -c "from headroom.rtk.installer import download_rtk; download_rtk()"
 # Replace CPU-only onnxruntime with GPU-enabled onnxruntime-gpu
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --system --force-reinstall "onnxruntime-gpu>=1.16.0"
+
+# Strip unnecessary files from site-packages so the runtime-stage COPY
+# (and its subsequent export compression) has far less data to move.
+# onnxruntime-gpu alone bundles ~1 GB of binaries; __pycache__ and test
+# artifacts add hundreds more MB.
+# Further reduction: CUDA /usr/local/cuda-12.6/ includes headers, static
+# libs, and tools not needed at runtime — only the .so under lib64/ plus
+# cuDNN are loaded.  Copying only those would save another ~2 GB.
+RUN find /usr/local -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null; \
+    find /usr/local -type f -name "*.pyc" -delete; \
+    find /usr/local -type f -name "*.pyo" -delete; \
+    find /usr/local/lib/python${PYTHON_VERSION}/site-packages -type d \( -name tests -o -name test -o -name testing \) -exec rm -rf {} + 2>/dev/null; \
+    echo "cleaned"
 
 # ---- Runtime stage (python-slim): supports root/nonroot via build arg ----
 FROM python:${PYTHON_VERSION}-slim AS runtime-slim-base
