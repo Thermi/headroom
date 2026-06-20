@@ -1500,6 +1500,12 @@ class StreamingMixin:
                                     "cache_creation_ephemeral_1h_input_tokens"
                                 ]
 
+                        # Per-chunk fallback for upstreams that emit only
+                        # ``completion_tokens`` and not a full usage frame.
+                        parsed = _parse_completion_tokens_from_sse_chunk(chunk)
+                        if parsed is not None and stream_state["output_tokens"] is None:
+                            stream_state["output_tokens"] = parsed
+
                 # Memory tool handling after stream completes
                 # Chunks were already yielded in real-time above, so we only
                 # do silent background processing here — no yielding.
