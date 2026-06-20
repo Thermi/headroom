@@ -58,3 +58,30 @@ The proxy silently falls back to Python-only mode if `_core.so` isn't built. Alw
 - Google‑style docstrings in Python
 - Conventional commits (`feat:`, `fix:`, `chore:`, `docs:`, `perf:`, `test:`)
 - Realignment/rust‑migration PRs use `fix:` prefix (not `feat:`) to avoid inflating semantic‑release version
+
+## Pre-commit hooks
+
+Hooks (ruff lint+fix, ruff-format, mypy, sync-plugin-versions, commitlint) run
+via pre-commit, installed in the project venv at `.venv/Scripts/pre-commit`.
+
+**Reinstall after venv rebuild:**
+```bash
+.venv/Scripts/python -m pre_commit install --hook-type pre-commit --hook-type commit-msg
+```
+
+**Hook behaviour:**
+1. Prepends `.venv/Scripts` to `PATH` so hooks calling `python3` resolve to the
+   venv interpreter (works around Windows missing `python3.exe`).
+2. If the venv does not exist or is broken, prints a warning and exits 0 —
+   commits proceed without hooks.
+3. The `commit-msg` hook runs `commitlint` (requires Node.js / npx on PATH).
+   Without it, this hook is skipped and commits still go through.
+
+**Windows‑specific:** `.venv/Scripts/python3.bat` is a thin wrapper that
+forwards `python3 <args>` → `python.exe <args>`, placed there by `install-git-hooks`
+or created manually when the hook first runs. Recreate it after venv rebuild if
+missing:
+```bat
+@echo off
+"%~dp0python.exe" %*
+```
