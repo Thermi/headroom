@@ -4,10 +4,19 @@
 SHELL := /bin/bash
 CARGO ?= cargo
 MATURIN ?= maturin
-# Dockerfile uses ``python``, not ``python3``.  On Windows the venv only
-# has ``python.exe``; ``python3`` resolves to the Microsoft Store shim and
-# fails.  Stick with ``python`` for cross-platform consistency.
-PYTHON ?= python
+# Python interpreter: use the project venv explicitly.  The system
+# ``python`` on Windows resolves to the Microsoft Store shim which blocks
+# non-interactively — the venv's ``python.exe`` is the only reliable
+# interpreter for ``$(shell ...)`` execution.
+# ``$(wildcard ...)`` needs forward slashes (POSIX); ``$(shell ...)`` on
+# Windows runs in cmd.exe which needs backslashes.
+ifneq ($(wildcard .venv/Scripts/python.exe),)
+  PYTHON := .venv\Scripts\python.exe
+else ifneq ($(wildcard .venv/bin/python3),)
+  PYTHON := .venv/bin/python3
+else
+  PYTHON ?= python
+endif
 FIXTURES ?= tests/parity/fixtures
 
 .PHONY: help test test-parity bench build-proxy build-wheel build-image fmt fmt-check lint clippy clean ci-precheck ci-precheck-rust ci-precheck-python ci-precheck-commitlint install-git-hooks verify-rust-core
@@ -79,7 +88,9 @@ EXTRAS ?= all
 # with both bash and cmd.exe).  On Windows `2>nul` suppresses stderr; on
 # Unix it creates a tiny harmless file named `nul` in cwd (gitignored).
 GIT_COMMIT ?= $(shell git rev-parse --short HEAD 2>nul || echo unknown)
-BUILD_TIME ?= $(shell $(PYTHON) -c "from datetime import datetime,timezone;print(datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'))" 2>nul || echo unknown)
+# NOTE: use f-strings, not strftime — cmd.exe interprets %Y/%m/%d as batch
+# variable expansion, mangling the output even when the Python call succeeds.
+BUILD_TIME ?= $(shell $(PYTHON) -c "from datetime import datetime,timezone;d=datetime.now(timezone.utc);print(f'{d.year}-{d.month:02d}-{d.day:02d}T{d.hour:02d}:{d.minute:02d}:{d.second:02d}Z')" 2>nul || echo unknown)
 
 build-image:
 	$(info Building Docker image: $(TAG))
