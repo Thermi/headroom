@@ -457,11 +457,13 @@ class ProxyConfig:
     subscription_poll_interval_s: int = 300
     subscription_active_window_s: int = 60
 
-    # Periodic TOIN stats logging. Enabled by default for observability, but
-    # operators of long-lived proxies can disable it if TOIN stats collection
-    # causes avoidable memory pressure on their platform.
-    # Env: HEADROOM_PERIODIC_TOIN_STATS=0.
-    periodic_toin_stats_enabled: bool = True
+    # DS4 (DeepSeek V4) subscription tracking and budget limits
+    # Detects sk-ds4-* API keys from Authorization headers and tracks
+    # per-key usage and compression savings. Budget is enforced at
+    # request time and reported in /stats.
+    ds4_subscription_enabled: bool = True
+    ds4_budget_limit_usd: float | None = None
+    ds4_budget_period: Literal["hourly", "daily", "monthly"] = "daily"
 
     # Stateless mode — disable all filesystem writes for read-only / container deployments
     stateless: bool = False

@@ -369,6 +369,35 @@ def dashboard(port: int, no_open: bool) -> None:
     ),
 )
 @click.option(
+    "--no-ds4-subscription",
+    is_flag=True,
+    envvar="HEADROOM_NO_DS4_SUBSCRIPTION",
+    help=(
+        "Disable DS4 (DeepSeek V4) subscription usage tracking "
+        "via sk-ds4-* API key detection. Env: HEADROOM_NO_DS4_SUBSCRIPTION."
+    ),
+)
+@click.option(
+    "--ds4-budget",
+    type=float,
+    default=None,
+    envvar="HEADROOM_DS4_BUDGET",
+    help=(
+        "DS4 subscription budget limit in USD per --ds4-budget-period. "
+        "Env: HEADROOM_DS4_BUDGET."
+    ),
+)
+@click.option(
+    "--ds4-budget-period",
+    type=click.Choice(["hourly", "daily", "monthly"]),
+    default="daily",
+    envvar="HEADROOM_DS4_BUDGET_PERIOD",
+    help=(
+        "DS4 budget period (hourly/daily/monthly). "
+        "Env: HEADROOM_DS4_BUDGET_PERIOD."
+    ),
+)
+@click.option(
     "--retry-max-attempts",
     type=click.IntRange(min=1, max=10),
     default=None,
@@ -950,6 +979,9 @@ def proxy(
     compressor: tuple[str, ...],
     no_subscription_tracking: bool,
     subscription_poll_interval: int | None,
+    no_ds4_subscription: bool,
+    ds4_budget: float | None,
+    ds4_budget_period: str,
     retry_max_attempts: int | None,
     retry_base_delay_ms: int | None,
     retry_max_delay_ms: int | None,
@@ -1266,6 +1298,9 @@ def proxy(
         subscription_poll_interval_s=(
             subscription_poll_interval if subscription_poll_interval is not None else 300
         ),
+        ds4_subscription_enabled=not no_ds4_subscription,
+        ds4_budget_limit_usd=ds4_budget,
+        ds4_budget_period=ds4_budget_period,
         retry_max_attempts=retry_max_attempts if retry_max_attempts is not None else 3,
         retry_base_delay_ms=retry_base_delay_ms if retry_base_delay_ms is not None else 1000,
         retry_max_delay_ms=retry_max_delay_ms if retry_max_delay_ms is not None else 30000,
