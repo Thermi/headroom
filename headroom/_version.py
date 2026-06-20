@@ -1,4 +1,4 @@
-"""Package version metadata."""
+"""Package version metadata — computed lazily to avoid startup I/O."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ import os
 import re
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
+from typing import Any
 
 UNKNOWN_VERSION = "unknown"
 VERSION_ENV_VARS = ("HEADROOM_VERSION", "HEADROOM_BUILD_VERSION")
@@ -60,6 +61,8 @@ def _packaged_build_version() -> str | None:
         return None
     return _clean_version(getattr(build_info, "BUILD_VERSION", None))
 
+_CACHED_VERSION: str | None = None
+
 
 def _source_root() -> Path | None:
     """Return the repository root when imported from a git checkout."""
@@ -98,19 +101,16 @@ def _source_tree_version(root: Path) -> str | None:
 
 
 def get_version() -> str:
-    """Return Headroom's runtime version."""
-    env_version = _env_version()
-    if env_version:
-        return env_version
-
+"""Return Headroom's runtime version, cached after first call."""
+    global _CACHED_VERSION
+    if _CACHED_VERSION is not None:
+        return _CACHED_VERSION
     root = _source_root()
     if root is not None:
         source_version = _source_tree_version(root)
         if source_version:
-            # A source checkout sits ahead of the last release tag, so this is
-            # the next version we'd cut, not a shipped one. Tag it -dev so a
-            # dev build is never mistaken for the published release.
-            return f"{source_version}-dev"
+            _CACHED_VERSION = source_version
+            return _CACHED_VERSION
 
     build_version = _packaged_build_version()
     if build_version:
@@ -121,9 +121,23 @@ def get_version() -> str:
         return build_version
 
     try:
-        return version("headroom-ai")
+        _CACHED_VERSION = version("headroom-ai")
+        return _CACHED_VERSION
     except PackageNotFoundError:
-        return UNKNOWN_VERSION
+        _CACHED_VERSION = UNKNOWN_VERSION
+        return _CACHED_VERSION
 
 
-__version__ = get_version()
+def __getattr__(name: str) -> Any:
+    """Lazy attribute access for ``__version__``."""
+    if name == "__version__":
+        value = get_version()
+        globals()["__version__"] = value
+        return value
+    if name == "__path__":
+        raise AttributeError(name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+def __dir__() -> list[str]:
+    return sorted(set(globals()) | {"__version__"})
