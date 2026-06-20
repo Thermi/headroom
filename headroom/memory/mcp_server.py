@@ -52,9 +52,13 @@ _TOOLS = [
         name="memory_search",
         description=(
             "Search persistent memory for relevant knowledge from prior sessions. "
+            "Returns uncompressed content stored in .headroom/memory.db. "
             "Use this for questions about architecture, conventions, prior decisions, "
             "project context, user preferences, org info, codenames, debugging history, "
-            "or anything that might have been discussed before."
+            "or anything that might have been discussed before.\n\n"
+            "For previously compressed proxy context (e.g. compressed tool outputs, "
+            "diff summaries, or search results), use headroom_retrieve to get the "
+            "original uncompressed content by its hash."
         ),
         inputSchema={
             "type": "object",
@@ -76,6 +80,8 @@ _TOOLS = [
         name="memory_save",
         description=(
             "Save information to persistent memory for future sessions. "
+            "Content is stored uncompressed and fully readable in "
+            ".headroom/memory.db — no compression is applied.\n\n"
             "Use this for decisions, conventions, architecture context, "
             "user preferences, project facts, or anything worth remembering. "
             "Saving a similar fact does not replace an existing memory; corrections "
@@ -113,8 +119,11 @@ _TOOLS = [
         description=(
             "Analyze a conversation turn (user message + assistant response) "
             "and extract facts worth remembering. Saves extracted memories "
-            "automatically. Use this when you've just had a conversation that "
-            "contained important information, decisions, or preferences."
+            "automatically — stored uncompressed and fully readable. "
+            "Use this when you've just had a conversation that "
+            "contained important information, decisions, or preferences.\n\n"
+            "For previously compressed proxy context, use headroom_retrieve "
+            "to get original content by hash."
         ),
         inputSchema={
             "type": "object",
@@ -156,7 +165,10 @@ _TOOLS = [
             "Delete a memory by its ID permanently. Use this to remove "
             "outdated, incorrect, or private information from persistent "
             "storage. The memory must be retrieved via memory_search or "
-            "memory_list first to obtain its ID."
+            "memory_list first to obtain its ID.\n\n"
+            "This only removes data from the uncompressed memory store "
+            "(.headroom/memory.db). Compressed proxy context stored by "
+            "headroom_compress is not affected."
         ),
         inputSchema={
             "type": "object",
