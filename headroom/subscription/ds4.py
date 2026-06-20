@@ -70,7 +70,7 @@ def extract_ds4_auth(auth_header: str) -> str | None:
     """
     if not auth_header or not auth_header.startswith("Bearer "):
         return None
-    token = auth_header[len("Bearer "):]
+    token = auth_header[len("Bearer ") :]
     if is_ds4_api_key(token):
         return token
     return None
@@ -300,10 +300,7 @@ class Ds4SubscriptionTracker(QuotaTracker):
     # ------------------------------------------------------------------
 
     def _snapshot_locked(self) -> dict[str, Any]:
-        per_key = {
-            prefix: c.to_dict()
-            for prefix, c in sorted(self._tracked_keys.items())
-        }
+        per_key = {prefix: c.to_dict() for prefix, c in sorted(self._tracked_keys.items())}
         return {
             "contribution": self._contribution.to_dict(),
             "tracked_keys": per_key,

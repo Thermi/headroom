@@ -120,6 +120,7 @@ def _get_env_float_optional(name: str) -> float | None:
 
 def _memory_storage_label(mode: str, db_path: str) -> str:
     from pathlib import Path
+
     if mode == "project":
         root = Path(db_path).resolve().parent / "memories"
         return f"per-project DBs under {root}/projects/<id>/memory.db"
@@ -292,7 +293,12 @@ def dashboard(port: int, no_open: bool) -> None:
     ),
 )
 @click.option("--no-optimize", is_flag=True, help="Disable optimization (passthrough mode)")
-@click.option("--no-kompress", is_flag=True, envvar="HEADROOM_NO_KOMPRESS", help="Disable Kompress ML text compression")
+@click.option(
+    "--no-kompress",
+    is_flag=True,
+    envvar="HEADROOM_NO_KOMPRESS",
+    help="Disable Kompress ML text compression",
+)
 @click.option("--no-cache", is_flag=True, help="Disable semantic caching")
 @click.option("--no-rate-limit", is_flag=True, help="Disable rate limiting")
 @click.option(
@@ -395,8 +401,7 @@ def dashboard(port: int, no_open: bool) -> None:
     default=None,
     envvar="HEADROOM_DS4_BUDGET",
     help=(
-        "DS4 subscription budget limit in USD per --ds4-budget-period. "
-        "Env: HEADROOM_DS4_BUDGET."
+        "DS4 subscription budget limit in USD per --ds4-budget-period. Env: HEADROOM_DS4_BUDGET."
     ),
 )
 @click.option(
@@ -404,10 +409,7 @@ def dashboard(port: int, no_open: bool) -> None:
     type=click.Choice(["hourly", "daily", "monthly"]),
     default="daily",
     envvar="HEADROOM_DS4_BUDGET_PERIOD",
-    help=(
-        "DS4 budget period (hourly/daily/monthly). "
-        "Env: HEADROOM_DS4_BUDGET_PERIOD."
-    ),
+    help=("DS4 budget period (hourly/daily/monthly). Env: HEADROOM_DS4_BUDGET_PERIOD."),
 )
 @click.option(
     "--retry-max-attempts",
@@ -934,7 +936,7 @@ def dashboard(port: int, no_open: bool) -> None:
     default=None,
     envvar="HEADROOM_MODEL_COST_MAP",
     help="JSON object mapping model names to litellm cost params. "
-    "Example: '{\"my-model\": {\"input_cost_per_token\": 0.000001, \"output_cost_per_token\": 0.000005}}'",
+    'Example: \'{"my-model": {"input_cost_per_token": 0.000001, "output_cost_per_token": 0.000005}}\'',
 )
 @click.option(
     "--embedding-server/--no-embedding-server",
@@ -1195,7 +1197,8 @@ def proxy(
     # Anthropic routes: CLI --no-anthropic > env var > default True
     anthropic_enabled = not (
         no_anthropic
-        or os.environ.get("HEADROOM_ANTHROPIC_ENABLED", "").strip().lower() in ("false", "0", "no", "off")
+        or os.environ.get("HEADROOM_ANTHROPIC_ENABLED", "").strip().lower()
+        in ("false", "0", "no", "off")
     )
 
     # Parse --model-cost-map JSON string
@@ -1282,7 +1285,7 @@ def proxy(
         ),
         ds4_subscription_enabled=not no_ds4_subscription,
         ds4_budget_limit_usd=ds4_budget,
-        ds4_budget_period=ds4_budget_period,
+        ds4_budget_period=cast(Literal["hourly", "daily", "monthly"], ds4_budget_period),
         retry_max_attempts=retry_max_attempts if retry_max_attempts is not None else 3,
         request_timeout_seconds=request_timeout_seconds
         if request_timeout_seconds is not None and request_timeout_seconds > 0
@@ -1338,7 +1341,9 @@ def proxy(
         # Memory System (Multi-Provider with auto-detection)
         # --learn implies --memory (need backend for storing patterns)
         # Stateless mode disables memory (requires SQLite on disk)
-        memory_enabled=False if is_stateless else (memory or (learn and not no_learn) or auto_extract_memories),
+        memory_enabled=False
+        if is_stateless
+        else (memory or (learn and not no_learn) or auto_extract_memories),
         memory_db_path=memory_db_path,
         memory_storage_mode=cast(Literal["project", "user", "global"], memory_storage.lower()),
         memory_project_root_override=memory_project_root,
@@ -1537,8 +1542,10 @@ Memory (Multi-Provider):
         tuning_section = ""
 
     from headroom._version import __version__
+
     try:
         from headroom._build_info import BUILD_GIT_COMMIT, BUILD_TIME
+
         _commit = BUILD_GIT_COMMIT or "unknown"
         _build = BUILD_TIME or "unknown"
     except ImportError:
