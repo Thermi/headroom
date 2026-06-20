@@ -321,8 +321,6 @@ SCRIPT
 USER ${RUNTIME_USER}
 WORKDIR /app
 
-RUN apt-get update && apt install -y htop ping traceroute tracepath && rm -rf /var/lib/apt/lists/*
-
 ENV HEADROOM_HOST=0.0.0.0 \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
