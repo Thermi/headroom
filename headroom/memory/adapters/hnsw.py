@@ -305,6 +305,25 @@ class HNSWVectorIndex:
         # Thread safety
         self._lock = Lock()
 
+        # Auto-load existing index from disk if auto_save is enabled and
+        # save files exist. Without this, every process restart starts with a
+        # cold index and vector search returns empty results even though the
+        # SQLite store has data (the root cause of "MCP clients couldn't
+        # retrieve memories after restart").
+        if self._auto_save and self._save_path:
+            try:
+                self.load_index(self._save_path)
+            except FileNotFoundError:
+                pass  # No saved index yet — fresh start is the default
+            except (ValueError, Exception) as exc:
+                import logging as _logging
+
+                _logging.getLogger(__name__).warning(
+                    "Could not restore HNSW index from %s: %s. Starting fresh.",
+                    self._save_path,
+                    exc,
+                )
+
     @property
     def dimension(self) -> int:
         """Return the embedding dimension this index expects."""
