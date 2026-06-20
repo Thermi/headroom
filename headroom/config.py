@@ -368,6 +368,17 @@ def is_tool_excluded(name: str, exclude_tools: Iterable[str]) -> bool:
         if "*" in pat or "?" in pat or "[" in pat
     )
 
+# Tool name prefixes that should never be compressed. Any tool whose name
+# starts with one of these prefixes is excluded from compression entirely.
+# This catches external MCP server tools (e.g. Ghidra MCP) whose outputs
+# contain structured binary data like disassembly or decompiled code that
+# compressors would mangle. Add more prefixes via --exclude-tools on the
+# proxy CLI (prefixes ending with '_' are treated as wildcard patterns).
+DEFAULT_EXCLUDED_TOOL_PREFIXES: frozenset[str] = frozenset(
+    {
+        "ghidra_",
+    }
+)
 
 # Tool names recognized as Read/Edit/Write for lifecycle tracking
 _READ_TOOL_NAMES: frozenset[str] = frozenset({"Read", "read"})
