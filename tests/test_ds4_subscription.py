@@ -11,8 +11,6 @@ Covers:
 from __future__ import annotations
 
 import threading
-import time
-from pathlib import Path
 from typing import Any
 
 import pytest
@@ -39,7 +37,6 @@ def _install_fake_core() -> None:
     """
     import re as _re
     import sys
-    from typing import Any
     from types import ModuleType
 
     if "headroom._core" in sys.modules:
@@ -185,7 +182,7 @@ class TestDs4Contribution:
 @pytest.fixture(autouse=True)
 def reset_tracker():
     """Reset the global DS4 tracker singleton before and after each test."""
-    global_tracker = get_ds4_tracker()
+    get_ds4_tracker()
     yield
     # Reset by re-configuring with default state
     import headroom.subscription.ds4 as ds4_mod
@@ -254,9 +251,6 @@ class TestNotifyActive:
         tracker = Ds4SubscriptionTracker(enabled=True)
         tracker.notify_active("Bearer sk-ds4-some-key")
         assert tracker._contribution.last_active_at is not None
-        # Subsequent call also updates last_active_at (timestamp changes
-        # when wall-clock moves to the next second)
-        prev = tracker._contribution.last_active_at
         tracker.notify_active("Bearer sk-ds4-other-key")
         assert tracker._contribution.last_active_at is not None
         # Verify the counter incremented (requests tracked in per-key entries)
@@ -355,31 +349,21 @@ class TestBudget:
         assert remaining == float("inf")
 
     def test_budget_within_limit(self):
-        tracker = Ds4SubscriptionTracker(
-            enabled=True, budget_limit_usd=10.0, budget_period="daily"
-        )
-        tracker.update_contribution(
-            tokens_submitted=1000, cost_with_headroom=2.0, cost_saved=0.5
-        )
+        tracker = Ds4SubscriptionTracker(enabled=True, budget_limit_usd=10.0, budget_period="daily")
+        tracker.update_contribution(tokens_submitted=1000, cost_with_headroom=2.0, cost_saved=0.5)
         allowed, remaining = tracker.check_budget()
         assert allowed is True
         assert remaining == pytest.approx(10.0 - 2.5)
 
     def test_budget_exceeded(self):
-        tracker = Ds4SubscriptionTracker(
-            enabled=True, budget_limit_usd=1.0, budget_period="daily"
-        )
-        tracker.update_contribution(
-            tokens_submitted=1000, cost_with_headroom=0.8, cost_saved=0.3
-        )
+        tracker = Ds4SubscriptionTracker(enabled=True, budget_limit_usd=1.0, budget_period="daily")
+        tracker.update_contribution(tokens_submitted=1000, cost_with_headroom=0.8, cost_saved=0.3)
         allowed, remaining = tracker.check_budget()
         assert allowed is False
         assert remaining == 0.0
 
     def test_budget_at_limit(self):
-        tracker = Ds4SubscriptionTracker(
-            enabled=True, budget_limit_usd=1.0, budget_period="daily"
-        )
+        tracker = Ds4SubscriptionTracker(enabled=True, budget_limit_usd=1.0, budget_period="daily")
         tracker.update_contribution(
             tokens_submitted=500, cost_with_headroom=0.7, cost_saved=0.29999
         )
@@ -446,7 +430,6 @@ class TestGetStats:
         token_a = "sk-ds4-keyA-12345678"
         token_b = "sk-ds4-keyB-87654321"
         prefix_a = token_a[:16]
-        prefix_b = token_b[:16]
         tracker.notify_active(f"Bearer {token_a}")
         tracker.notify_active(f"Bearer {token_b}")
         tracker.update_contribution(
@@ -460,9 +443,7 @@ class TestGetStats:
         assert stats["tracked_keys"][prefix_a]["tokens_submitted"] == 50
 
     def test_get_stats_returns_budget(self):
-        tracker = Ds4SubscriptionTracker(
-            enabled=True, budget_limit_usd=50.0, budget_period="daily"
-        )
+        tracker = Ds4SubscriptionTracker(enabled=True, budget_limit_usd=50.0, budget_period="daily")
         tracker.update_contribution(tokens_submitted=1000, cost_with_headroom=10.0)
         stats = tracker.get_stats()
         assert stats["budget"]["budget_limit_usd"] == 50.0
