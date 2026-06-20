@@ -230,4 +230,4 @@ def test_stats_preserves_default_smart_crusher_compaction_state() -> None:
     response = client.get("/stats")
 
     assert response.status_code == 200
-    assert response.json()["config"]["smart_crusher_with_compaction"] is None
+    assert response.json()["config"]["smart_crusher_with_compaction"] is False
