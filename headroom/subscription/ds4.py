@@ -147,7 +147,7 @@ class Ds4SubscriptionTracker(QuotaTracker):
         self._budget_period = budget_period
         self._model_cost_map = dict(model_cost_map) if model_cost_map else {}
 
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         self._contribution = Ds4Contribution()
         self._tracked_keys: dict[str, Ds4Contribution] = {}
 
@@ -256,7 +256,10 @@ class Ds4SubscriptionTracker(QuotaTracker):
         return remaining > 0, max(0.0, remaining)
 
     def budget_status(self) -> dict[str, Any]:
-        """Return a detailed budget-status dict for ``/stats``."""
+        """Return a detailed budget-status dict for ``/stats``.
+
+        Safe to call while ``self._lock`` is held (uses ``RLock``).
+        """
         with self._lock:
             period_cost = self._get_period_cost_locked()
         result: dict[str, Any] = {
