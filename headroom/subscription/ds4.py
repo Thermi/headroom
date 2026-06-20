@@ -105,8 +105,8 @@ class Ds4Contribution:
             "cost_without_headroom_usd": round(self.cost_without_headroom, 4),
             "savings_usd": round(self.savings_usd, 4),
             "requests": self.requests,
-            "last_active_at": self.last_active_at,
-            "started_at": self.started_at,
+            "last_active_at": self.last_active_at or "",
+            "started_at": self.started_at or "",
         }
 
 
@@ -277,9 +277,9 @@ class Ds4SubscriptionTracker(QuotaTracker):
                 else 0.0
             )
         else:
-            result["remaining_usd"] = None
+            result["remaining_usd"] = 0.0
             result["within_budget"] = True
-            result["utilization_pct"] = None
+            result["utilization_pct"] = 0.0
         return result
 
     def _get_period_cost_locked(self) -> float:

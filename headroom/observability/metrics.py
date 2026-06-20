@@ -118,7 +118,7 @@ class OTelMetricsConfig:
             "enabled": self.enabled,
             "service_name": self.service_name,
             "exporter": self.exporter,
-            "endpoint": self.endpoint,
+            "endpoint": self.endpoint or "",
             "resource_attributes": dict(self.resource_attributes),
         }
 
