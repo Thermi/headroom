@@ -79,10 +79,11 @@ class TestRequestIdContextVar:
         assert rid3.endswith("_000002")
 
 
-def test_ojson_is_importable():
-    """Verify the ojson dependency is installed."""
-    ojson = pytest.importorskip("ojson", reason="ojson not installed (optional dependency)")
-    assert hasattr(ojson, "__version__")
+def test_orjson_is_importable():
+    """Verify the orjson dependency is installed."""
+    orjson = pytest.importorskip("orjson", reason="orjson not installed (optional dependency)")
+    assert hasattr(orjson, "dumps"), "orjson should expose dumps()"
+    assert hasattr(orjson, "loads"), "orjson should expose loads()"
 
 
 @_skip_integration
