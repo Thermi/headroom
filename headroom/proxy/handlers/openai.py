@@ -10,8 +10,6 @@ import contextlib
 import copy
 import hashlib
 import logging
-
-from headroom.proxy import _json as json
 import os
 import threading
 import time

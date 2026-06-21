@@ -8,8 +8,6 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
-
-from headroom.proxy import _json as json
 import time
 from typing import TYPE_CHECKING, Any
 
