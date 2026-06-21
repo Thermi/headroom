@@ -79,6 +79,12 @@ class TestRequestIdContextVar:
         assert rid3.endswith("_000002")
 
 
+def test_ojson_is_importable():
+    """Verify the ojson dependency is installed."""
+    ojson = pytest.importorskip("ojson", reason="ojson not installed (optional dependency)")
+    assert hasattr(ojson, "__version__")
+
+
 @_skip_integration
 class TestMiddlewareRequestId:
     """Integration tests for request_id threading through the ASGI middleware."""
