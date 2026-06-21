@@ -39,7 +39,12 @@ class TokenBucketRateLimiter:
         self._token_buckets: dict[str, RateLimitState] = defaultdict(
             lambda: RateLimitState(tokens=tokens_per_minute, last_update=time.time())
         )
-        self._lock = asyncio.Lock()
+        self._locks: dict[str, asyncio.Lock] = {}
+        self._cleanup_lock = asyncio.Lock()
+
+    def _get_lock(self, key: str) -> asyncio.Lock:
+        """Get or create a per-key lock for the given bucket key."""
+        return self._locks.setdefault(key, asyncio.Lock())
 
     async def _cleanup_stale_buckets(self) -> None:
         """Remove buckets that haven't been used in the last 10 minutes."""
@@ -69,10 +74,11 @@ class TokenBucketRateLimiter:
 
     async def check_request(self, key: str = "default") -> tuple[bool, float]:
         """Check if request is allowed. Returns (allowed, wait_seconds)."""
-        async with self._lock:
+        async with self._cleanup_lock:
             # Prevent unbounded bucket growth from spoofed keys
             if len(self._request_buckets) > MAX_RATE_LIMITER_BUCKETS:
                 await self._cleanup_stale_buckets()
+        async with self._get_lock(key):
             state = self._request_buckets[key]
             available = self._refill(state, self.requests_per_minute)
 
@@ -85,7 +91,7 @@ class TokenBucketRateLimiter:
 
     async def check_tokens(self, key: str, token_count: int) -> tuple[bool, float]:
         """Check if token usage is allowed."""
-        async with self._lock:
+        async with self._get_lock(key):
             state = self._token_buckets[key]
             available = self._refill(state, self.tokens_per_minute)
 
@@ -98,7 +104,7 @@ class TokenBucketRateLimiter:
 
     async def stats(self) -> dict:
         """Get rate limiter statistics."""
-        async with self._lock:
+        async with self._cleanup_lock:
             return {
                 "requests_per_minute": self.requests_per_minute,
                 "tokens_per_minute": self.tokens_per_minute,

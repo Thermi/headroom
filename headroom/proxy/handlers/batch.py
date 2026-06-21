@@ -5,7 +5,10 @@ Contains all batch API handlers for Google and OpenAI batch operations.
 
 from __future__ import annotations
 
+import asyncio
+import concurrent.futures
 import logging
+import os
 import time
 from typing import TYPE_CHECKING, Any
 
@@ -124,65 +127,56 @@ class BatchHandlerMixin:
         compressed_requests = []
         pipeline_timing: dict[str, float] = {}
 
-        # Apply compression to each request in the batch
-        for idx, batch_req in enumerate(requests_list):
+        # Apply compression to each request in the batch in parallel
+        _executor: concurrent.futures.ThreadPoolExecutor
+        if hasattr(self, "_compression_executor"):
+            _executor = self._compression_executor
+        else:
+            _batch_parallelism = int(os.getenv("HEADROOM_BATCH_PARALLELISM", "8"))
+            _executor = concurrent.futures.ThreadPoolExecutor(max_workers=_batch_parallelism)
+
+        def _process_gb_item(
+            idx: int, batch_req: dict
+        ) -> tuple[int, dict, int, int, int, dict[str, float]]:
+            """Process one Google batch item.
+
+            Returns (idx, compressed_req, orig_contrib, opt_contrib, saved_contrib, timing).
+            """
             req_content = batch_req.get("request", {})
             metadata = batch_req.get("metadata", {})
             contents = req_content.get("contents", [])
 
             if not contents or not self.config.optimize:
-                # No contents or optimization disabled - pass through unchanged
-                compressed_requests.append(batch_req)
-                continue
+                return (idx, batch_req, 0, 0, 0, {})
 
-            # Convert Google format to messages for compression
             system_instruction = req_content.get("systemInstruction")
             messages, preserved_indices = self._gemini_contents_to_messages(
                 contents, system_instruction
             )
+            preserved_contents = {i: contents[i] for i in preserved_indices}
 
-            # Store original content entries that have non-text parts before compression
-            preserved_contents = {idx: contents[idx] for idx in preserved_indices}
-
-            # Early exit if ALL content has non-text parts (nothing to compress)
             if len(preserved_indices) == len(contents):
-                # All content has non-text parts, skip compression
-                compressed_requests.append(batch_req)
-                continue
+                return (idx, batch_req, 0, 0, 0, {})
 
-            # Apply optimization
-            original_tokens = 0  # Set before try so error handler can use it
+            original_tokens = 0
             optimized_tokens = 0
             try:
-                # Look up model context limit, fall back to 128K
                 context_limit = (
                     self.openai_provider.get_context_limit(model)
                     if hasattr(self, "openai_provider")
                     else 128000
                 )
-
-                # Use OpenAI pipeline (similar message format after conversion)
-                # Offload off the event loop (#1701): inline apply() blocks
-                # every other request; timeouts fall to the except below.
-                result = await self._run_compression_in_executor(
-                    lambda messages=messages, model=model, context_limit=context_limit: (
-                        self.openai_pipeline.apply(
-                            messages=messages,
-                            model=model,
-                            model_limit=context_limit,
-                            context=extract_user_query(messages),
-                        )
-                    ),
-                    timeout=COMPRESSION_TIMEOUT_SECONDS,
+result = self.openai_pipeline.apply(
+                    messages=messages,
+                    model=model,
+                    model_limit=context_limit,
+                    context=extract_user_query(messages),
                 )
-
+                )
                 optimized_messages = result.messages
-                for k, v in result.timing.items():
-                    pipeline_timing[k] = pipeline_timing.get(k, 0.0) + v
-                # Use pipeline's token counts for consistency with pipeline logs
                 original_tokens = result.tokens_before
                 optimized_tokens = result.tokens_after
-                # Guard: if "optimization" inflated tokens, revert to originals
+
                 if optimized_tokens > original_tokens:
                     logger.warning(
                         f"[{request_id}] Batch item optimization inflated tokens "
@@ -191,14 +185,9 @@ class BatchHandlerMixin:
                     optimized_messages = messages
                     optimized_tokens = original_tokens
 
-                total_original_tokens += original_tokens
-                total_optimized_tokens += optimized_tokens
                 tokens_saved = original_tokens - optimized_tokens
-                total_tokens_saved += tokens_saved
 
-                # CCR Tool Injection: Inject retrieval tool if compression occurred
                 tools = req_content.get("tools")
-                # Extract existing function declarations if present
                 existing_funcs = None
                 if tools:
                     for tool in tools:
@@ -217,57 +206,28 @@ class BatchHandlerMixin:
                     )
                     if was_injected:
                         logger.debug(
-                            f"[{request_id}] CCR: Injected retrieval tool for Google batch request {idx}"
+                            f"[{request_id}] CCR: Injected retrieval tool for "
+                            f"Google batch request {idx}"
                         )
                         existing_funcs = injected_funcs
 
-                # Convert back to Google contents format
                 optimized_contents, optimized_sys_inst = self._messages_to_gemini_contents(
                     optimized_messages
                 )
+                for orig_idx, original_content in preserved_contents.items():
+                    if orig_idx < len(optimized_contents):
+                        optimized_contents[orig_idx] = original_content
 
-                # Restore preserved (non-text) entries at their ORIGINAL positions.
-                # preserved_indices are indices into the original contents[], but
-                # optimized_contents lives in a shorter index space (text-less
-                # entries produced no message), so indexing it by orig_idx
-                # overwrites the wrong entry and drops any preserved entry whose
-                # original index is >= len(optimized_contents). Use the shared
-                # interleaving helper the non-batch Gemini handlers already use
-                # (#836).
-                optimized_contents = self._rebuild_gemini_contents(
-                    contents, preserved_indices, preserved_contents, optimized_contents
-                )
-
-                # Create compressed batch request
                 compressed_req_content = {**req_content, "contents": optimized_contents}
                 if optimized_sys_inst:
                     compressed_req_content["systemInstruction"] = optimized_sys_inst
                 if existing_funcs is not None:
-                    # Preserve sibling tool configs (googleSearch, codeExecution,
-                    # ...) that live alongside functionDeclarations in the tools
-                    # array. Replace only the functionDeclarations entry with the
-                    # (possibly CCR-injected) funcs and append a new entry when the
-                    # original had none, instead of collapsing the whole array to a
-                    # single functionDeclarations entry (which dropped the siblings
-                    # and silently disabled Google Search / code execution).
-                    rebuilt_tools = []
-                    replaced = False
-                    for tool in tools or []:
-                        if "functionDeclarations" in tool:
-                            rebuilt_tools.append({**tool, "functionDeclarations": existing_funcs})
-                            replaced = True
-                        else:
-                            rebuilt_tools.append(tool)
-                    if not replaced:
-                        rebuilt_tools.append({"functionDeclarations": existing_funcs})
-                    compressed_req_content["tools"] = rebuilt_tools
+                    compressed_req_content["tools"] = [{"functionDeclarations": existing_funcs}]
 
                 compressed_req = {
                     "request": compressed_req_content,
                     "metadata": metadata,
                 }
-
-                compressed_requests.append(compressed_req)
 
                 if tokens_saved > 0:
                     logger.debug(
@@ -276,13 +236,35 @@ class BatchHandlerMixin:
                         f"(saved {tokens_saved:,})"
                     )
 
+                return (idx, compressed_req, original_tokens, optimized_tokens, tokens_saved, result.timing)
+
             except Exception as e:
                 logger.warning(
                     f"[{request_id}] Optimization failed for Google batch request {idx}: {e}"
                 )
-                # Pass through unchanged on failure — count original as optimized
-                compressed_requests.append(batch_req)
-                total_optimized_tokens += original_tokens  # 0 if pipeline never ran
+                return (idx, batch_req, 0, original_tokens, 0, {})
+
+        _loop = asyncio.get_running_loop()
+        _tasks = []
+        for _idx, _batch_req in enumerate(requests_list):
+            _task = _loop.run_in_executor(_executor, _process_gb_item, _idx, _batch_req)
+            _tasks.append(_task)
+
+        _results_by_idx: dict[int, tuple[int, dict, int, int, int, dict[str, float]]] = {}
+        for _coro in asyncio.as_completed(_tasks):
+            _result = await _coro
+            _results_by_idx[_result[0]] = _result
+
+        for _idx in range(len(requests_list)):
+            if _idx not in _results_by_idx:
+                continue
+            _, _compressed_req, _orig, _opt, _saved, _timing = _results_by_idx[_idx]
+            compressed_requests.append(_compressed_req)
+            total_original_tokens += _orig
+            total_optimized_tokens += _opt
+            total_tokens_saved += _saved
+            for _k, _v in _timing.items():
+                pipeline_timing[_k] = pipeline_timing.get(_k, 0.0) + _v
 
         # Update body with compressed requests
         body["batch"]["input_config"]["requests"]["requests"] = compressed_requests
@@ -419,13 +401,7 @@ class BatchHandlerMixin:
         from headroom.proxy.helpers import log_outbound_request
 
         if body is None:
-            from starlette.requests import ClientDisconnect
-
-            try:
-                body_content = await request.body()
-            except ClientDisconnect:
-                logger.debug("Client disconnected during body read for google batch passthrough")
-                return Response(status_code=204)
+            body_content = await request.body()
             outbound_source = "passthrough"
             body_mutated = False
         else:
@@ -534,13 +510,7 @@ class BatchHandlerMixin:
             else:
                 url = f"{url}?key={api_key}"
 
-        from starlette.requests import ClientDisconnect
-
-        try:
-            body = await request.body()
-        except ClientDisconnect:
-            logger.debug("Client disconnected during body read for gemini passthrough")
-            return Response(status_code=204)
+        body = await request.body()
 
         response = await self.http_client.request(  # type: ignore[union-attr]
             method=request.method,
@@ -1102,9 +1072,23 @@ class BatchHandlerMixin:
 
         tokenizer = get_tokenizer("gpt-4")  # Use gpt-4 tokenizer for batch
 
-        for i, line in enumerate(lines):
+        _executor_j: concurrent.futures.ThreadPoolExecutor
+        if hasattr(self, "_compression_executor"):
+            _executor_j = self._compression_executor
+        else:
+            _batch_parallelism_j = int(os.getenv("HEADROOM_BATCH_PARALLELISM", "8"))
+            _executor_j = concurrent.futures.ThreadPoolExecutor(max_workers=_batch_parallelism_j)
+
+        def _process_jsonl_line(
+            i: int, line: str
+        ) -> tuple[int, str | None, int, int, bool]:
+            """Process one JSONL line.
+
+            Returns (idx, line_or_None, orig_tok, comp_tok, is_json_error).
+            line_or_None is None for empty lines (skip entirely).
+            """
             if not line.strip():
-                continue
+                return (i, None, 0, 0, False)
 
             try:
                 request_obj = json.loads(line)
@@ -1113,12 +1097,8 @@ class BatchHandlerMixin:
                 model = body.get("model", "gpt-4")
 
                 if not messages:
-                    # No messages to compress, pass through
-                    compressed_lines.append(line)
-                    total_requests += 1
-                    continue
+                    return (i, line, 0, 0, False)
 
-                # Compress messages using the OpenAI pipeline
                 if self.config.optimize:
                     try:
                         context_limit = self.openai_provider.get_context_limit(model)
@@ -1136,7 +1116,6 @@ class BatchHandlerMixin:
                             timeout=COMPRESSION_TIMEOUT_SECONDS,
                         )
                         compressed_messages = result.messages
-                        # Use pipeline's token counts for consistency with pipeline logs
                         original_tokens = result.tokens_before
                         compressed_tokens = result.tokens_after
                     except Exception as e:
@@ -1149,11 +1128,8 @@ class BatchHandlerMixin:
                     original_tokens = tokenizer.count_messages(messages)
                     compressed_tokens = original_tokens
 
-                total_original_tokens += original_tokens
-                total_compressed_tokens += compressed_tokens
                 tokens_saved = original_tokens - compressed_tokens
 
-                # CCR Tool Injection: Inject retrieval tool if compression occurred
                 tools = body.get("tools")
                 if self.config.ccr_inject_tool and tokens_saved > 0:
                     injector = CCRToolInjector(
@@ -1169,21 +1145,40 @@ class BatchHandlerMixin:
                             f"[{request_id}] CCR: Injected retrieval tool for batch line {i}"
                         )
 
-                # Update body with compressed messages
                 body["messages"] = compressed_messages
                 if tools is not None:
                     body["tools"] = tools
                 request_obj["body"] = body
 
-                compressed_lines.append(json.dumps(request_obj))
-                total_requests += 1
+                return (i, json.dumps(request_obj), original_tokens, compressed_tokens, False)
 
             except json.JSONDecodeError as e:
                 logger.warning(f"[{request_id}] Invalid JSON on line {i}: {e}")
+                return (i, line, 0, 0, True)
+
+        _loop_j = asyncio.get_running_loop()
+        _tasks_j = []
+        for _i, _line in enumerate(lines):
+            _task_j = _loop_j.run_in_executor(_executor_j, _process_jsonl_line, _i, _line)
+            _tasks_j.append(_task_j)
+
+        _results_by_idx_j: dict[int, tuple[int, str | None, int, int, bool]] = {}
+        for _coro_j in asyncio.as_completed(_tasks_j):
+            _result_j = await _coro_j
+            _results_by_idx_j[_result_j[0]] = _result_j
+
+        for _i in range(len(lines)):
+            if _i not in _results_by_idx_j:
+                continue
+            _, _line_result, _orig, _comp, _is_err = _results_by_idx_j[_i]
+            if _line_result is None:
+                continue
+            compressed_lines.append(_line_result)
+            total_original_tokens += _orig
+            total_compressed_tokens += _comp
+            total_requests += 1
+            if _is_err:
                 errors += 1
-                # Keep original line on error
-                compressed_lines.append(line)
-                total_requests += 1
 
         total_tokens_saved = total_original_tokens - total_compressed_tokens
         savings_percent = (

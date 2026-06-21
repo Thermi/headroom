@@ -49,6 +49,16 @@ use headroom_core::transforms::{
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyDict};
 
+/// Execute `f` without GIL management overhead.
+/// Under free-threaded Python 3.14 (`Py_GIL_DISABLED`) this is a direct call.
+/// Under the GIL this calls `py.allow_threads(f)` to release the GIL.
+fn maybe_allow_threads<T>(py: Python<'_>, f: impl FnOnce() -> T) -> T {
+    #[cfg(not(Py_GIL_DISABLED))]
+    return py.allow_threads(f);
+    #[cfg(Py_GIL_DISABLED)]
+    f()
+}
+
 /// Identity stub used by the Python smoke test to verify linkage.
 #[pyfunction]
 fn hello() -> &'static str {
@@ -420,7 +430,7 @@ impl PyDiffCompressor {
     fn compress(&self, py: Python<'_>, content: &str, context: &str) -> PyDiffCompressionResult {
         let content = content.to_string();
         let context = context.to_string();
-        let inner = py.detach(|| self.inner.compress(&content, &context));
+        let inner = maybe_allow_threads(py, || self.inner.compress(&content, &context));
         PyDiffCompressionResult { inner }
     }
 
@@ -437,7 +447,8 @@ impl PyDiffCompressor {
     ) -> (PyDiffCompressionResult, PyDiffCompressorStats) {
         let content = content.to_string();
         let context = context.to_string();
-        let (result, stats) = py.detach(|| self.inner.compress_with_stats(&content, &context));
+        let (result, stats) =
+            maybe_allow_threads(py, || self.inner.compress_with_stats(&content, &context));
         (
             PyDiffCompressionResult { inner: result },
             PyDiffCompressorStats { inner: stats },
@@ -763,7 +774,7 @@ impl PySmartCrusher {
     fn crush(&self, py: Python<'_>, content: &str, query: &str, bias: f64) -> PyCrushResult {
         let content = content.to_string();
         let query = query.to_string();
-        let inner = py.detach(|| self.inner.crush(&content, &query, bias));
+        let inner = maybe_allow_threads(py, || self.inner.crush(&content, &query, bias));
         PyCrushResult { inner }
     }
 
@@ -782,7 +793,7 @@ impl PySmartCrusher {
     ) -> (String, bool, String) {
         let content = content.to_string();
         let query = query.to_string();
-        py.detach(|| self.inner.smart_crush_content(&content, &query, bias))
+        maybe_allow_threads(py, || self.inner.smart_crush_content(&content, &query, bias))
     }
 
     /// Crush a JSON array directly and return the structured result.
@@ -814,8 +825,7 @@ impl PySmartCrusher {
         // re-acquire to build the PyDict from the owned outputs.
         let items_json = items_json.to_string();
         let query = query.to_string();
-        let (kept_json, ccr_hash, dropped_summary, strategy_info, compacted, compaction_kind) = py
-            .detach(|| {
+        let (kept_json, ccr_hash, dropped_summary, strategy_info, compacted, compaction_kind) = maybe_allow_threads(py, || {
                 let parsed: serde_json::Value = serde_json::from_str(&items_json)
                     .unwrap_or_else(|e| panic!("items_json must be JSON: {e}"));
                 let items = match parsed {
@@ -862,7 +872,7 @@ impl PySmartCrusher {
         // Heavy: JSON parse + recursive walker + tabular compaction +
         // re-serialize. None of it touches Python; release the GIL.
         let doc_json = doc_json.to_string();
-        py.detach(|| {
+        maybe_allow_threads(py, || {
             let parsed: serde_json::Value = serde_json::from_str(&doc_json)
                 .unwrap_or_else(|e| panic!("doc_json must be JSON: {e}"));
             let mut dc = DocumentCompactor::new().with_config(CompactConfig {
@@ -1010,7 +1020,7 @@ impl PyDetectionResult {
 #[pyfunction]
 fn detect_content_type(py: Python<'_>, content: &str) -> PyDetectionResult {
     let owned = content.to_string();
-    let content_type = py.detach(move || rust_detect_chain(&owned));
+    let content_type = maybe_allow_threads(py, move || rust_detect_chain(&owned));
     PyDetectionResult {
         inner: RustDetectionResult {
             content_type,
@@ -1025,7 +1035,7 @@ fn detect_content_type(py: Python<'_>, content: &str) -> PyDetectionResult {
 #[pyfunction]
 fn is_json_array_of_dicts(py: Python<'_>, content: &str) -> bool {
     let owned = content.to_string();
-    py.detach(move || rust_is_json_array_of_dicts(&owned))
+    maybe_allow_threads(py, move || rust_is_json_array_of_dicts(&owned))
 }
 
 // Suppress unused-import warning when ContentType isn't referenced
@@ -1293,7 +1303,7 @@ impl PySearchCompressor {
         // wants persistence beyond the request lifecycle.
         let owned = content.to_string();
         let owned_ctx = context.to_string();
-        let (result, stats) = py.detach(move || {
+        let (result, stats) = maybe_allow_threads(py, move || {
             let store = headroom_core::ccr::InMemoryCcrStore::new();
             let (r, s) = self
                 .inner
@@ -1492,7 +1502,7 @@ impl PyLogCompressor {
     #[pyo3(signature = (content, bias = 1.0))]
     fn compress(&self, py: Python<'_>, content: &str, bias: f64) -> PyLogCompressionResult {
         let owned = content.to_string();
-        let (result, stats) = py.detach(move || {
+        let (result, stats) = maybe_allow_threads(py, move || {
             let store = headroom_core::ccr::InMemoryCcrStore::new();
             let (r, s) = self.inner.compress_with_store(&owned, bias, Some(&store));
             (r, s)
@@ -1541,7 +1551,7 @@ fn protect_tags(
     compress_tagged_content: bool,
 ) -> (String, Vec<(String, String)>) {
     let owned = text.to_string();
-    py.detach(move || {
+    maybe_allow_threads(py, move || {
         let (cleaned, blocks, _stats) = rust_protect_tags(&owned, compress_tagged_content);
         (cleaned, blocks)
     })
@@ -1553,7 +1563,7 @@ fn protect_tags(
 #[pyfunction]
 fn restore_tags(py: Python<'_>, text: &str, blocks: Vec<(String, String)>) -> (String, bool) {
     let owned = text.to_string();
-    py.detach(move || rust_restore_tags(&owned, &blocks))
+    maybe_allow_threads(py, move || rust_restore_tags(&owned, &blocks))
 }
 
 /// Case-insensitive HTML5 tag check. The Python shim uses this to

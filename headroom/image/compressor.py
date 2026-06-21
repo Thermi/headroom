@@ -24,7 +24,9 @@ from __future__ import annotations
 import base64
 import io
 import logging
+import os
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -138,17 +140,8 @@ class ImageCompressor:
         self.use_siglip = use_siglip
         self.device = device
 
-        # Lazy-loaded routers. The ONNX router loads native ort.InferenceSession
-        # models that Python's GC does not eagerly reclaim, so building one per
-        # compress() call grew RSS unboundedly under image traffic (#2513).
-        # Cache it on the instance and reuse it.
+        # Lazy-loaded router
         self._router: TrainedRouter | None = None
-        self._onnx_router: Any = None
-
-        # Set on a process-wide shared instance (see the isolation worker and
-        # _get_image_compressor) so a per-request close() does not unload models
-        # the next request would just reload.
-        self._is_singleton = False
 
         # Last compression result (for metrics)
         self.last_result: CompressionResult | None = None
@@ -172,36 +165,13 @@ class ImageCompressor:
             )
         return self._router
 
-    def _get_onnx_router(self) -> Any:
-        """Lazy-load and cache the ONNX technique router.
-
-        Building an ``OnnxTechniqueRouter`` loads native ``ort.InferenceSession``
-        models; creating one per ``compress()`` call leaked native memory and
-        grew RSS unboundedly under image traffic (#2513). Cache one per instance.
-        """
-        if self._onnx_router is None:
-            from .onnx_router import OnnxTechniqueRouter
-
-            self._onnx_router = OnnxTechniqueRouter(use_siglip=self.use_siglip)
-        return self._onnx_router
-
     def close(self, unload_models: bool = True) -> None:
-        """Release any router-held model state.
-
-        A process-wide shared instance (``_is_singleton``) keeps its models
-        loaded across requests, so a per-request ``close()`` must be a no-op
-        there; otherwise every image request would reload the ONNX/torch models
-        it just cached, reintroducing the #2513 leak.
-        """
-        if self._is_singleton:
-            return
+        """Release any router-held model state."""
         if self._router is not None:
             # Only loaded routers hold heavyweight image models; plain has_images()
             # checks remain cheap and have nothing to release.
             self._router.release_models(unload_registry=unload_models)
             self._router = None
-        # Drop the cached ONNX router so its native sessions can be reclaimed.
-        self._onnx_router = None
 
     def has_images(self, messages: list[dict[str, Any]]) -> bool:
         """Check if messages contain images."""
@@ -278,6 +248,32 @@ class ImageCompressor:
                 if "inlineData" in item:
                     return base64.b64decode(item["inlineData"].get("data", ""))
 
+        return None
+
+    def _is_image_block(self, item: dict[str, Any]) -> bool:
+        """Check if a content block is an image."""
+        if item.get("type") == "image_url":
+            return True
+        if item.get("type") == "image":
+            return True
+        if "inlineData" in item:
+            return True
+        return False
+
+    def _extract_image_data_from_block(self, item: dict[str, Any]) -> bytes | None:
+        """Extract raw image bytes from a single content block."""
+        if item.get("type") == "image_url":
+            url = item.get("image_url", {}).get("url", "")
+            if url.startswith("data:"):
+                match = re.match(r"data:image/[^;]+;base64,(.+)", url)
+                if match:
+                    return base64.b64decode(match.group(1))
+        if item.get("type") == "image":
+            source = item.get("source", {})
+            if source.get("type") == "base64":
+                return base64.b64decode(source.get("data", ""))
+        if "inlineData" in item:
+            return base64.b64decode(item["inlineData"].get("data", ""))
         return None
 
     def _resize_image(
@@ -517,6 +513,79 @@ class ImageCompressor:
         )
         return text
 
+    def _compress_image_block(
+        self,
+        item: dict[str, Any],
+        technique: Technique,
+        provider: str,
+        image_data: bytes | None,
+    ) -> dict[str, Any]:
+        """Apply compression technique to a single image content block.
+
+        Args:
+            item: The image content block dict.
+            technique: Compression technique to apply.
+            provider: Target provider ('openai', 'anthropic', 'google').
+            image_data: Raw image bytes (already decoded).
+
+        Returns:
+            Compressed content block dict.
+        """
+        if technique.value == "preserve":
+            return item
+
+        # TRANSCODE: OCR the image and replace with text
+        if technique.value == "transcode" and image_data:
+            extracted = self._ocr_extract(image_data)
+            if extracted:
+                return {"type": "text", "text": f"[OCR from image]\n{extracted}"}
+            logger.debug("OCR fallback: using full_low instead of transcode")
+
+        # FULL_LOW / CROP: reduce quality
+        if technique.value in ("full_low", "crop", "transcode"):
+            if item.get("type") == "image_url" and provider == "openai":
+                return {
+                    "type": "image_url",
+                    "image_url": {**item.get("image_url", {}), "detail": "low"},
+                }
+            elif item.get("type") == "image" and provider == "anthropic":
+                if image_data:
+                    try:
+                        resized_data, media_type = self._resize_image(
+                            image_data, max_dimension=512
+                        )
+                        return {
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": media_type,
+                                "data": base64.b64encode(resized_data).decode(),
+                            },
+                        }
+                    except Exception as e:
+                        logger.warning(f"Failed to resize image: {e}")
+                return item
+            elif "inlineData" in item and provider == "google":
+                if image_data:
+                    try:
+                        resized_data, media_type = self._resize_image(
+                            image_data, max_dimension=768
+                        )
+                        return {
+                            "inlineData": {
+                                "mimeType": media_type,
+                                "data": base64.b64encode(resized_data).decode(),
+                            }
+                        }
+                    except Exception as e:
+                        logger.warning(f"Failed to resize image: {e}")
+                return item
+            else:
+                return item
+
+        # PRESERVE or unknown — keep original
+        return item
+
     def _apply_compression(
         self,
         messages: list[dict[str, Any]],
@@ -524,9 +593,6 @@ class ImageCompressor:
         provider: str,
     ) -> list[dict[str, Any]]:
         """Apply compression technique to messages."""
-        if technique.value == "preserve":
-            return messages
-
         compressed = []
         for message in messages:
             content = message.get("content")
@@ -541,101 +607,15 @@ class ImageCompressor:
                     new_content.append(item)
                     continue
 
-                # Extract image bytes for OCR (transcode) across all formats
-                image_bytes_for_ocr: bytes | None = None
-                is_image_block = False
-
-                if item.get("type") == "image_url":
-                    is_image_block = True
-                    url = item.get("image_url", {}).get("url", "")
-                    if url.startswith("data:"):
-                        match = re.match(r"data:image/[^;]+;base64,(.+)", url)
-                        if match:
-                            image_bytes_for_ocr = base64.b64decode(match.group(1))
-                elif item.get("type") == "image":
-                    is_image_block = True
-                    source = item.get("source", {})
-                    if source.get("type") == "base64":
-                        image_bytes_for_ocr = base64.b64decode(source.get("data", ""))
-                elif "inlineData" in item:
-                    is_image_block = True
-                    image_bytes_for_ocr = base64.b64decode(
-                        item.get("inlineData", {}).get("data", "")
-                    )
-
-                if not is_image_block:
+                if not self._is_image_block(item):
                     new_content.append(item)
                     continue
 
-                # --- TRANSCODE: OCR the image and replace with text ---
-                if technique.value == "transcode" and image_bytes_for_ocr:
-                    extracted = self._ocr_extract(image_bytes_for_ocr)
-                    if extracted:
-                        # Replace image with extracted text
-                        new_content.append(
-                            {"type": "text", "text": f"[OCR from image]\n{extracted}"}
-                        )
-                        continue
-                    # OCR failed or low confidence — fall through to full_low
-                    logger.debug("OCR fallback: using full_low instead of transcode")
-
-                # --- FULL_LOW / CROP: reduce quality ---
-                if technique.value in ("full_low", "crop", "transcode"):
-                    if item.get("type") == "image_url" and provider == "openai":
-                        new_content.append(
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    **item.get("image_url", {}),
-                                    "detail": "low",
-                                },
-                            }
-                        )
-                    elif item.get("type") == "image" and provider == "anthropic":
-                        if image_bytes_for_ocr:
-                            try:
-                                resized_data, media_type = self._resize_image(
-                                    image_bytes_for_ocr, max_dimension=512
-                                )
-                                new_content.append(
-                                    {
-                                        "type": "image",
-                                        "source": {
-                                            "type": "base64",
-                                            "media_type": media_type,
-                                            "data": base64.b64encode(resized_data).decode(),
-                                        },
-                                    }
-                                )
-                            except Exception as e:
-                                logger.warning(f"Failed to resize image: {e}")
-                                new_content.append(item)
-                        else:
-                            new_content.append(item)
-                    elif "inlineData" in item and provider == "google":
-                        if image_bytes_for_ocr:
-                            try:
-                                resized_data, media_type = self._resize_image(
-                                    image_bytes_for_ocr, max_dimension=768
-                                )
-                                new_content.append(
-                                    {
-                                        "inlineData": {
-                                            "mimeType": media_type,
-                                            "data": base64.b64encode(resized_data).decode(),
-                                        }
-                                    }
-                                )
-                            except Exception as e:
-                                logger.warning(f"Failed to resize image: {e}")
-                                new_content.append(item)
-                        else:
-                            new_content.append(item)
-                    else:
-                        new_content.append(item)
-                else:
-                    # PRESERVE or unknown — keep original
-                    new_content.append(item)
+                image_data = self._extract_image_data_from_block(item)
+                compressed_item = self._compress_image_block(
+                    item, technique, provider, image_data
+                )
+                new_content.append(compressed_item)
 
             compressed.append({**message, "content": new_content})
 
@@ -650,8 +630,9 @@ class ImageCompressor:
 
         Pipeline:
         1. Tile-boundary alignment (pure math, zero quality loss)
-        2. ML-based technique routing (ONNX, query + image analysis)
-        3. Apply compression technique
+        2. Per-image ML-based technique routing (ONNX, query + image analysis)
+        3. Per-image compression technique application
+        4. Steps 2-3 run in parallel across images via ThreadPoolExecutor
 
         Args:
             messages: LLM messages (OpenAI/Anthropic/Google format)
@@ -678,12 +659,9 @@ class ImageCompressor:
             logger.debug(f"Tile optimization skipped: {e}")
             tile_saved = 0
 
-        # Step 2: ML-based technique routing
+        # Step 2: Extract the shared text query
         query = self._extract_query(messages)
-        image_data = self._extract_image_data(messages)
-
-        if not query or not image_data:
-            # Still got tile savings even without ML routing
+        if not query:
             if tile_saved > 0:
                 self.last_result = CompressionResult(
                     technique=Technique.PRESERVE,
@@ -693,58 +671,187 @@ class ImageCompressor:
                 )
             return messages
 
-        # Prefer the ONNX router in production, but honor test-time monkeypatches
-        # of the PyTorch router factory so existing routing tests remain deterministic.
-        if type(self._get_router).__module__.startswith("unittest.mock"):
+        # Collect all image blocks with their positions in the message tree
+        image_blocks: list[tuple[int, int, dict[str, Any]]] = []
+        for msg_idx, message in enumerate(messages):
+            content = message.get("content")
+            if not isinstance(content, list):
+                continue
+            for content_idx, item in enumerate(content):
+                if not isinstance(item, dict):
+                    continue
+                if self._is_image_block(item):
+                    image_blocks.append((msg_idx, content_idx, item))
+
+        if not image_blocks:
+            if tile_saved > 0:
+                self.last_result = CompressionResult(
+                    technique=Technique.PRESERVE,
+                    original_tokens=tile_saved,
+                    compressed_tokens=0,
+                    confidence=1.0,
+                )
+            return messages
+
+        # Set up shared router (ONNX Runtime sessions are thread-safe for
+        # concurrent run() calls with separate input tensors).  For test-time
+        # monkeypatches we detect the mock and use it directly.
+        use_mock_router = type(self._get_router).__module__.startswith("unittest.mock")
+
+        onnx_router: Any = None
+        if not use_mock_router:
             try:
-                pt_router = self._get_router()
-                decision = pt_router.classify(image_data, query)
-                technique = decision.technique
-                confidence = decision.confidence
-            except Exception as e:
-                logger.warning(f"Router failed, preserving image: {e}")
-                technique = Technique.PRESERVE
-                confidence = 0.0
-        else:
-            try:
-                onnx_router = self._get_onnx_router()
-                decision = onnx_router.classify(image_data, query)
-                technique = decision.technique
-                confidence = decision.confidence
-            except Exception as onnx_err:
-                logger.debug(f"ONNX router not available ({onnx_err}), trying PyTorch...")
+                from .onnx_router import OnnxTechniqueRouter
+
+                onnx_router = OnnxTechniqueRouter(use_siglip=self.use_siglip)
+            except Exception:
+                pass
+
+        max_workers = min(int(os.environ.get("HEADROOM_IMAGE_PARALLELISM", "4")), 16)
+
+        # Per-image results: (compressed_item, technique, confidence, image_data)
+        results: list[tuple[dict[str, Any], Technique, float, bytes | None]
+                       | None] = [None] * len(image_blocks)
+
+        def _classify_and_compress(
+            idx: int,
+            msg_idx: int,
+            content_idx: int,
+            item: dict[str, Any],
+        ) -> tuple[int, dict[str, Any], Technique, float, bytes | None]:
+            image_data = self._extract_image_data_from_block(item)
+            if not image_data:
+                return idx, item, Technique.PRESERVE, 0.0, None
+
+            technique: Technique = Technique.PRESERVE
+            confidence: float = 0.0
+
+            if use_mock_router:
                 try:
                     pt_router = self._get_router()
                     decision = pt_router.classify(image_data, query)
                     technique = decision.technique
                     confidence = decision.confidence
-                except Exception as e:
-                    logger.warning(f"Router failed, preserving image: {e}")
-                    technique = Technique.PRESERVE
-                    confidence = 0.0
+                except Exception:
+                    pass
+            elif onnx_router is not None:
+                try:
+                    decision = onnx_router.classify(image_data, query)
+                    technique = decision.technique
+                    confidence = decision.confidence
+                except Exception:
+                    try:
+                        pt_router = self._get_router()
+                        decision = pt_router.classify(image_data, query)
+                        technique = decision.technique
+                        confidence = decision.confidence
+                    except Exception:
+                        pass
+            else:
+                try:
+                    pt_router = self._get_router()
+                    decision = pt_router.classify(image_data, query)
+                    technique = decision.technique
+                    confidence = decision.confidence
+                except Exception:
+                    pass
 
-        # Count original tokens BEFORE compression
-        original_tokens = self._estimate_tokens(image_data, "high") + tile_saved
+            compressed_item = self._compress_image_block(
+                item, technique, provider, image_data
+            )
+            return idx, compressed_item, technique, confidence, image_data
 
-        # Step 3: Apply compression technique
-        compressed_messages = self._apply_compression(messages, technique, provider)
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {
+                executor.submit(_classify_and_compress, idx, *block): idx
+                for idx, block in enumerate(image_blocks)
+            }
+            for future in as_completed(futures):
+                result = future.result()
+                results[result[0]] = result[1:]
 
-        # Count actual tokens AFTER compression by measuring the result.
-        # If the image was replaced with text (OCR), count text tokens.
-        # If resized, re-estimate from new dimensions.
-        compressed_tokens = self._count_result_tokens(compressed_messages, image_data, provider)
+        # Reconstruct messages, placing compressed blocks back in order
+        compressed_lookup: dict[tuple[int, int], dict[str, Any]] = {}
+        for (msg_idx, content_idx, _), res in zip(image_blocks, results):
+            if res is not None:
+                compressed_lookup[(msg_idx, content_idx)] = res[0]
 
-        # Store result
+        compressed_messages: list[dict[str, Any]] = []
+        for msg_idx, message in enumerate(messages):
+            content = message.get("content")
+            if not isinstance(content, list):
+                compressed_messages.append(message)
+                continue
+            new_content: list[Any] = []
+            for content_idx, item in enumerate(content):
+                key = (msg_idx, content_idx)
+                if key in compressed_lookup:
+                    new_content.append(compressed_lookup[key])
+                else:
+                    new_content.append(item)
+            compressed_messages.append({**message, "content": new_content})
+
+        # Count total compressed tokens by inspecting each compressed block.
+        # Count total original tokens from the per-image image_data (pre-compression).
+        original_tokens_total = 0
+        compressed_tokens_total = 0
+        confidences: list[float] = []
+        last_technique = Technique.PRESERVE
+        for (_b_idx, _c_idx, _), res in zip(image_blocks, results):
+            if res is None:
+                continue
+            compressed_item, technique, confidence, image_data = res
+            last_technique = technique
+            if confidence > 0:
+                confidences.append(confidence)
+            if image_data:
+                original_tokens_total += self._estimate_tokens(image_data, "high")
+                # Count tokens for this single compressed block
+                if compressed_item.get("type") == "text" and "[OCR from image]" in compressed_item.get("text", ""):
+                    compressed_tokens_total += max(1, len(compressed_item["text"]) // 4)
+                elif compressed_item.get("type") == "image_url":
+                    detail = compressed_item.get("image_url", {}).get("detail", "high")
+                    if detail == "low":
+                        compressed_tokens_total += 85
+                    else:
+                        url = compressed_item.get("image_url", {}).get("url", "")
+                        if url.startswith("data:"):
+                            match = re.match(r"data:image/[^;]+;base64,(.+)", url)
+                            if match:
+                                data = base64.b64decode(match.group(1))
+                                compressed_tokens_total += self._estimate_tokens(data, "high")
+                            else:
+                                compressed_tokens_total += self._estimate_tokens(image_data, "high")
+                        else:
+                            compressed_tokens_total += self._estimate_tokens(image_data, "high")
+                elif compressed_item.get("type") == "image":
+                    source = compressed_item.get("source", {})
+                    if source.get("type") == "base64":
+                        data = base64.b64decode(source.get("data", ""))
+                        compressed_tokens_total += self._estimate_tokens(data, "high")
+                    else:
+                        compressed_tokens_total += self._estimate_tokens(image_data, "high")
+                elif "inlineData" in compressed_item:
+                    data = base64.b64decode(compressed_item.get("inlineData", {}).get("data", ""))
+                    compressed_tokens_total += self._estimate_tokens(data, "high")
+                else:
+                    compressed_tokens_total += self._estimate_tokens(image_data, "high")
+
+        original_tokens_total += tile_saved
+
+        # Compute aggregate confidence (average of per-image confidences)
+        avg_confidence = sum(confidences) / len(confidences) if confidences else 0.0
+
         self.last_result = CompressionResult(
-            technique=technique,
-            original_tokens=original_tokens,
-            compressed_tokens=compressed_tokens,
-            confidence=confidence,
+            technique=last_technique,
+            original_tokens=original_tokens_total,
+            compressed_tokens=compressed_tokens_total,
+            confidence=avg_confidence,
         )
 
         logger.info(
-            f"Image compression: {technique.value} "
-            f"({original_tokens} → {compressed_tokens} tokens, "
+            f"Image compression: processed {len(results)} image(s) "
+            f"({original_tokens_total} → {compressed_tokens_total} tokens, "
             f"{self.last_result.savings_percent:.0f}% saved)"
         )
 
