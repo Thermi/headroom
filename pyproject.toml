@@ -86,6 +86,7 @@ proxy = [
     "transformers>=5.5.0,<6.0",   # Tokenizer only (for Kompress)
     "watchdog>=4.0.0",            # File watcher for live code graph reindexing (--code-graph)
     "sqlite-vec>=0.1.6",          # Vector index for memory (--memory). Lightweight, no torch.
+    "orjson>=3.9.0",              # Fast JSON (Rust-backed, releases GIL) — hot-path serialization
 ]
 # Production ASGI/WSGI server — Unix-only (gunicorn does not support Windows).
 # Kept separate from [proxy] so that dev, CI, and Windows users are not forced
