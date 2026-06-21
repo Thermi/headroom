@@ -19,6 +19,7 @@ from headroom.ccr.mcp_server import (
     SessionStats,
     _format_session_summary,
 )
+from headroom.accounting import reset_model_accounting
 from headroom.compress import CompressResult
 
 # ---------------------------------------------------------------------------
@@ -47,6 +48,14 @@ def _no_real_compress():
     patcher.start()
     yield
     patcher.stop()
+
+
+@pytest.fixture(autouse=True)
+def _reset_accounting():
+    """Reset the global model accounting between tests."""
+    reset_model_accounting()
+    yield
+    reset_model_accounting()
 
 
 # ---------------------------------------------------------------------------
@@ -498,6 +507,87 @@ class TestHandleStats:
 
         data = json.loads(result[0].text)
         assert "proxy" not in data
+
+    async def test_stats_includes_model_accounting(self):
+        server = _make_server(check_proxy=False)
+        server._stats.record_compression(
+            input_tokens=200,
+            output_tokens=60,
+            strategy="kompress",
+            model_name="chopratejas/kompress-v2-base",
+            runtime_ms=15.0,
+        )
+
+        mock_store_instance = MagicMock()
+        mock_store_instance.get_stats.return_value = {
+            "entry_count": 1, "max_entries": 500,
+        }
+        server._local_store = mock_store_instance
+
+        result = await server._handle_stats()
+        data = json.loads(result[0].text)
+        assert "model_accounting" in data
+        assert data["model_accounting"] is not None
+        assert "chopratejas/kompress-v2-base" in data["model_accounting"]
+        model_data = data["model_accounting"]["chopratejas/kompress-v2-base"]
+        assert model_data["total_calls"] == 1
+        assert model_data["total_input_tokens"] == 200
+        assert model_data["total_output_tokens"] == 60
+        assert model_data["avg_runtime_ms"] == 15.0
+        assert model_data["p50_input_tokens"] == 200
+
+    async def test_stats_model_accounting_no_nulls(self):
+        server = _make_server(check_proxy=False)
+        server._stats.record_compression(100, 30, "kompress", "gpt-4o", 5.0)
+
+        mock_store_instance = MagicMock()
+        mock_store_instance.get_stats.return_value = {
+            "entry_count": 0, "max_entries": 500,
+        }
+        server._local_store = mock_store_instance
+
+        result = await server._handle_stats()
+        data = json.loads(result[0].text)
+
+        def check_no_nulls(obj, path=""):
+            if isinstance(obj, dict):
+                for k, v in obj.items():
+                    check_no_nulls(v, f"{path}.{k}")
+            elif isinstance(obj, list):
+                for i, v in enumerate(obj):
+                    check_no_nulls(v, f"{path}[{i}]")
+            else:
+                assert obj is not None, f"Null value at {path}"
+
+        check_no_nulls(data)
+
+    async def test_stats_model_accounting_empty_is_empty_dict(self):
+        """When no model usage recorded, model_accounting is {} not None."""
+        server = _make_server(check_proxy=False)
+
+        mock_store_instance = MagicMock()
+        mock_store_instance.get_stats.return_value = {
+            "entry_count": 0, "max_entries": 500,
+        }
+        server._local_store = mock_store_instance
+
+        result = await server._handle_stats()
+        data = json.loads(result[0].text)
+        assert "model_accounting" in data
+        assert data["model_accounting"] == {}
+        assert data["model_accounting"] is not None
+
+    async def test_stats_model_accounting_multiple_models(self):
+        server = _make_server(check_proxy=False)
+        server._stats.record_compression(100, 30, "kompress", "gpt-4o", 5.0)
+        server._stats.record_compression(50, 20, "smartcrusher", "smartcrusher-v1", 2.0)
+
+        result = await server._handle_stats()
+        data = json.loads(result[0].text)
+        assert "gpt-4o" in data["model_accounting"]
+        assert "smartcrusher-v1" in data["model_accounting"]
+        assert data["model_accounting"]["gpt-4o"]["total_calls"] == 1
+        assert data["model_accounting"]["smartcrusher-v1"]["total_calls"] == 1
 
 
 # ---------------------------------------------------------------------------
