@@ -344,6 +344,7 @@ class BatchHandlerMixin:
                             requests_list,
                             model,
                             api_key,
+                            request_id,
                         )
                 except Exception as e:
                     logger.warning(f"[{request_id}] Failed to store Google batch context: {e}")
@@ -584,6 +585,7 @@ class BatchHandlerMixin:
         requests_list: list[dict[str, Any]],
         model: str,
         api_key: str | None,
+        request_id: str = "",
     ) -> None:
         """Store Google batch context for CCR result processing.
 
@@ -632,7 +634,7 @@ class BatchHandlerMixin:
 
         await store.store(context)
         logger.debug(
-            f"Stored Google batch context for {batch_name} with {len(requests_list)} requests"
+            f"[{request_id}] Stored Google batch context for {batch_name} with {len(requests_list)} requests"
         )
 
     async def handle_google_batch_results(
@@ -761,10 +763,11 @@ class BatchHandlerMixin:
         processed_results = [p.result for p in processed]
         response_data["response"]["responses"] = processed_results
 
+        _rid = request.scope.get("headroom_request_id", "?")
         for p in processed:
             if p.was_processed:
                 logger.info(
-                    f"CCR: Processed Google batch result {p.custom_id} "
+                    f"[{_rid}] CCR: Processed Google batch result {p.custom_id} "
                     f"({p.continuation_rounds} continuation rounds)"
                 )
 
@@ -877,7 +880,7 @@ class BatchHandlerMixin:
         try:
             # Step 1: Download the input file from OpenAI
             logger.info(f"[{request_id}] Batch: Downloading input file {input_file_id}")
-            file_content = await self._download_openai_file(input_file_id, headers)
+            file_content = await self._download_openai_file(input_file_id, headers, request_id)
 
             if file_content is None:
                 return JSONResponse(
@@ -913,7 +916,7 @@ class BatchHandlerMixin:
             # Step 4: Upload compressed file to OpenAI
             logger.info(f"[{request_id}] Batch: Uploading compressed file")
             new_file_id = await self._upload_openai_file(
-                compressed_content, f"compressed_{input_file_id}.jsonl", headers
+                compressed_content, f"compressed_{input_file_id}.jsonl", headers, request_id
             )
 
             if new_file_id is None:
@@ -1036,20 +1039,20 @@ class BatchHandlerMixin:
                 },
             )
 
-    async def _download_openai_file(self, file_id: str, headers: dict) -> str | None:
+    async def _download_openai_file(self, file_id: str, headers: dict, request_id: str = "") -> str | None:
         """Download file content from OpenAI."""
         url = f"{self.OPENAI_API_URL}/v1/files/{file_id}/content"
         try:
             response = await self.http_client.get(url, headers=headers)  # type: ignore[union-attr]
             if response.status_code == 200:
                 return str(response.text)
-            logger.error(f"Failed to download file {file_id}: {response.status_code}")
+            logger.error(f"[{request_id}] Failed to download file {file_id}: {response.status_code}")
             return None
         except Exception as e:
-            logger.error(f"Error downloading file {file_id}: {e}")
+            logger.error(f"[{request_id}] Error downloading file {file_id}: {e}")
             return None
 
-    async def _upload_openai_file(self, content: str, filename: str, headers: dict) -> str | None:
+    async def _upload_openai_file(self, content: str, filename: str, headers: dict, request_id: str = "") -> str | None:
         """Upload a file to OpenAI for batch processing."""
         url = f"{self.OPENAI_API_URL}/v1/files"
 
@@ -1073,10 +1076,10 @@ class BatchHandlerMixin:
                 result = response.json()
                 file_id: str | None = result.get("id")
                 return file_id
-            logger.error(f"Failed to upload file: {response.status_code} - {response.text}")
+            logger.error(f"[{request_id}] Failed to upload file: {response.status_code} - {response.text}")
             return None
         except Exception as e:
-            logger.error(f"Error uploading file: {e}")
+            logger.error(f"[{request_id}] Error uploading file: {e}")
             return None
 
     async def _compress_batch_jsonl(self, content: str, request_id: str) -> tuple[list[str], dict]:
