@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-import json
+from headroom.proxy import _json as json
+
+
 import logging
 import threading
 from dataclasses import dataclass

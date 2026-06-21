@@ -10,7 +10,7 @@ reproducing the failure.
 from __future__ import annotations
 
 import asyncio
-import json
+from headroom.proxy import _json as json
 import logging
 import platform
 import shutil

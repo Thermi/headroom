@@ -10,8 +10,9 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-import json
 import logging
+
+from headroom.proxy import _json as json
 import os
 import random
 import re

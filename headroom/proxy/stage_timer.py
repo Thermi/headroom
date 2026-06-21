@@ -23,7 +23,7 @@ can be safely imported from both handler code paths.
 
 from __future__ import annotations
 
-import json
+from headroom.proxy import _json as json
 import logging
 import time
 from collections.abc import Iterable

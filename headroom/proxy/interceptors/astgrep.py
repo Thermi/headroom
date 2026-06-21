@@ -10,7 +10,9 @@ than three definitions to outline.
 
 from __future__ import annotations
 
-import json
+from headroom.proxy import _json as json
+
+
 import logging
 import os
 import shutil

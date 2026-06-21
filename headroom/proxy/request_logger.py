@@ -10,7 +10,7 @@ Extracted from server.py for maintainability.
 from __future__ import annotations
 
 import gzip
-import json
+from headroom.proxy import _json as json
 import logging
 import sys
 import threading

@@ -27,7 +27,9 @@ from __future__ import annotations
 import asyncio
 import enum
 import inspect
-import json
+from headroom.proxy import _json as json
+
+
 import logging
 import os
 from dataclasses import dataclass, field
