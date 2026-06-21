@@ -1711,6 +1711,11 @@ logger.info(
             self._build_info.get("git_commit", "unknown"),
             self._build_info.get("build_time", "unknown"),
         )
+        try:
+            import ojson
+            logger.info("ojson: available (version=%s)", ojson.__version__)
+        except ImportError:
+            logger.warning("ojson: not installed (ordered JSON unavailable)")
         logger.info(f"Optimization: {'ENABLED' if self.config.optimize else 'DISABLED'}")
         self.config.mode = normalize_proxy_mode(self.config.mode)
         logger.info(f"Mode: {self.config.mode}")
