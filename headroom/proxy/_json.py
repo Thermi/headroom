@@ -21,7 +21,7 @@ except ImportError:
 if HAS_ORJSON:
     JSONDecodeError = _orjson.JSONDecodeError
 
-    def loads(data: str | bytes) -> Any:
+    def loads(data: str | bytes, **kwargs: Any) -> Any:
         if isinstance(data, str):
             data = data.encode("utf-8")
         return _orjson.loads(data)
@@ -42,14 +42,32 @@ if HAS_ORJSON:
         non_compact = separators is not None and separators != (",", ":")
         if not non_compact:
             if default is not None:
-                result = _orjson.dumps(obj, option=option, default=default)
+                raw: bytes = _orjson.dumps(obj, option=option, default=default)
             else:
-                result = _orjson.dumps(obj, option=option)
-            return result.decode("utf-8")
-        return _stdlib_json.dumps(obj, **kwargs)
+                raw = _orjson.dumps(obj, option=option)
+            return raw.decode("utf-8")
+        _result: str = _stdlib_json.dumps(obj, **kwargs)
+        return _result
+
+    def dump(obj: Any, fp: Any, **kwargs: Any) -> None:
+        fp.write(dumps(obj, **kwargs))
+
+    def load(fp: Any) -> Any:
+        return _orjson.loads(fp.read())
 
 
 else:
     JSONDecodeError = _stdlib_json.JSONDecodeError
-    loads = _stdlib_json.loads
-    dumps = _stdlib_json.dumps
+
+    def loads(data: str | bytes, **kwargs: Any) -> Any:
+        return _stdlib_json.loads(data, **kwargs)
+
+    def dumps(obj: Any, **kwargs: Any) -> str:
+        _result: str = _stdlib_json.dumps(obj, **kwargs)
+        return _result
+
+    def dump(obj: Any, fp: Any, **kwargs: Any) -> None:
+        _stdlib_json.dump(obj, fp, **kwargs)
+
+    def load(fp: Any) -> Any:
+        return _stdlib_json.load(fp)
