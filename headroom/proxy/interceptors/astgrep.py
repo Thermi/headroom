@@ -10,9 +10,6 @@ than three definitions to outline.
 
 from __future__ import annotations
 
-from headroom.proxy import _json as json
-
-
 import logging
 import os
 import shutil
@@ -22,8 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from headroom import binaries
-from headroom._subprocess import run
-from headroom.proxy import runtime_env
+from headroom.proxy import _json as json
 
 from . import base
 

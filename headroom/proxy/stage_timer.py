@@ -23,13 +23,14 @@ can be safely imported from both handler code paths.
 
 from __future__ import annotations
 
-from headroom.proxy import _json as json
 import logging
 import time
 from collections.abc import Iterable
 from contextlib import AbstractAsyncContextManager, AbstractContextManager
 from types import TracebackType
 from typing import Any
+
+from headroom.proxy import _json as json
 
 logger = logging.getLogger("headroom.proxy")
 

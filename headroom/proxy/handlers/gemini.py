@@ -12,6 +12,8 @@ import os
 import time
 from typing import TYPE_CHECKING, Any
 
+from headroom.proxy import _json as json
+
 if TYPE_CHECKING:
     from fastapi import Request
     from fastapi.responses import JSONResponse, Response, StreamingResponse

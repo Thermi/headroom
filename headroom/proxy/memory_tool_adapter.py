@@ -27,12 +27,11 @@ Usage:
 
 from __future__ import annotations
 
-from headroom.proxy import _json as json
-
-
 import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
+
+from headroom.proxy import _json as json
 
 if TYPE_CHECKING:
     from headroom.memory.backends.local import LocalBackend

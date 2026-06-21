@@ -27,9 +27,6 @@ from __future__ import annotations
 import asyncio
 import enum
 import inspect
-from headroom.proxy import _json as json
-
-
 import logging
 import os
 from dataclasses import dataclass, field
@@ -45,6 +42,7 @@ from headroom.memory.storage_router import (
     RequestContext,
     ResolvedScope,
 )
+from headroom.proxy import _json as json
 
 if TYPE_CHECKING:
     from headroom.memory.backends.local import LocalBackend

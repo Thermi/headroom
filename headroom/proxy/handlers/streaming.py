@@ -12,6 +12,7 @@ import logging
 import time
 from typing import TYPE_CHECKING, Any
 
+from headroom.proxy import _json as json
 from headroom.proxy.auth_mode import classify_client
 from headroom.proxy.helpers import (
     RETRYABLE_OVERLOAD_STATUSES,

@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-from headroom.proxy import _json as json
-
-
 import logging
 import threading
 from dataclasses import dataclass
@@ -16,6 +13,7 @@ from headroom.cache.compression_cache import (
     _swap_tool_result_content,
 )
 from headroom.config import TransformResult
+from headroom.proxy import _json as json
 from headroom.tokenizer import Tokenizer
 from headroom.transforms.base import Transform
 

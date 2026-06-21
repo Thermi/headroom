@@ -10,7 +10,6 @@ Extracted from server.py for maintainability.
 from __future__ import annotations
 
 import gzip
-from headroom.proxy import _json as json
 import logging
 import sys
 import threading
@@ -20,6 +19,8 @@ from dataclasses import asdict
 from pathlib import Path
 from threading import Lock
 from typing import TYPE_CHECKING, Any
+
+from headroom.proxy import _json as json
 
 if TYPE_CHECKING:
     from ..memory.tracker import ComponentStats

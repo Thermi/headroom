@@ -10,12 +10,13 @@ reproducing the failure.
 from __future__ import annotations
 
 import asyncio
-from headroom.proxy import _json as json
 import logging
 import platform
 import shutil
 import socket
 from urllib.parse import urlparse
+
+from headroom.proxy import _json as json
 
 logger = logging.getLogger("headroom.proxy.diagnostics")
 
@@ -82,8 +83,10 @@ async def _run_traceroute(host: str) -> list[str]:
         proc = await asyncio.create_subprocess_exec(
             binary,
             "-n",
-            "-w", "2",
-            "-m", "15",
+            "-w",
+            "2",
+            "-m",
+            "15",
             host,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
@@ -209,7 +212,9 @@ def _detect_interface_mtu() -> str:
 
             result = _sp.run(
                 ["netsh", "interface", "ip", "show", "interface"],
-                capture_output=True, text=True, timeout=5,
+                capture_output=True,
+                text=True,
+                timeout=5,
             )
             if result.returncode == 0:
                 for line in result.stdout.splitlines():
@@ -225,7 +230,9 @@ def _detect_interface_mtu() -> str:
 
             result = _sp.run(
                 ["networksetup", "-getinfo", "Ethernet"],
-                capture_output=True, text=True, timeout=5,
+                capture_output=True,
+                text=True,
+                timeout=5,
             )
             if result.returncode == 0:
                 for line in result.stdout.splitlines():

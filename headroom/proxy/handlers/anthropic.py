@@ -15,6 +15,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
+from headroom.proxy import _json as json
 from headroom.proxy.stage_timer import StageTimer, emit_stage_timings_log
 
 if TYPE_CHECKING:

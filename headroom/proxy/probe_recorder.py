@@ -12,7 +12,6 @@ tool for bounded recording sessions, not an always-on production setting.
 
 from __future__ import annotations
 
-from headroom.proxy import _json as json
 import logging
 import os
 import threading
@@ -20,6 +19,7 @@ import time
 from pathlib import Path
 
 from headroom.pipeline import PipelineEvent, PipelineStage
+from headroom.proxy import _json as json
 
 logger = logging.getLogger(__name__)
 
