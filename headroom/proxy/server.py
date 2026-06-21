@@ -1713,6 +1713,7 @@ logger.info(
         )
         try:
             import ojson
+
             logger.info("ojson: available (version=%s)", ojson.__version__)
         except ImportError:
             logger.warning("ojson: not installed (ordered JSON unavailable)")
