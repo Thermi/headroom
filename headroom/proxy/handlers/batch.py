@@ -5,8 +5,9 @@ Contains all batch API handlers for Google and OpenAI batch operations.
 
 from __future__ import annotations
 
-import json
 import logging
+
+from headroom.proxy import _json as json
 import time
 from typing import TYPE_CHECKING, Any
 
