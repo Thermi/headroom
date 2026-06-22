@@ -1241,6 +1241,23 @@ class CodeAwareCompressor(Transform):
                 syntax_valid=True,
             )
 
+        # For languages without a LangConfig (e.g. dockerfile), there is no
+        # data-driven extraction available — _extract_generic_structure is a
+        # no-op that preserves everything, so AST-based compression cannot
+        # produce any meaningful savings. Return the original immediately to
+        # avoid a useless parse/verify cycle and a misleading warning log.
+        if detected_lang not in _LANG_CONFIGS:
+            return CodeCompressionResult(
+                compressed=code,
+                original=code,
+                original_tokens=original_tokens,
+                compressed_tokens=original_tokens,
+                compression_ratio=1.0,
+                language=detected_lang,
+                language_confidence=confidence,
+                syntax_valid=True,
+            )
+
         # Parse and compress
         try:
             compressed, structure, symbol_scores = self._compress_with_ast(
@@ -1893,6 +1910,8 @@ class CodeAwareCompressor(Transform):
         if kept_lines:
             result_parts.extend(kept_lines)
 
+        has_body_content = bool(kept_lines) or bool(docstring_text) or opening_brace_line is not None
+
         if omitted_lines > 0:
             result_parts.append(
                 _make_omitted_comment(
@@ -1901,6 +1920,8 @@ class CodeAwareCompressor(Transform):
             )
             if lang_config.uses_colon_after_signature:
                 result_parts.append(f"{indent}pass")
+        elif not has_body_content and lang_config.uses_colon_after_signature:
+            result_parts.append(f"{indent}pass")
 
         if closing_brace_line is not None:
             result_parts.append(closing_brace_line)
