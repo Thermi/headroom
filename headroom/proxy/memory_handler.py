@@ -1205,7 +1205,11 @@ your responses, not to drive new actions."""
         _read_tool_names = frozenset({"memory_search", "memory_list"})
 
         def _get_tool_name(tc: dict[str, Any]) -> str | None:
-            return tc.get("name") or tc.get("function", {}).get("name")
+            name: str | None = tc.get("name")
+            if name:
+                return name
+            fn_name: str | None = tc.get("function", {}).get("name")
+            return fn_name
 
         reads = [tc for tc in tool_calls if _get_tool_name(tc) in _read_tool_names]
         writes = [tc for tc in tool_calls if _get_tool_name(tc) not in _read_tool_names]
