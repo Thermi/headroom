@@ -542,6 +542,22 @@ def is_kompress_available() -> bool:
     return _is_onnx_available() or _is_pytorch_available()
 
 
+def _available_gpu_providers() -> list[str]:
+    """Probe ONNX Runtime for available GPU execution providers."""
+    try:
+        import onnxruntime
+    except ImportError:
+        return []
+    gpu_providers = [
+        p
+        for p in onnxruntime.get_available_providers()
+        if "Cuda" in p or "CUDA" in p or "TensorRT" in p or "Dml" in p or "DirectML" in p or "CoreML" in p or "ROCM" in p
+    ]
+    if "CUDAExecutionProvider" in gpu_providers:
+        gpu_providers.insert(0, gpu_providers.pop(gpu_providers.index("CUDAExecutionProvider")))
+    return gpu_providers
+
+
 # ── Model Architecture (must match training) ──────────────────────────
 # torch/transformers are imported lazily — only when actually needed.
 # This allows `from kompress_compressor import is_kompress_available`
