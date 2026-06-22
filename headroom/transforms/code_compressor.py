@@ -173,9 +173,7 @@ def _get_parser(language: str) -> Any:
                     "'tree-sitter>=0.23.0,<0.25.0' "
                     "'tree-sitter-language-pack>=0.10.0,<0.12.0'"
                 ) from e
-            raise ValueError(
-                f"tree-sitter type error for language {language!r}: {e}"
-            ) from e
+            raise ValueError(f"tree-sitter type error for language {language!r}: {e}") from e
         except Exception as e:
             raise ValueError(
                 f"Language '{language}' is not supported by tree-sitter. "
@@ -1910,7 +1908,9 @@ class CodeAwareCompressor(Transform):
         if kept_lines:
             result_parts.extend(kept_lines)
 
-        has_body_content = bool(kept_lines) or bool(docstring_text) or opening_brace_line is not None
+        has_body_content = (
+            bool(kept_lines) or bool(docstring_text) or opening_brace_line is not None
+        )
 
         if omitted_lines > 0:
             result_parts.append(
