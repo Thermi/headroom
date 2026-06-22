@@ -52,7 +52,7 @@ use pyo3::types::{PyBytes, PyDict};
 /// Execute `f` without GIL management overhead.
 /// Under free-threaded Python 3.14 (`Py_GIL_DISABLED`) this is a direct call.
 /// Under the GIL this calls `py.allow_threads(f)` to release the GIL.
-fn maybe_allow_threads<T>(py: Python<'_>, f: impl FnOnce() -> T) -> T {
+fn maybe_allow_threads<T: Send>(py: Python<'_>, f: impl FnOnce() -> T + Send) -> T {
     #[cfg(not(Py_GIL_DISABLED))]
     return py.allow_threads(f);
     #[cfg(Py_GIL_DISABLED)]
