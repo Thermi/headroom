@@ -248,6 +248,9 @@ pub fn compress_openai_responses_request(
             let body_bytes_in = body.len();
             let new_body_bytes = Bytes::copy_from_slice(new_body.get().as_bytes());
             let body_bytes_out = new_body_bytes.len();
+            let bytes_freed = body_bytes_in.saturating_sub(body_bytes_out);
+            let bytes_savings_pct = if body_bytes_in > 0 { (bytes_freed as f64 / body_bytes_in as f64 * 100.0) as u32 } else { 0 };
+            let tokens_savings_pct = if original_tokens_total > 0 { ((original_tokens_total - compressed_tokens_total) as f64 / original_tokens_total as f64 * 100.0) as u32 } else { 0 };
             tracing::info!(
                 event = "compression_decision",
                 request_id = %request_id,
@@ -258,7 +261,8 @@ pub fn compress_openai_responses_request(
                 reason = "live_zone_blocks_rewritten",
                 body_bytes_in = body_bytes_in,
                 body_bytes_out = body_bytes_out,
-                bytes_freed = body_bytes_in.saturating_sub(body_bytes_out),
+                bytes_freed = bytes_freed,
+                bytes_savings_pct = bytes_savings_pct,
                 items_total = manifest.messages_total,
                 latest_user_message_index = ?manifest.latest_user_message_index,
                 live_zone_blocks = manifest.block_outcomes.len(),
@@ -267,6 +271,7 @@ pub fn compress_openai_responses_request(
                 live_zone_block_compressed_bytes = compressed_bytes_total,
                 live_zone_block_original_tokens = original_tokens_total,
                 live_zone_block_compressed_tokens = compressed_tokens_total,
+                tokens_savings_pct = tokens_savings_pct,
                 had_compressor_error = had_compressor_error,
                 model = model,
                 "openai responses live-zone dispatch"

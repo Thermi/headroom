@@ -794,12 +794,15 @@ pub(crate) async fn forward_http(
                 markers_inserted,
                 per_strategy_tokens,
             } => {
+                let tokens_freed = tokens_before.saturating_sub(tokens_after);
+                let tokens_savings_pct = if tokens_before > 0 { (tokens_freed as f64 / tokens_before as f64 * 100.0) as u32 } else { 0 };
                 tracing::info!(
                     request_id = %request_id,
                     path = %path_for_log,
                     tokens_before = tokens_before,
                     tokens_after = tokens_after,
-                    tokens_freed = tokens_before.saturating_sub(tokens_after),
+                    tokens_freed = tokens_freed,
+                    tokens_savings_pct = tokens_savings_pct,
                     strategies = ?strategies_applied,
                     markers = markers_inserted.len(),
                     "compression applied"
