@@ -46,32 +46,6 @@ _REPLACEMENT_CA_VARS = (
 # Env var that opts out of OpenSSL's RFC 5280 strict CA-constraint checks.
 TLS_STRICT_ENV = "HEADROOM_TLS_STRICT"
 
-# Values (case-insensitive) that mean "turn strict mode OFF".
-_TLS_STRICT_OFF_VALUES = frozenset({"0", "false", "no", "off"})
-
-
-def tls_strict_disabled() -> bool:
-    """True when ``HEADROOM_TLS_STRICT`` opts out of OpenSSL strict mode.
-
-    Default (unset / any other value) is strict, matching Python 3.13's own
-    default. Only the explicit off-values flip it.
-    """
-    return os.environ.get(TLS_STRICT_ENV, "").strip().lower() in _TLS_STRICT_OFF_VALUES
-
-
-def _clear_x509_strict(ctx: ssl.SSLContext, *, reason: str) -> ssl.SSLContext:
-    """Clear only ``VERIFY_X509_STRICT`` from a context, leaving all else on.
-
-    Keeps certificate verification, hostname verification, expiry checks, and
-    chain validation enabled — this is far narrower than disabling verify.
-    """
-    strict_flag = getattr(ssl, "VERIFY_X509_STRICT", 0)
-    if strict_flag and ctx.verify_flags & strict_flag:
-        ctx.verify_flags &= ~strict_flag
-        logger.info("event=ssl_x509_strict_disabled reason=%s", reason)
-    return ctx
-
-
 def _relax_x509_strict_for_custom_ca(ctx: ssl.SSLContext, *, path: str) -> ssl.SSLContext:
     """Relax OpenSSL strict-mode checks for an operator-provided CA bundle.
 
@@ -80,14 +54,12 @@ def _relax_x509_strict_for_custom_ca(ctx: ssl.SSLContext, *, path: str) -> ssl.S
     keyUsage extension. Clearing only ``VERIFY_X509_STRICT`` keeps certificate
     verification, hostname verification, expiry checks, and chain validation
     enabled while making custom CA bundles usable in those environments.
-
-    A custom CA bundle is itself a strong signal of a corporate PKI, so the
-    strict flag is relaxed here regardless of ``HEADROOM_TLS_STRICT`` (the
-    historical behavior). The env toggle additionally covers the case where
-    the corporate root lives in the *default* trust store and no bundle var
-    is set — see :func:`build_httpx_verify`.
     """
-    return _clear_x509_strict(ctx, reason=f"custom_ca:{path}")
+    strict_flag = getattr(ssl, "VERIFY_X509_STRICT", 0)
+    if strict_flag and ctx.verify_flags & strict_flag:
+        ctx.verify_flags &= ~strict_flag
+        logger.info("event=ssl_x509_strict_disabled_for_custom_ca path=%s", path)
+    return ctx
 
 
 def _replacement_ca_context(path: str) -> ssl.SSLContext:
