@@ -4,62 +4,101 @@ from __future__ import annotations
 
 import asyncio
 import ctypes
-import logging
 import os
 import sys
+import threading
 from typing import Any
 
-logger = logging.getLogger(__name__)
+# ── Shared onnxruntime availability / provider detection ──────────────
+#
+# onnxruntime is a heavy import: on a GPU build the first ``import
+# onnxruntime`` dlopens ~1 GB of CUDA libraries and can take several
+# seconds. Multiple subsystems probe it independently at startup (the
+# proxy GPU banner, the memory embedder backend selector, the Kompress
+# compressor). Probing concurrently — or before that slow first import
+# finishes — produced inconsistent results: one caller would report
+# "onnxruntime not available" / "No GPU detected" while another, a moment
+# later, successfully loaded CUDA.
+#
+# These helpers make detection deterministic and race-free:
+#   * the answer is computed once and memoized, so every caller agrees;
+#   * only a *successful* probe is cached — a transient early failure is
+#     never frozen in, so a later call still gets the real answer;
+#   * :func:`warm_onnxruntime` lets startup perform the slow import once,
+#     serially, before concurrent consumers probe it.
+_ort_lock = threading.Lock()
+_ort_available: bool | None = None
+_gpu_providers: tuple[str, ...] | None = None
 
-# Override for the CPU memory-arena default below: "1"/"true" forces the
-# arena ON, "0"/"false" forces it OFF, unset/"auto" uses the platform default.
-ONNX_CPU_ARENA_ENV = "HEADROOM_ONNX_CPU_ARENA"
-
-_TRUTHY = frozenset({"1", "true", "yes", "on"})
-_FALSY = frozenset({"0", "false", "no", "off"})
+_GPU_PROVIDER_KEYWORDS = ("cuda", "tensorrt", "dml", "directml", "coreml", "rocm")
 
 
-def _env_flag(name: str) -> bool | None:
-    raw = os.environ.get(name, "").strip().lower()
-    if raw in _TRUTHY:
-        return True
-    if raw in _FALSY:
-        return False
-    if raw and raw != "auto":
-        logger.warning("%s must be a boolean or 'auto', got %r; using auto", name, raw)
-    return None
+def onnxruntime_available() -> bool:
+    """Return whether ``onnxruntime`` can be imported in this process.
 
-
-def cpu_arena_enabled() -> bool:
-    """Whether ONNX Runtime's CPU memory arena should stay enabled.
-
-    Disabling the arena trades peak throughput for lower retained RSS, which
-    is the right call on the small Linux VMs Headroom commonly runs on. On
-    Windows the same setting is catastrophic: without the arena every
-    ``Run()`` falls back to per-node VirtualAlloc/free, slowing transformer
-    inference by 2-3 orders of magnitude (onnxruntime#11627). That turned
-    every compression into a >30s timeout for Windows proxy users, so the
-    arena stays at ORT's default (enabled) there.
+    The result is memoized once the import succeeds. A failed import is not
+    cached, so a probe issued before the (slow) first import completes does
+    not permanently poison the answer for later callers.
     """
-    override = _env_flag(ONNX_CPU_ARENA_ENV)
-    if override is not None:
-        return override
-    return sys.platform == "win32"
+    global _ort_available
+    if _ort_available:
+        return True
+    with _ort_lock:
+        if _ort_available:
+            return True
+        try:
+            import onnxruntime  # noqa: F401
+        except ImportError:
+            return False
+        _ort_available = True
+        return True
 
 
-# Pin model artifacts to immutable commit SHAs so a changed or compromised
-# upstream HuggingFace repo cannot be pulled silently (supply-chain integrity).
-# Repos not listed here fall back to the floating default ref. Set
-# HEADROOM_HF_PIN=off to bypass pinning (e.g. when intentionally evaluating a
-# newer model revision). To upgrade a model, bump its SHA here deliberately.
-_PINNED_REVISIONS: dict[str, str] = {
-    # chopratejas/kompress-v2-base @ 2026-06-10
-    "chopratejas/kompress-v2-base": "b1563631b35bfdcee37587ad530147497d820d4c",
-    "chopratejas/technique-router-onnx": "27b0b4bfa510a1cff66d888072c0b807082721a8",
-    "chopratejas/siglip-image-encoder-onnx": "d0a9fbd66d4bd8c761bff592d44831f7c2ae184e",
-    # Third-party repo — pinning matters most here.
-    "Qdrant/all-MiniLM-L6-v2-onnx": "5f1b8cd78bc4fb444dd171e59b18f3a3af89a079",
-}
+def available_gpu_providers() -> list[str]:
+    """Return ONNX Runtime's available GPU execution providers, CUDA first.
+
+    Uses case-insensitive matching so provider names like
+    ``CUDAExecutionProvider``, ``TensorrtExecutionProvider``,
+    ``DmlExecutionProvider``, etc. are identified regardless of case
+    variance across onnxruntime versions. A provider being *available*
+    (compiled into the build) does not guarantee its runtime libraries are
+    present; that is resolved gracefully at session-creation time.
+
+    The detected list is memoized after the first successful probe so every
+    subsystem reports the same providers for the life of the process.
+    """
+    global _gpu_providers
+    if _gpu_providers is not None:
+        return list(_gpu_providers)
+    if not onnxruntime_available():
+        return []
+    with _ort_lock:
+        if _gpu_providers is not None:
+            return list(_gpu_providers)
+        import onnxruntime
+
+        all_providers = onnxruntime.get_available_providers()
+        gpu_providers = [
+            p for p in all_providers if any(kw in p.lower() for kw in _GPU_PROVIDER_KEYWORDS)
+        ]
+        if "CUDAExecutionProvider" in gpu_providers:
+            gpu_providers.insert(0, gpu_providers.pop(gpu_providers.index("CUDAExecutionProvider")))
+        _gpu_providers = tuple(gpu_providers)
+        return list(gpu_providers)
+
+
+def warm_onnxruntime() -> None:
+    """Eagerly import onnxruntime once, serially, warming the shared caches.
+
+    Call this from a single-threaded startup path *before* concurrent
+    subsystems probe onnxruntime. Doing the slow first import here ensures
+    later probes hit a warm ``sys.modules`` entry and the memoized result,
+    instead of racing the in-progress import (which previously surfaced as
+    spurious "onnxruntime not available" / "No GPU detected" logs).
+    """
+    if onnxruntime_available():
+        available_gpu_providers()
+
 
 
 def _resolve_revision(repo_id: str, revision: str | None) -> str | None:
@@ -149,9 +188,6 @@ def create_cpu_session_options(
     memory usage over peak ONNX throughput. Disabling ORT's CPU arena and memory
     pattern caches reduces retained anonymous RSS after variable-size inference
     workloads, which is especially important on small VMs.
-
-    The arena is left at ORT's default on Windows (see ``cpu_arena_enabled``),
-    where disabling it degrades inference latency by orders of magnitude.
     """
     sess_options = ort.SessionOptions()
 
@@ -160,11 +196,10 @@ def create_cpu_session_options(
     if inter_op_num_threads is not None:
         sess_options.inter_op_num_threads = inter_op_num_threads
 
-    if not cpu_arena_enabled():
-        if hasattr(sess_options, "enable_cpu_mem_arena"):
-            sess_options.enable_cpu_mem_arena = False
-        if hasattr(sess_options, "enable_mem_pattern"):
-            sess_options.enable_mem_pattern = False
+    if hasattr(sess_options, "enable_cpu_mem_arena"):
+        sess_options.enable_cpu_mem_arena = False
+    if hasattr(sess_options, "enable_mem_pattern"):
+        sess_options.enable_mem_pattern = False
 
     return sess_options
 
