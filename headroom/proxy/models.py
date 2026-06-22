@@ -476,6 +476,12 @@ class ProxyConfig:
     # customise the prefix in generated request IDs.
     request_id_prefix: str = "hr_"
 
+    # Periodic TOIN stats logging. Enabled by default for observability, but
+    # operators of long-lived proxies can disable it if TOIN stats collection
+    # causes avoidable memory pressure on their platform.
+    # Env: HEADROOM_PERIODIC_TOIN_STATS=0.
+    periodic_toin_stats_enabled: bool = True
+
     # Stateless mode — disable all filesystem writes for read-only / container deployments
     stateless: bool = False
 
