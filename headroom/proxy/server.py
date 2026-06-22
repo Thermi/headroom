@@ -3254,6 +3254,8 @@ def create_app(config: ProxyConfig | None = None) -> FastAPI:
             )
             raise
         else:
+            if status_code is not None and not response_complete:
+                await send({"type": "http.response.body", "body": b"", "more_body": False})
             if status_code is not None:
                 try:
                     proxy.metrics.record_inbound_response(status_code=status_code)
