@@ -551,7 +551,13 @@ def _available_gpu_providers() -> list[str]:
     gpu_providers = [
         p
         for p in onnxruntime.get_available_providers()
-        if "Cuda" in p or "CUDA" in p or "TensorRT" in p or "Dml" in p or "DirectML" in p or "CoreML" in p or "ROCM" in p
+        if "Cuda" in p
+        or "CUDA" in p
+        or "TensorRT" in p
+        or "Dml" in p
+        or "DirectML" in p
+        or "CoreML" in p
+        or "ROCM" in p
     ]
     if "CUDAExecutionProvider" in gpu_providers:
         gpu_providers.insert(0, gpu_providers.pop(gpu_providers.index("CUDAExecutionProvider")))

@@ -14,7 +14,6 @@ from __future__ import annotations
 import asyncio
 import json
 import sys
-import threading
 import time
 from types import SimpleNamespace
 from typing import Any
@@ -26,7 +25,6 @@ pytest.importorskip("fastapi")
 
 from headroom.proxy.handlers import batch as batch_module
 from headroom.proxy.rate_limiter import TokenBucketRateLimiter
-
 
 # ============================================================================
 # Helpers
@@ -122,13 +120,15 @@ class _DummyHandler(batch_module.BatchHandlerMixin):
     async def handle_passthrough(self, request: Any, base_url: str) -> dict:  # noqa: ANN401
         return {"request": request, "base_url": base_url}
 
-    async def _retry_request(self, method: str, url: str, headers: dict, body: Any, **kwargs: Any) -> Any:  # noqa: ANN401
+    async def _retry_request(
+        self, method: str, url: str, headers: dict, body: Any, **kwargs: Any
+    ) -> Any:  # noqa: ANN401
         return self._retry_response
 
-    def _gemini_contents_to_messages(self, contents: list, system_instruction: Any) -> tuple[list, list]:  # noqa: ANN401
-        messages = [
-            {"role": "user", "content": part["parts"][0]["text"]} for part in contents
-        ]
+    def _gemini_contents_to_messages(
+        self, contents: list, system_instruction: Any
+    ) -> tuple[list, list]:  # noqa: ANN401
+        messages = [{"role": "user", "content": part["parts"][0]["text"]} for part in contents]
         return messages, []
 
     def _messages_to_gemini_contents(self, messages: list) -> tuple[list, Any]:  # noqa: ANN401
@@ -383,6 +383,7 @@ class TestBatchParallelism:
             "headroom.utils",
             SimpleNamespace(extract_user_query=lambda messages: "query"),
         )
+
 
 # ============================================================================
 # 2. ANTHROPIC.PY — Batch parallelisation
@@ -662,7 +663,9 @@ class TestMemoryHandlerParallelism:
     async def test_error_isolation_in_parallel_tools(self, mock_handler: Any) -> None:  # noqa: ANN401
         """One failing tool call doesn't prevent others from completing."""
 
-        async def mixed_execute(tool_name: str, input_data: dict, user_id: str, provider: str, **kwargs: Any) -> str:  # noqa: ANN401
+        async def mixed_execute(
+            tool_name: str, input_data: dict, user_id: str, provider: str, **kwargs: Any
+        ) -> str:  # noqa: ANN401
             await asyncio.sleep(0.01)
             if "fail" in str(input_data.get("query", "")):
                 raise RuntimeError("intentional failure")
@@ -803,9 +806,7 @@ class TestImageCompressorParallelism:
             content.append(
                 {
                     "type": "image_url",
-                    "image_url": {
-                        "url": f"data:image/png;base64,{chr(65 + i) * 4}"
-                    },
+                    "image_url": {"url": f"data:image/png;base64,{chr(65 + i) * 4}"},
                 }
             )
         messages = [{"role": "user", "content": content}]
