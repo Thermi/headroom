@@ -44,6 +44,7 @@ from headroom.memory.storage_router import (
     RequestContext,
     ResolvedScope,
 )
+from headroom.onnx_runtime import onnxruntime_available
 from headroom.proxy import _json as json
 
 if TYPE_CHECKING:
@@ -345,16 +346,44 @@ class MemoryHandler:
                 embedder_model = "all-MiniLM-L6-v2"
                 vector_dimension = 384
 
-                # Check if ONNX runtime is available (should be — it's in proxy deps)
-                if embedder_backend == "onnx":
+                # Opt-in GPU offload: HEADROOM_EMBEDDER_RUNTIME=pytorch_mps routes embedding
+                # through the torch sentence-transformers backend on the Apple GPU (MPS).
+                # LocalEmbedder serializes MPS encode calls (torch-MPS is not thread-safe).
+                # We switch only when MPS is actually available; otherwise keep the
+                # existing default embedder selection path (ONNX when available, then
+                # the pre-existing local sentence-transformers fallback).
+                if os.environ.get("HEADROOM_EMBEDDER_RUNTIME", "").strip().lower() == "pytorch_mps":
                     try:
-                        import onnxruntime  # noqa: F401
+                        import sentence_transformers  # noqa: F401
+                        import torch
+
+                        if torch.backends.mps.is_available():
+                            embedder_backend = "local"
+                            logger.info(
+                                "Memory: HEADROOM_EMBEDDER_RUNTIME=pytorch_mps → "
+                                "torch embedder on Apple GPU (MPS)"
+                            )
+                        else:
+                            logger.warning(
+                                "Memory: HEADROOM_EMBEDDER_RUNTIME=pytorch_mps requested but "
+                                "MPS is not available; using default embedder selection"
+                            )
                     except ImportError:
-                        # Fall back to sentence-transformers (requires torch)
-                        embedder_backend = "local"
-                        logger.info(
-                            "Memory: onnxruntime not available, falling back to sentence-transformers"
+                        logger.warning(
+                            "Memory: HEADROOM_EMBEDDER_RUNTIME=pytorch_mps requested but "
+                            "torch/sentence-transformers not installed; using default embedder selection"
                         )
+
+                # Check if ONNX runtime is available (should be — it's in proxy
+                # deps). Routed through the shared, memoized probe so this answer
+                # is consistent with the proxy GPU banner and Kompress, and a
+                # transient early import does not spuriously report it missing.
+                if embedder_backend == "onnx" and not onnxruntime_available():
+                    # Fall back to sentence-transformers (requires torch)
+                    embedder_backend = "local"
+                    logger.info(
+                        "Memory: onnxruntime not available, falling back to sentence-transformers"
+                    )
 
             backend_config = LocalBackendConfig(
                 db_path=self.config.db_path,
