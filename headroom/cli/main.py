@@ -10,7 +10,7 @@ def get_version() -> str:
     try:
         from headroom._version import __version__
 
-        return __version__
+        return str(__version__)
     except ImportError:
         return "unknown"
 
