@@ -29,6 +29,8 @@ import enum
 import inspect
 import logging
 import os
+import shutil
+import sqlite3
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -193,6 +195,7 @@ class MemoryHandler:
         # partitioning instead (see ``_compose_effective_user_id``) — the
         # router stays None in that case.
         self._router: BackendRouter | None = None
+        self._storage_root: Path | None = None
         self._initialized = False
         # Async singleflight guard for backend init. Ensures concurrent first
         # callers land on one init (double-checked pattern inside
@@ -377,6 +380,7 @@ class MemoryHandler:
                 if self.config.storage_root
                 else (Path(self.config.db_path).resolve().parent / "memories")
             )
+            self._storage_root = storage_root
             global_db_path = Path(self.config.db_path).resolve()
             router_cfg = BackendRouterConfig(
                 mode=self.config.storage_mode,
@@ -431,9 +435,69 @@ class MemoryHandler:
 
         self._initialized = True
 
+        # Remove per-project DB directories that contain zero memories
+        self._cleanup_empty_project_dbs()
+
         # Auto-import from Memory Bridge if configured
         if self.config.bridge_enabled and self.config.bridge_auto_import:
             await self._init_and_import_bridge()
+
+    def _cleanup_empty_project_dbs(self) -> None:
+        """Remove per-project database directories that contain zero memories.
+
+        Scans ``<storage_root>/projects/`` for subdirectories whose
+        ``memory.db`` has an empty ``memories`` table (schema created
+        but never populated). Removes the entire project directory tree
+        to reclaim disk space.
+        """
+        storage_root = getattr(self, "_storage_root", None)
+        if storage_root is None:
+            return
+
+        projects_dir = Path(storage_root) / "projects"
+        if not projects_dir.is_dir():
+            return
+
+        removed = 0
+        for project_dir in sorted(projects_dir.iterdir()):
+            if not project_dir.is_dir():
+                continue
+            db_path = project_dir / "memory.db"
+            if not db_path.is_file():
+                continue
+
+            try:
+                conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+                try:
+                    cursor = conn.execute("SELECT COUNT(*) FROM memories")
+                    count = cursor.fetchone()[0]
+                finally:
+                    conn.close()
+            except Exception:
+                # Locked, corrupted, or missing table — skip
+                continue
+
+            if count == 0:
+                try:
+                    shutil.rmtree(project_dir)
+                    removed += 1
+                    logger.info(
+                        "Memory: removed empty project DB directory: %s",
+                        project_dir.name,
+                    )
+                except Exception as exc:
+                    logger.debug(
+                        "Memory: failed to remove empty project directory %s: %s",
+                        project_dir.name,
+                        exc,
+                    )
+
+        if removed:
+            logger.info(
+                "Memory: cleaned up %d empty project DB director%s",
+                removed,
+                "y" if removed == 1 else "ies",
+            )
 
     async def _init_and_import_bridge(self) -> None:
         """Initialize the Memory Bridge and run auto-import."""
