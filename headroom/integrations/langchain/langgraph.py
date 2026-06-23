@@ -271,7 +271,8 @@ def compress_tool_messages(
                 )
             )
             logger.debug(
-                "Skipping ToolMessage %s compression: %s",
+                "[%s] Skipping ToolMessage %s compression: %s",
+                request_id,
                 getattr(msg, "tool_call_id", "unknown"),
                 skip_reason,
             )
@@ -285,7 +286,8 @@ def compress_tool_messages(
             was_modified = crush_result.was_modified
         except Exception as e:
             logger.warning(
-                "Compression failed for ToolMessage %s: %s. Keeping original.",
+                "[%s] Compression failed for ToolMessage %s: %s. Keeping original.",
+                request_id,
                 getattr(msg, "tool_call_id", "unknown"),
                 str(e),
             )
@@ -332,7 +334,8 @@ def compress_tool_messages(
             )
 
             logger.info(
-                "Compressed ToolMessage %s: %d -> %d tokens (%.1f%% saved)",
+                "[%s] Compressed ToolMessage %s: %d -> %d tokens (%.1f%% saved)",
+                request_id,
                 msg.tool_call_id,
                 tokens_before,
                 tokens_after,
