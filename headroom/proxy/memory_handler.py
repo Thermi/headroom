@@ -379,11 +379,27 @@ class MemoryHandler:
                 # is consistent with the proxy GPU banner and Kompress, and a
                 # transient early import does not spuriously report it missing.
                 if embedder_backend == "onnx" and not onnxruntime_available():
-                    # Fall back to sentence-transformers (requires torch)
-                    embedder_backend = "local"
-                    logger.info(
-                        "Memory: onnxruntime not available, falling back to sentence-transformers"
-                    )
+                    # Fall back to sentence-transformers (requires torch), but
+                    # only if it's actually installed. On CPU-only containers
+                    # torch is ~6 GB and deliberately excluded from the image,
+                    # so the check is not redundant.
+                    try:
+                        import sentence_transformers  # noqa: F401
+                    except ImportError:
+                        embedder_backend = "none"
+                        embedder_model = "none"
+                        logger.warning(
+                            "Memory: onnxruntime not available and "
+                            "sentence-transformers not installed; "
+                            "disabling embedding. Install sentence-transformers "
+                            "with: pip install sentence-transformers"
+                        )
+                    else:
+                        embedder_backend = "local"
+                        logger.info(
+                            "Memory: onnxruntime not available, "
+                            "falling back to sentence-transformers"
+                        )
 
             backend_config = LocalBackendConfig(
                 db_path=self.config.db_path,
