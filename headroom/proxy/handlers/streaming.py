@@ -219,6 +219,13 @@ class StreamingMixin:
                         # OpenAI has cached tokens in prompt_tokens_details
                         details = chunk_usage.get("prompt_tokens_details") or {}
                         usage["cache_read_input_tokens"] = details.get("cached_tokens", 0)
+                        # OpenAI/DeepSeek: infer writes as uncached portion
+                        _input_val = int(usage.get("input_tokens", 0))
+                        _cached_val = int(usage.get("cache_read_input_tokens", 0))
+                        if _input_val > 0:
+                            usage["cache_creation_input_tokens"] = max(
+                                _input_val - _cached_val, 0
+                            )
 
                 elif provider == "gemini":
                     # Gemini sends usageMetadata in each streaming chunk
@@ -339,6 +346,14 @@ class StreamingMixin:
                         usage_found["cache_read_input_tokens"] = _usage_int(
                             details.get("cached_tokens")
                         )
+                        # OpenAI/DeepSeek don't expose a separate cache write
+                        # counter; infer it as the uncached portion of input.
+                        _input_val = _usage_int(input_tokens)
+                        _cached_val = usage_found["cache_read_input_tokens"]
+                        if _input_val > 0:
+                            usage_found["cache_creation_input_tokens"] = max(
+                                _input_val - _cached_val, 0
+                            )
 
             elif provider == "gemini":
                 usage_meta = data.get("usageMetadata")
