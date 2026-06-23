@@ -242,7 +242,7 @@ def capture_codex_wire_debug(
         )
         return path
     except Exception as exc:  # pragma: no cover - debug path must never break traffic
-        logger.warning("event=codex_wire_debug_capture_failed error=%s", exc)
+        logger.warning("[%s] event=codex_wire_debug_capture_failed error=%s", request_id or "", exc)
         return None
 
 

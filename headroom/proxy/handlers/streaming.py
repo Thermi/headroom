@@ -1434,8 +1434,9 @@ class StreamingMixin:
                         # Safety: prevent unbounded buffer growth.
                         if len(stream_state["sse_buffer"]) > MAX_SSE_BUFFER_SIZE:
                             logger.error(
-                                "SSE buffer exceeded maximum size (%d bytes), "
+                                "[%s] SSE buffer exceeded maximum size (%d bytes), "
                                 "truncating to prevent memory exhaustion",
+                                request_id,
                                 MAX_SSE_BUFFER_SIZE,
                             )
                             # Keep the most recent half so an in-flight
@@ -1472,8 +1473,9 @@ class StreamingMixin:
                             full_sse_bytes.extend(chunk)
                             if len(full_sse_bytes) > MAX_SSE_BUFFER_SIZE:
                                 logger.warning(
-                                    "Memory-mode SSE buffer exceeded maximum size, "
-                                    "disabling memory detection for this request"
+                                    "[%s] Memory-mode SSE buffer exceeded maximum size, "
+                                    "disabling memory detection for this request",
+                                    request_id,
                                 )
                                 memory_enabled = False
 
