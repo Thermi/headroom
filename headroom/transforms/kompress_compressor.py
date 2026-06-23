@@ -814,7 +814,15 @@ def _load_kompress_onnx(
                 use_gpu = False
                 backend = "onnx"
         else:
-            providers = ["CPUExecutionProvider"]
+            detected = _available_gpu_providers()
+            if detected:
+                providers = detected + ["CPUExecutionProvider"]
+                logger.info(
+                    "Kompress ONNX auto-detected GPU providers: %s",
+                    detected,
+                )
+            else:
+                providers = ["CPUExecutionProvider"]
 
         session = _create_onnx_session(model_id, providers, allow_download=allow_download)
         model = _OnnxModel(session)
