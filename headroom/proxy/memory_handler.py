@@ -473,7 +473,9 @@ class MemoryHandler:
         if self.config.bridge_enabled and self.config.bridge_auto_import:
             await self._init_and_import_bridge()
 
-    async def upgrade_embedder(self, backend: str = "onnx", model: str = "all-MiniLM-L6-v2") -> bool:
+    async def upgrade_embedder(
+        self, backend: str = "onnx", model: str = "all-MiniLM-L6-v2"
+    ) -> bool:
         """Upgrade the embedder from no-op to ONNX after onnxruntime is ready.
 
         Called once by the background init task after :class:`OnnxRuntimeWarmup`
@@ -493,8 +495,7 @@ class MemoryHandler:
 
             hm._embedder = OnnxLocalEmbedder()
             logger.info(
-                "Memory: upgraded embedder from no-op to ONNX "
-                "(model=%s, backend=%s)",
+                "Memory: upgraded embedder from no-op to ONNX (model=%s, backend=%s)",
                 model,
                 backend,
             )
