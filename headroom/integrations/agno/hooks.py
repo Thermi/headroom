@@ -117,7 +117,7 @@ class HeadroomPreHook:
             The unchanged run_input
         """
         request_id = str(uuid4())
-        logger.debug(f"HeadroomPreHook tracking request {request_id}")
+        logger.debug(f"[{request_id}] HeadroomPreHook tracking request")
 
         # Record that we processed this input (timing/tracking only)
         metrics = HookMetrics(

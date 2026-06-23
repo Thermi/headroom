@@ -472,7 +472,10 @@ class HeadroomAgnoModel(Model):  # type: ignore[misc]
         # Skip optimization for messages with extended thinking blocks
         # Thinking blocks must be passed through unchanged for Claude's API
         if self._has_thinking_blocks(openai_messages):
-            logger.info("Skipping Headroom optimization: messages contain extended thinking blocks")
+            logger.info(
+                f"[{request_id}] Skipping Headroom optimization: "
+                "messages contain extended thinking blocks"
+            )
             # Estimate token count (rough approximation)
             tokens_estimate = sum(len(str(m.get("content", ""))) // 4 for m in openai_messages)
             metrics = OptimizationMetrics(
@@ -521,7 +524,8 @@ class HeadroomAgnoModel(Model):  # type: ignore[misc]
             # Fallback to original messages on pipeline error
             # Log at warning level (degraded behavior, not critical failure)
             logger.warning(
-                f"Headroom optimization failed, using original messages: {type(e).__name__}: {e}"
+                f"[{request_id}] Headroom optimization failed, using original messages: "
+                f"{type(e).__name__}: {e}"
             )
             optimized = openai_messages
             # Estimate token count for unoptimized messages (rough approximation)
