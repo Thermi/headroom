@@ -62,24 +62,48 @@ WORKDIR /build
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --system maturin setuptools-rust patchelf
 
-# Phase 1 — resolve and install all Python dependencies from the lockfile,
+# Phase 1 — resolve and install Python dependencies for the selected extras,
 # without building the headroom package itself.  Only pyproject.toml and
 # the lockfile invalidate this cache; source-code edits do not.
 COPY pyproject.toml uv.lock ./
+# Lean extras for the proxy service: proxy + code + memory + relevance.
+# Omits ml/voice (torch ~6 GB), anyllm, otel, image, memory-torch, memory-stack,
+# langchain, agno, strands, pdf/fulltext/audio, evals, benchmark, html, reports,
+# bedrock, proxy-prod, voice-train, pytorch-mps.  GPU onnxruntime is force-installed
+# separately below.
+ARG HEADROOM_EXTRAS=proxy,code,memory,relevance
 RUN --mount=type=cache,target=/root/.cache/uv \
+    export HEADROOM_EXTRAS="${HEADROOM_EXTRAS}" && \
     python <<SCRIPT \
     | uv pip install --system -r /dev/stdin
-import tomllib, pathlib
+import os, tomllib, pathlib
 p = tomllib.loads(pathlib.Path('pyproject.toml').read_text())
 deps = list(p['project'].get('dependencies', []))
-for name, group in p['project'].get('optional-dependencies', {}).items():
-    if name not in ('dev', 'test', 'doc'):
-        deps.extend(group)
+wanted = [e.strip() for e in os.environ.get('HEADROOM_EXTRAS', 'all').split(',')]
+if 'all' in wanted:
+    for name, group in p['project'].get('optional-dependencies', {}).items():
+        if name not in ('dev', 'test', 'doc'):
+            deps.extend(group)
+else:
+    seen = set(wanted)
+    for extra in wanted:
+        q = [extra]
+        while q:
+            e = q.pop()
+            group = p['project'].get('optional-dependencies', {}).get(e, [])
+            for spec in group:
+                if spec.startswith('headroom-ai['):
+                    inner = spec.split('[')[1].split(']')[0]
+                    for sub in inner.split(','):
+                        sub = sub.strip()
+                        if sub not in seen:
+                            seen.add(sub)
+                            q.append(sub)
+                else:
+                    deps.append(spec)
+    deps = list(dict.fromkeys(deps))
 print('\n'.join(deps))
 SCRIPT
-
-#ARG HEADROOM_EXTRAS=code,proxy,memory
-ARG HEADROOM_EXTRAS=all
 
 # Phase 2 — copy the Rust workspace + Python source and build the wheel.
 # Cache-busted by actual source changes only; dep install stays cached.
@@ -217,11 +241,12 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # artifacts add hundreds more MB.
 # Further reduction: CUDA /usr/local/cuda-12.6/ includes headers, static
 # libs, and tools not needed at runtime — only the .so under lib64/ plus
-# cuDNN are loaded.  Copying only those would save another ~2 GB.
+# cuDNN are loaded.  Copying only those saves ~2 GB.
 RUN find /usr/local -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null; \
-    find /usr/local -type f -name "*.pyc" -delete; \
-    find /usr/local -type f -name "*.pyo" -delete; \
+    find /usr/local -type f \( -name "*.pyc" -o -name "*.pyo" \) -delete; \
     find /usr/local/lib/python${PYTHON_VERSION}/site-packages -type d \( -name tests -o -name test -o -name testing \) -exec rm -rf {} + 2>/dev/null; \
+    find /usr/local/lib/python${PYTHON_VERSION}/site-packages -type f \( -name "*.a" -o -name "*.la" \) -delete 2>/dev/null; \
+    find /usr/local/lib/python${PYTHON_VERSION}/site-packages -type d -name ".libs" -exec rm -rf {} + 2>/dev/null; \
     echo "cleaned"
 
 # ---- Runtime stage (python-slim): supports root/nonroot via build arg ----
@@ -248,7 +273,9 @@ RUN apt-get update && \
 COPY --from=builder ${PYTHON_SITE_PACKAGES} ${PYTHON_SITE_PACKAGES}
 COPY --from=builder /usr/local/bin/headroom /usr/local/bin/headroom
 COPY --from=builder /root/.headroom/bin/rtk /usr/local/bin/rtk
-COPY --from=cuda-libs /usr/local/cuda-12.6 /usr/local/cuda-12.6
+# Copy only the CUDA runtime shared libraries (lib64/), not headers/tools.
+# The full toolkit weighs ~3 GB; lib64/ + cuDNN is ~1.5 GB.
+COPY --from=cuda-libs /usr/local/cuda-12.6/lib64 /usr/local/cuda-12.6/lib64
 # cuDNN is installed to system paths (/usr/lib/x86_64-linux-gnu/) in the
 # nvidia/cuda image, not inside the CUDA toolkit directory.  Copy it into
 # the CUDA lib path so onnxruntime's CUDAExecutionProvider can find it.
@@ -310,7 +337,8 @@ LABEL org.opencontainers.image.title="headroom" \
 
 COPY --from=builder ${PYTHON_SITE_PACKAGES} ${PYTHON_SITE_PACKAGES}
 COPY --from=builder /root/.headroom/bin/rtk /usr/local/bin/rtk
-COPY --from=cuda-libs /usr/local/cuda-12.6 /usr/local/cuda-12.6
+# Copy only the CUDA runtime shared libraries, not headers/tools.
+COPY --from=cuda-libs /usr/local/cuda-12.6/lib64 /usr/local/cuda-12.6/lib64
 
 RUN mkdir -p /opt/headroom && python3 <<SCRIPT
 import json, pathlib, headroom._build_info as bi
