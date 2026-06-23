@@ -4510,6 +4510,162 @@ def create_app(config: ProxyConfig | None = None) -> FastAPI:
 
         return {"transformations": transformations, "log_full_messages": log_full_messages}
 
+    @app.get("/sessions")
+    async def sessions():
+        """Dynamic overview of all currently known sessions.
+
+        Aggregates session state from the WebSocket registry, prefix-cache
+        tracker, beta-header tracker, memory-tool tracker, and CCR tracker.
+        Each entry carries a ``display`` field with derived activity metadata
+        so operators can see at a glance which sessions are active.
+        """
+        from headroom.proxy.helpers import (
+            get_session_beta_tracker,
+            get_session_ccr_tracker,
+            get_session_tool_tracker,
+        )
+
+        entries: list[dict[str, Any]] = []
+        seen: set[str] = set()
+
+        # 1. WebSocket sessions (live Codex relay connections)
+        ws_registry = getattr(proxy, "ws_sessions", None)
+        if ws_registry is not None:
+            for snap in ws_registry.snapshot():
+                sid = snap.get("session_id", "")
+                dedup_key = f"ws:{sid}"
+                if dedup_key in seen:
+                    continue
+                seen.add(dedup_key)
+                entries.append({
+                    "session_id": sid,
+                    "provider": None,
+                    "type": "websocket",
+                    "source": "ws_registry",
+                    "display": {
+                        "age_seconds": snap.get("age_seconds", 0),
+                        "idle_seconds": snap.get("idle_seconds", 0),
+                        "relay_task_count": snap.get("relay_task_count", 0),
+                        "client_addr": snap.get("client_addr"),
+                        "upstream_url": snap.get("upstream_url"),
+                        "request_id": snap.get("request_id"),
+                    },
+                })
+
+        # 2. Prefix-cache tracker sessions (cache-aware compression state)
+        sts = getattr(proxy, "session_tracker_store", None)
+        if sts is not None:
+            for sid, info in sts.snapshot().items():
+                dedup_key = f"prefix:{sid}"
+                if dedup_key in seen:
+                    continue
+                seen.add(dedup_key)
+                entries.append({
+                    "session_id": sid,
+                    "provider": info.get("provider"),
+                    "type": "prefix_cache",
+                    "source": "session_tracker_store",
+                    "display": {
+                        "turn_number": info.get("turn_number", 0),
+                        "cached_token_count": info.get("cached_token_count", 0),
+                        "cached_message_count": info.get("cached_message_count", 0),
+                        "frozen_message_count": info.get("frozen_message_count", 0),
+                        "idle_seconds": info.get("idle_seconds", 0),
+                        "expired": info.get("expired", False),
+                    },
+                })
+
+        # 3. Beta-header tracker sessions (sticky beta tokens)
+        beta = get_session_beta_tracker()
+        for b in beta.snapshot():
+            sid = b.get("session_id", "")
+            prov = b.get("provider", "")
+            dedup_key = f"beta:{prov}:{sid}"
+            if dedup_key in seen:
+                continue
+            seen.add(dedup_key)
+            entries.append({
+                "session_id": sid,
+                "provider": prov,
+                "type": "beta_header",
+                "source": "session_beta_tracker",
+                "display": {
+                    "beta_tokens": b.get("beta_tokens", []),
+                    "token_count": b.get("token_count", 0),
+                },
+            })
+
+        # 4. Memory-tool injection tracker sessions (sticky tool definitions)
+        tool = get_session_tool_tracker()
+        for t in tool.snapshot():
+            sid = t.get("session_id", "")
+            prov = t.get("provider", "")
+            dedup_key = f"tool:{prov}:{sid}"
+            if dedup_key in seen:
+                continue
+            seen.add(dedup_key)
+            entries.append({
+                "session_id": sid,
+                "provider": prov,
+                "type": "memory_tool",
+                "source": "session_tool_tracker",
+                "display": {
+                    "tool_count": t.get("tool_count", 0),
+                    "tool_names": t.get("tool_names", []),
+                },
+            })
+
+        # 5. CCR tracker sessions (compression-context retrieval state)
+        ccr = get_session_ccr_tracker()
+        for c in ccr.snapshot():
+            sid = c.get("session_id", "")
+            prov = c.get("provider", "")
+            dedup_key = f"ccr:{prov}:{sid}"
+            if dedup_key in seen:
+                continue
+            seen.add(dedup_key)
+            entries.append({
+                "session_id": sid,
+                "provider": prov,
+                "type": "ccr",
+                "source": "session_ccr_tracker",
+                "display": {
+                    "has_done_ccr": c.get("has_done_ccr", False),
+                    "has_golden_tool_bytes": c.get("has_golden_tool_bytes", False),
+                },
+            })
+
+        # 6. Display session from SavingsTracker (active rolling window)
+        savings = getattr(proxy.metrics, "savings_tracker", None) if hasattr(proxy, "metrics") else None
+        if savings is not None:
+            snap = savings.snapshot()
+            ds = snap.get("display_session", {})
+            if ds.get("requests", 0) > 0:
+                entries.append({
+                    "session_id": "_display_session",
+                    "provider": None,
+                    "type": "display_session",
+                    "source": "savings_tracker",
+                    "display": {
+                        "requests": ds.get("requests", 0),
+                        "tokens_saved": ds.get("tokens_saved", 0),
+                        "compression_savings_usd": ds.get("compression_savings_usd", 0.0),
+                        "total_input_tokens": ds.get("total_input_tokens", 0),
+                        "savings_percent": ds.get("savings_percent", 0.0),
+                        "started_at": ds.get("started_at", ""),
+                        "last_activity_at": ds.get("last_activity_at", ""),
+                        "rollover_inactivity_minutes": snap.get("display_session_policy", {}).get(
+                            "rollover_inactivity_minutes", 60
+                        ),
+                    },
+                })
+
+        return {
+            "sessions": entries,
+            "total_count": len(entries),
+            "generated_at": _iso_utc_now(),
+        }
+
     @app.get("/subscription-window")
     async def subscription_window():
         """Current Anthropic subscription window utilisation and Headroom contribution.

@@ -821,3 +821,23 @@ class SessionTrackerStore:
     def active_sessions(self) -> int:
         """Number of active session trackers."""
         return len(self._trackers)
+
+    def snapshot(self) -> dict[str, dict[str, Any]]:
+        """JSON-serializable view of all tracked sessions.
+
+        Returns a mapping of session_id → tracker display info (provider,
+        turn number, cached tokens/messages, and idle seconds).
+        """
+        now = time.time()
+        result: dict[str, dict[str, Any]] = {}
+        for sid, tracker in self._trackers.items():
+            result[sid] = {
+                "provider": tracker.provider,
+                "turn_number": tracker._turn_number,
+                "cached_token_count": tracker._cached_token_count,
+                "cached_message_count": tracker._cached_message_count,
+                "idle_seconds": round(now - tracker._last_activity, 1),
+                "frozen_message_count": tracker.get_frozen_message_count(),
+                "expired": tracker.is_expired,
+            }
+        return result
