@@ -408,7 +408,8 @@ class TransformPipeline:
                     # Log transform results
                     if result.transforms_applied:
                         logger.info(
-                            "Transform %s: %d -> %d tokens (saved %d) [%.1fms]",
+                            "%sTransform %s: %d -> %d tokens (saved %d) [%.1fms]",
+                            log_prefix,
                             transform.name,
                             tokens_before_transform,
                             tokens_after_transform,
@@ -417,7 +418,10 @@ class TransformPipeline:
                         )
                     else:
                         logger.debug(
-                            "Transform %s: no changes [%.1fms]", transform.name, duration_ms
+                            "%sTransform %s: no changes [%.1fms]",
+                            log_prefix,
+                            transform.name,
+                            duration_ms,
                         )
 
                     # Record diff if enabled

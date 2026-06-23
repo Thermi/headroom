@@ -166,7 +166,8 @@ class PipelineExtensionManager:
                 updated = handler(event)
             except Exception as exc:  # noqa: BLE001 - preserve hook fail-open behavior
                 log.warning(
-                    "pipeline extension %r failed during %s: %s",
+                    "[%s] pipeline extension %r failed during %s: %s",
+                    request_id,
                     type(extension).__name__,
                     stage.value,
                     exc,
