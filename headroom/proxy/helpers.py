@@ -936,6 +936,21 @@ def _get_image_compressor():
 # Resolved lazily so HEADROOM_WORKSPACE_DIR env-var changes are honored.
 
 
+class _RequestIdFilter(logging.Filter):
+    """Prepends ``[{request_id}]`` to every log record when a request is active."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        try:
+            from headroom.proxy.server import _REQUEST_ID_VAR
+
+            rid = _REQUEST_ID_VAR.get(None)
+        except Exception:
+            rid = None
+        if rid:
+            record.msg = f"[{rid}] {record.msg}"
+        return True
+
+
 def _headroom_log_dir() -> Path:
     return _paths.log_dir()
 
@@ -977,6 +992,7 @@ def _setup_file_logging() -> None:
     headroom_logger = logging.getLogger("headroom")
     headroom_logger.setLevel(logging.INFO)
     headroom_logger.addHandler(stream_handler)
+    headroom_logger.addFilter(_RequestIdFilter())
 
     if log_dir is not None:
         try:

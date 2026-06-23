@@ -5,6 +5,7 @@ import logging
 import pytest
 from fastapi.testclient import TestClient
 
+from headroom.proxy.models import ProxyConfig
 from headroom.proxy.server import (
     HeadroomProxy,
     _REQUEST_ID_VAR,
@@ -40,6 +41,7 @@ class TestRequestIdContextVar:
         proxy = object.__new__(HeadroomProxy)
         proxy._request_counter = 0
         proxy._request_counter_lock = __import__("asyncio").Lock()
+        proxy.config = ProxyConfig()
 
         _REQUEST_ID_VAR.set("test-request-123")
         rid = await proxy._next_request_id()
@@ -54,6 +56,7 @@ class TestRequestIdContextVar:
         proxy = object.__new__(HeadroomProxy)
         proxy._request_counter = 0
         proxy._request_counter_lock = __import__("asyncio").Lock()
+        proxy.config = ProxyConfig()
 
         _REQUEST_ID_VAR.set(None)
         rid = await proxy._next_request_id()
@@ -65,6 +68,7 @@ class TestRequestIdContextVar:
         proxy = object.__new__(HeadroomProxy)
         proxy._request_counter = 0
         proxy._request_counter_lock = __import__("asyncio").Lock()
+        proxy.config = ProxyConfig()
 
         _REQUEST_ID_VAR.set("first-consumed")
         rid = await proxy._next_request_id()

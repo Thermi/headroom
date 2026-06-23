@@ -465,6 +465,10 @@ class ProxyConfig:
     ds4_budget_limit_usd: float | None = None
     ds4_budget_period: Literal["hourly", "daily", "monthly"] = "daily"
 
+    # Request ID prefix (default "hr_"). Set HEADROOM_REQUEST_ID_PREFIX to
+    # customise the prefix in generated request IDs.
+    request_id_prefix: str = "hr_"
+
     # Stateless mode — disable all filesystem writes for read-only / container deployments
     stateless: bool = False
 
