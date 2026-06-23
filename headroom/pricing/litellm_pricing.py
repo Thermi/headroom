@@ -110,15 +110,35 @@ def _resolve_litellm_model_uncached(model: str) -> str:
     """Uncached resolution — called once per unique model name."""
     if not LITELLM_AVAILABLE:
         return model
-
-    def is_known_model(candidate: str) -> bool:
-        try:
-            litellm.cost_per_token(model=candidate, prompt_tokens=1, completion_tokens=0)
-            return True
-        except Exception:
-            return False
-
-    return resolve_litellm_model_name(model, is_known_model)
+# Try as-is first
+    try:
+        litellm.cost_per_token(model=model, prompt_tokens=1, completion_tokens=0)
+        return model
+    except Exception:
+        pass
+    # Try with provider prefix
+    prefixes = {
+        "claude-": "anthropic/",
+        "gpt-": "openai/",
+        "o1-": "openai/",
+        "o3-": "openai/",
+        "o4-": "openai/",
+        "gemini-": "google/",
+        "deepseek-": "deepseek/",
+    }
+    # Case-insensitive prefix match: MiniMax uses mixed-case model
+    # names like "MiniMax-M3" (capital M's); we shouldn't require the
+    # user to lower-case their config to match.
+    model_lower = model.lower()
+    for pattern, prefix in prefixes.items():
+        if model_lower.startswith(pattern):
+            prefixed = f"{prefix}{model}"
+            try:
+                litellm.cost_per_token(model=prefixed, prompt_tokens=1, completion_tokens=0)
+                return prefixed
+            except Exception:
+                break
+    return model
 
 
 def _register_minimax_pricing() -> None:
