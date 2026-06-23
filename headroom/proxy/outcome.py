@@ -119,8 +119,12 @@ class RequestOutcome:
     status_code: int = 200
 
     # ── Timing ────────────────────────────────────────────────────────
-    # total_latency_ms: wall-clock end-to-end for this request
-    # overhead_ms: time spent in compression dispatch only (subset of total)
+    # total_latency_ms: wall-clock end-to-end from handler entry through
+    #     upstream API round-trip to response ready for client forwarding.
+    # overhead_ms: subset — time spent in pre-upstream processing only
+    #     (request read, JSON parse, tokenization, compression routing,
+    #     CCR/memory injection, pipeline extensions).
+    #   → upstream inference time ≈ total_latency_ms - overhead_ms
     # ttfb_ms: time to first upstream byte for streaming paths; 0 for
     #     non-streaming or when unmeasured (no None — convention is 0)
     # pipeline_timing: optional per-stage breakdown surfaced on dashboards

@@ -249,6 +249,48 @@ Every label vocabulary is bounded by code, not customer input:
 There is no code path where a malicious client can drive label
 cardinality unbounded.
 
+## Per-request latency breakdown
+
+Every proxied request records two latency fields in the request log and
+`/stats` endpoint:
+
+| Field | What it measures |
+|---|---|
+| `optimization_latency_ms` | Wall-clock from handler entry through request body reading, JSON parsing, tokenization, compression routing, and all pre-upstream processing (CCR injection, memory lookup, pipeline extensions). |
+| `total_latency_ms` | Wall-clock from the same handler entry through to the moment the final response is ready to be sent back to the client — i.e. **client request received to server response forwarded**. Includes the full upstream API round-trip. |
+
+The difference `total_latency_ms - optimization_latency_ms` is dominated
+by the upstream provider's inference time (plus network travel time and
+any CCR continuation rounds). For the common case this is the time the
+LLM itself spends generating the response.
+
+```
+                    optimization_latency_ms ────┐
+                                                 ├── total_latency_ms ──────┐
+                                                 │                          │
+  ┌──────────┬───────────┬─────────┬─────────────┼──────┬───────────────────┤
+  │ read req │ parse     │ compress│ inject      │ send │ recv + process    │
+  │ headers  │ body      │ + route │ CCR/memory  │ to   │ response          │
+  │ + auth   │           │         │ + extensions│ LLM  │                   │
+  └──────────┴───────────┴─────────┴─────────────┴──────┴───────────────────┘
+
+  ←──────── pre-upstream (optimization) ────────→ ←─── upstream (inference) ──→
+```
+
+In the `/stats` JSON response the same breakdown is returned as a
+`latency_ms` sub-object:
+
+```json
+"latency_ms": {
+    "total": 4098.25,
+    "optimization": 259.19,
+    "upstream": 3839.06
+}
+```
+
+The flat `optimization_latency_ms` and `total_latency_ms` fields are
+retained for backward compatibility.
+
 ## See also
 
 - `crates/headroom-proxy/src/observability/` — implementation.

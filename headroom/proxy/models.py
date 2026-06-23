@@ -61,7 +61,14 @@ class RequestLog:
     savings_percent: float
 
     # Performance
+    # optimization_latency_ms: wall-clock spent in pre-upstream processing
+    #   (request read, JSON parse, tokenization, compression routing, CCR/memory
+    #   injection, pipeline extensions). Subset of total_latency_ms.
     optimization_latency_ms: float
+    # total_latency_ms: wall-clock end-to-end from handler entry through to the
+    #   moment the final response is forwarded back to the client. Includes the
+    #   full upstream API round-trip (provider inference time). None when the
+    #   measurement was not recorded (e.g. WebSocket session).
     total_latency_ms: float | None
 
     # Metadata
