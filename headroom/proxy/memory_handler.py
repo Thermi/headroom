@@ -391,6 +391,7 @@ class MemoryHandler:
                             _ort_ok = True
                             break
                         import time as _time
+
                         _time.sleep(0.5)
                     if not _ort_ok:
                         # Fall back to sentence-transformers (requires torch), but
