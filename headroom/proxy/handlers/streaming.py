@@ -933,33 +933,20 @@ class StreamingMixin:
                         next_forwarded.append(_copy.deepcopy(asst_msg))
                         next_original.append(_copy.deepcopy(asst_msg))
 
-            # Cache-miss attribution (#1313), streaming Anthropic path. Mirror
-            # the non-streaming handler: classify BEFORE update_from_response
-            # overwrites the last-turn state the classifier reads. Compare the
-            # prefix we forwarded this turn (`forwarded_messages`, pre-assistant
-            # append) against last turn's.
-            # `hasattr` guard: stub trackers in tests may implement only the
-            # freeze API, not the full PrefixCacheTracker surface.
-            if provider == "anthropic" and hasattr(prefix_tracker, "classify_cache_miss"):
-                miss = prefix_tracker.classify_cache_miss(
-                    cache_read_tokens=cache_read_tokens,
-                    current_forwarded_messages=forwarded_messages,
-                )
-                if miss.is_miss:
-                    logger.info(
-                        f"[{request_id}] CACHE-MISS-ATTRIBUTION: reason={miss.reason} "
-                        f"idle={miss.idle_seconds:.0f}s ttl={miss.cache_ttl_seconds}s "
-                        f"expected_cached={miss.expected_cached_tokens:,} "
-                        f"prefix_changed={miss.prefix_changed} ttl_exceeded={miss.ttl_exceeded}"
-                    )
-                    await self.metrics.record_cache_miss_attribution(provider, miss.reason)
-
+            _frozen_before_update = prefix_tracker._cached_message_count
             prefix_tracker.update_from_response(
                 cache_read_tokens=cache_read_tokens,
                 cache_write_tokens=cache_write_tokens,
                 messages=next_forwarded,
                 original_messages=next_original,
             )
+
+            if _frozen_before_update > 0 and cache_read_tokens > 0:
+                _est_compression_ratio = 0.5
+                await self.metrics.record_prefix_freeze(
+                    tokens_preserved=cache_read_tokens,
+                    compression_foregone=int(cache_read_tokens * _est_compression_ratio),
+                )
 
         # Active-compression denominator (``attempted_input_tokens``) is
         # derived inside ``RequestOutcome.from_stream`` as
@@ -2123,6 +2110,7 @@ class StreamingMixin:
                 # so prefix state is consistent regardless of metric
                 # path.
                 if prefix_tracker is not None:
+                    _frozen_before_update = prefix_tracker._cached_message_count
                     tracker_messages = (
                         optimized_messages
                         if optimized_messages is not None
@@ -2133,6 +2121,13 @@ class StreamingMixin:
                         cache_write_tokens=cache_write_tokens,
                         messages=tracker_messages,
                     )
+
+                    if _frozen_before_update > 0 and cache_read_tokens > 0:
+                        _est_compression_ratio = 0.5
+                        await self.metrics.record_prefix_freeze(
+                            tokens_preserved=cache_read_tokens,
+                            compression_foregone=int(cache_read_tokens * _est_compression_ratio),
+                        )
 
                 # CCR Feedback: record headroom_retrieve tool calls so
                 # TOIN learns which fields matter. Streaming path can't

@@ -923,6 +923,14 @@ class PrometheusMetrics:
                 if ms_val > self.stage_timing_max[key]:
                     self.stage_timing_max[key] = ms_val
 
+    async def record_prefix_freeze(self, tokens_preserved: int, compression_foregone: int) -> None:
+        """Record prefix freeze savings: tokens kept in cache by freezing vs
+        estimated compression foregone by skipping those frozen messages."""
+        async with self._lock:
+            self.prefix_freeze_busts_avoided += 1
+            self.prefix_freeze_tokens_preserved += tokens_preserved
+            self.prefix_freeze_compression_foregone += compression_foregone
+
     async def record_cache_bust(self, tokens_lost: int) -> None:
         """Record tokens that lost their cache discount due to compression."""
         async with self._lock:
