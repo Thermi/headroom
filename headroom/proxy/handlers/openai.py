@@ -6468,11 +6468,9 @@ has_compressed_content_this_turn=has_new_compressed_content,
                         t.get("name") or t.get("function", {}).get("name", "?")
                         for t in (ws_response_body.get("tools") or [])
                     ]
-                    instr_preview = (ws_response_body.get("instructions") or "")[:200]
                     logger.info(
                         f"[{request_id}] WS Memory: Codex tools={existing_tool_names}, "
-                        f"instructions_len={len(ws_response_body.get('instructions') or '')}, "
-                        f"instructions_preview={instr_preview!r}"
+                        f"instructions_len={len(ws_response_body.get('instructions') or '')}"
                     )
 
                     # Inject memory context into instructions

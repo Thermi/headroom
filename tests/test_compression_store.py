@@ -60,10 +60,11 @@ def _capture_headroom_retrieve_events():
         logger.setLevel(previous_level)
 
 
-def test_retrieve_logs_payload_preview():
+def test_retrieve_does_not_log_payload_content():
     store = CompressionStore(enable_feedback=False)
+    original = "secret-ish payload for operator debugging"
     hash_key = store.store(
-        original="secret-ish payload for operator debugging",
+        original=original,
         compressed="payload",
         original_tokens=8,
         compressed_tokens=1,
@@ -79,13 +80,14 @@ def test_retrieve_logs_payload_preview():
     assert len(events) == 1
     assert events[0]["hash"] == hash_key
     assert events[0]["retrieval_type"] == "full"
-    assert events[0]["payload_preview"] == "secret-ish payload for operator debugging"
+    assert events[0]["payload_chars"] == len(original)
+    assert "payload_preview" not in events[0]
     assert "payload" not in events[0]
-    assert events[0]["payload_truncated"] is False
+    assert original not in json.dumps(events[0], ensure_ascii=False)
     assert events[0]["tool_name"] == "tool_a"
 
 
-def test_retrieve_log_redacts_secret_payload_values():
+def test_retrieve_log_omits_secret_payload_values():
     store = CompressionStore(enable_feedback=False)
     hash_key = store.store(
         original="OPENAI_API_KEY=sk-proj-secret1234567890 Authorization: Bearer token123456789",
@@ -97,10 +99,37 @@ def test_retrieve_log_redacts_secret_payload_values():
 
     assert entry is not None
     assert len(events) == 1
-    assert "sk-proj-secret1234567890" not in events[0]["payload_preview"]
-    assert "Bearer token123456789" not in events[0]["payload_preview"]
-    assert "OPENAI_API_KEY=[REDACTED]" in events[0]["payload_preview"]
-    assert "Authorization: [REDACTED]" in events[0]["payload_preview"]
+    serialized = json.dumps(events[0], ensure_ascii=False)
+    assert "sk-proj-secret1234567890" not in serialized
+    assert "Bearer token123456789" not in serialized
+    assert "payload_preview" not in events[0]
+
+
+def test_search_does_not_log_retrieved_payload():
+    store = CompressionStore(enable_feedback=False)
+    items = [
+        {"id": 1, "text": "alpha target"},
+        {"id": 2, "text": "beta other"},
+    ]
+    hash_key = store.store(
+        original=json.dumps(items),
+        compressed="[]",
+        original_item_count=2,
+        compressed_item_count=0,
+        tool_name="search_tool",
+    )
+
+    with _capture_headroom_retrieve_events() as events:
+        results = store.search(hash_key, "alpha", score_threshold=0.0)
+
+    assert results
+    assert len(events) == 1
+    assert events[0]["hash"] == hash_key
+    assert events[0]["retrieval_type"] == "search"
+    assert events[0]["query"] == "alpha"
+    assert "payload_preview" not in events[0]
+    assert "payload_preview_chars" not in events[0]
+    assert "alpha target" not in json.dumps(events[0], ensure_ascii=False)
 
 
 def test_global_store_uses_env_default_ttl(monkeypatch: pytest.MonkeyPatch):
