@@ -97,6 +97,7 @@ def test_resolve_native_path_blocks_traversal(handler: MemoryHandler) -> None:
 
 def test_native_view_lists_directory_and_reads_files(handler: MemoryHandler) -> None:
     root = handler._resolve_native_path("/memories", "u1")
+    root.mkdir(parents=True, exist_ok=True)
     (root / "alpha.txt").write_text("line1\nline2\nline3", encoding="utf-8")
     (root / "nested").mkdir()
     (root / "nested" / "beta.txt").write_text("nested", encoding="utf-8")
@@ -119,6 +120,7 @@ def test_native_view_handles_missing_paths_and_latin1(handler: MemoryHandler) ->
     assert "does not exist" in missing
 
     latin_path = handler._resolve_native_path("/memories/latin.txt", "u1")
+    latin_path.parent.mkdir(parents=True, exist_ok=True)
     latin_path.write_bytes("caf\xe9".encode("latin-1"))
     viewed = handler._native_view({"path": "/memories/latin.txt"}, "u1")
     assert "cafe" not in viewed
@@ -163,6 +165,7 @@ def test_native_insert_validates_range_and_path(handler: MemoryHandler) -> None:
     )
 
     note = handler._resolve_native_path("/memories/note.txt", "u1")
+    note.parent.mkdir(parents=True, exist_ok=True)
     note.write_text("a\nb", encoding="utf-8")
     invalid = handler._native_insert(
         {"path": "/memories/note.txt", "insert_line": 4, "insert_text": "x"},
@@ -173,6 +176,7 @@ def test_native_insert_validates_range_and_path(handler: MemoryHandler) -> None:
 
 def test_native_str_replace_covers_missing_multiple_and_success(handler: MemoryHandler) -> None:
     note = handler._resolve_native_path("/memories/note.txt", "u1")
+    note.parent.mkdir(parents=True, exist_ok=True)
     note.write_text("hello\nhello\nworld", encoding="utf-8")
 
     assert (
@@ -224,6 +228,7 @@ def test_native_delete_and_rename_validate_inputs(handler: MemoryHandler) -> Non
 
     old = handler._resolve_native_path("/memories/old.txt", "u1")
     new = handler._resolve_native_path("/memories/new.txt", "u1")
+    old.parent.mkdir(parents=True, exist_ok=True)
     old.write_text("x", encoding="utf-8")
     new.write_text("y", encoding="utf-8")
     assert (
@@ -1207,7 +1212,9 @@ async def test_init_backend_locked_local_and_bridge_import(
     await handler._init_backend_locked()
 
     assert handler.initialized is True
-    assert seen["backend_initialized"] is True
+    # Backend is created but lazy-initialized — _ensure_initialized
+    # runs on first memory operation, not during init.
+    assert "backend_initialized" not in seen
     assert seen["bridge_called"] is True
     assert seen["config"] == {
         "db_path": str(tmp_path / "memory.db"),
@@ -1297,7 +1304,8 @@ def test_memory_handler_init_defaults_and_tool_injection_edges(
     )
     handler = MemoryHandler(MemoryConfig(enabled=False, use_native_tool=True), agent_type="codex")
     assert handler._native_memory_dir == native_dir
-    assert native_dir.exists()
+    # Directory is NOT created eagerly — deferred until first write
+    assert not native_dir.exists()
 
     disabled_injection = MemoryHandler(
         MemoryConfig(enabled=False, inject_tools=False, use_native_tool=False),

@@ -250,8 +250,6 @@ class MemoryHandler:
 
             self._native_memory_dir = _paths.native_memory_dir()
 
-        # Create directory if it doesn't exist
-        self._native_memory_dir.mkdir(parents=True, exist_ok=True)
         logger.info(f"Memory: Native memory directory: {self._native_memory_dir}")
 
     def get_beta_headers(self) -> dict[str, str]:
@@ -411,7 +409,6 @@ class MemoryHandler:
                 vector_dimension=vector_dimension,
             )
             self._backend = LocalBackend(backend_config)
-            await self._backend._ensure_initialized()
             logger.info(
                 f"Memory: Initialized LocalBackend at {self.config.db_path} "
                 f"(embedder: {embedder_backend})"

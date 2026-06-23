@@ -53,7 +53,6 @@ class NativeFileToolHandler:
             ValueError: If path traversal is detected.
         """
         user_dir = self._memory_dir / user_id
-        user_dir.mkdir(parents=True, exist_ok=True)
 
         if path.startswith("/memories"):
             path = path[len("/memories") :]

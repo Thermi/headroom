@@ -146,9 +146,11 @@ class LocalBackend:
         cleanly and ``CancelledError`` is re-raised rather than leaving the
         backend half-built.
         """
-        # Fast path: already initialized, no lock contention.
-        if self._initialized:
-            return
+        if not self._initialized:
+            Path(self._config.db_path).parent.mkdir(parents=True, exist_ok=True)
+
+            from headroom.memory import HierarchicalMemory, MemoryConfig
+            from headroom.memory.config import EmbedderBackend
 
             # Map string embedder_backend to enum
             embedder_backend_map = {
@@ -420,6 +422,9 @@ class LocalBackend:
         Returns:
             List of MemorySearchResult objects with scores and related entities.
         """
+        if not Path(self._config.db_path).exists():
+            return []
+
         await self._ensure_initialized()
         assert self._hierarchical_memory is not None
         assert self._graph is not None
@@ -630,6 +635,9 @@ class LocalBackend:
         Returns:
             The Memory if found, None otherwise.
         """
+        if not Path(self._config.db_path).exists():
+            return None
+
         await self._ensure_initialized()
         assert self._hierarchical_memory is not None
 
@@ -697,6 +705,9 @@ class LocalBackend:
         Returns:
             Subgraph containing reachable entities and relationships.
         """
+        if not Path(self._config.db_path).exists():
+            return Subgraph(entities=[], relationships=[], root_entity_ids=[])
+
         await self._ensure_initialized()
         assert self._graph is not None
 
@@ -733,6 +744,9 @@ class LocalBackend:
         Returns:
             List of memories for the user.
         """
+        if not Path(self._config.db_path).exists():
+            return []
+
         await self._ensure_initialized()
         assert self._hierarchical_memory is not None
 
@@ -793,6 +807,9 @@ class LocalBackend:
         Returns:
             List of MemorySearchResult objects.
         """
+        if not Path(self._config.db_path).exists():
+            return []
+
         await self._ensure_initialized()
         assert self._hierarchical_memory is not None
 
@@ -846,6 +863,9 @@ class LocalBackend:
         Returns:
             List of MemorySearchResult objects sorted by combined score.
         """
+        if not Path(self._config.db_path).exists():
+            return []
+
         await self._ensure_initialized()
 
         # Fetch more candidates than needed for better coverage

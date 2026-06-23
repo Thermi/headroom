@@ -368,8 +368,6 @@ class BackendRouter:
                 self._backends.move_to_end(db_path)
                 return existing
 
-            db_path.parent.mkdir(parents=True, exist_ok=True)
-
             template = self._config.backend_config_template
             cfg = LocalBackendConfig(
                 db_path=str(db_path),
