@@ -44,7 +44,6 @@ from headroom.memory.storage_router import (
     RequestContext,
     ResolvedScope,
 )
-from headroom.onnx_runtime import onnxruntime_available
 from headroom.proxy import _json as json
 
 if TYPE_CHECKING:
@@ -375,46 +374,19 @@ class MemoryHandler:
                             "torch/sentence-transformers not installed; using default embedder selection"
                         )
 
-                # Check if ONNX runtime is available (should be — it's in proxy
-                # deps). Routed through the shared, memoized probe so this answer
-                # is consistent with the proxy GPU banner and Kompress, and a
-                # transient early import does not spuriously report it missing.
-                # Retry with a short sleep because onnxruntime-gpu's first import
-                # can hit a transient CUDA init failure when racing with the
-                # concurrent warm_onnxruntime() background task — the first
-                # attempt raises ImportError, but a subsequent one succeeds once
-                # the CUDA driver is fully visible inside the container.
+                # Unless already overridden by the HEADROOM_EMBEDDER_RUNTIME
+                # path above, start with a no-op embedder. The ONNX embedder
+                # will be activated later via upgrade_embedder() once
+                # onnxruntime has been detected by the background warmup
+                # task, avoiding the transient-ImportError race with
+                # onnxruntime-gpu's CUDA initialisation.
                 if embedder_backend == "onnx":
-                    _ort_ok = False
-                    for _ in range(5):
-                        if onnxruntime_available():
-                            _ort_ok = True
-                            break
-                        import time as _time
-
-                        _time.sleep(0.5)
-                    if not _ort_ok:
-                        # Fall back to sentence-transformers (requires torch), but
-                        # only if it's actually installed. On CPU-only containers
-                        # torch is ~6 GB and deliberately excluded from the image,
-                        # so the check is not redundant.
-                        try:
-                            import sentence_transformers  # noqa: F401
-                        except ImportError:
-                            embedder_backend = "none"
-                            embedder_model = "none"
-                            logger.warning(
-                                "Memory: onnxruntime not available and "
-                                "sentence-transformers not installed; "
-                                "disabling embedding. Install sentence-transformers "
-                                "with: pip install sentence-transformers"
-                            )
-                        else:
-                            embedder_backend = "local"
-                            logger.info(
-                                "Memory: onnxruntime not available, "
-                                "falling back to sentence-transformers"
-                            )
+                    embedder_backend = "none"
+                    embedder_model = "none"
+                    logger.info(
+                        "Memory: deferring embedder activation "
+                        "(will upgrade to ONNX when onnxruntime is ready)"
+                    )
 
             backend_config = LocalBackendConfig(
                 db_path=self.config.db_path,
@@ -500,6 +472,36 @@ class MemoryHandler:
         # Auto-import from Memory Bridge if configured
         if self.config.bridge_enabled and self.config.bridge_auto_import:
             await self._init_and_import_bridge()
+
+    async def upgrade_embedder(self, backend: str = "onnx", model: str = "all-MiniLM-L6-v2") -> bool:
+        """Upgrade the embedder from no-op to ONNX after onnxruntime is ready.
+
+        Called once by the background init task after :class:`OnnxRuntimeWarmup`
+        signals that onnxruntime has been successfully imported. Replaces the
+        ``NoopEmbedder`` in the existing ``HierarchicalMemory`` with an
+        ``OnnxLocalEmbedder`` and warms it up.
+
+        Returns True if the upgrade succeeded.
+        """
+        if not self._initialized or self._backend is None:
+            return False
+        try:
+            hm = getattr(self._backend, "_hierarchical_memory", None)
+            if hm is None:
+                return False
+            from headroom.memory.adapters.embedders import OnnxLocalEmbedder
+
+            hm._embedder = OnnxLocalEmbedder()
+            logger.info(
+                "Memory: upgraded embedder from no-op to ONNX "
+                "(model=%s, backend=%s)",
+                model,
+                backend,
+            )
+            return True
+        except Exception as exc:
+            logger.warning("Memory: embedder upgrade failed (non-fatal): %s", exc)
+            return False
 
     def _cleanup_empty_project_dbs(self) -> None:
         """Remove per-project database directories that contain zero memories.

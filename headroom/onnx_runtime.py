@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import ctypes
 import logging
 import os
@@ -182,3 +183,45 @@ def trim_process_heap() -> bool:
         return bool(libc.malloc_trim(0))
     except Exception:
         return False
+
+
+class OnnxRuntimeWarmup:
+    """Coordinates onnxruntime background warmup with ready signaling.
+
+    Lets concurrent background tasks wait for onnxruntime to be probed
+    before making decisions that depend on its availability, without
+    forcing sequential initialization.
+
+    Usage in an async context (e.g. proxy startup)::
+
+        warmup = OnnxRuntimeWarmup()
+
+        async def bg_onnx():
+            await warmup.warmup()
+            # GPU probe ...
+
+        async def bg_memory():
+            await warmup.wait_ready()
+            # onnxruntime_available() now returns the correct answer
+            ...
+    """
+
+    def __init__(self) -> None:
+        self._ready = asyncio.Event()
+
+    async def warmup(self) -> None:
+        """Run :func:`warm_onnxruntime` in a thread and signal readiness.
+
+        Returns once onnxruntime has been successfully imported and GPU
+        providers probed (or the 30s retry loop exhausted).
+        """
+        await asyncio.to_thread(warm_onnxruntime)
+        self._ready.set()
+
+    async def wait_ready(self) -> None:
+        """Wait indefinitely for the warmup to complete.
+
+        Returns once :func:`warmup` has finished (onnxruntime has been
+        successfully imported and GPU providers probed).
+        """
+        await self._ready.wait()
