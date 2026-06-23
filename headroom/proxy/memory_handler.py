@@ -49,8 +49,6 @@ from headroom.proxy import _json as json
 
 if TYPE_CHECKING:
     from headroom.memory.backends.local import LocalBackend
-    from headroom.proxy.native_memory_file_ops import NativeFileToolHandler
-    from headroom.proxy.semantic_memory_adapter import SemanticNativeToolAdapter
 
 logger = logging.getLogger(__name__)
 
