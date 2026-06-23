@@ -328,7 +328,8 @@ class HeadroomHookProvider(HookProvider):  # type: ignore[misc]
                 skip_reason=skip_reason,
             )
             logger.debug(
-                "Skipping compression for tool %s (id=%s): %s",
+                "[%s] Skipping compression for tool %s (id=%s): %s",
+                request_id,
                 tool_name,
                 tool_use_id,
                 skip_reason,
@@ -351,7 +352,8 @@ class HeadroomHookProvider(HookProvider):  # type: ignore[misc]
                 skip_reason=f"below_threshold:{tokens_before}<{self.min_tokens_to_compress}",
             )
             logger.debug(
-                "Tool %s output below threshold (%d < %d tokens), skipping compression",
+                "[%s] Tool %s output below threshold (%d < %d tokens), skipping compression",
+                request_id,
                 tool_name,
                 tokens_before,
                 self.min_tokens_to_compress,
@@ -366,7 +368,8 @@ class HeadroomHookProvider(HookProvider):  # type: ignore[misc]
         except Exception as e:
             # Compression failed, keep original
             logger.warning(
-                "Compression failed for tool %s (id=%s): %s. Keeping original.",
+                "[%s] Compression failed for tool %s (id=%s): %s. Keeping original.",
+                request_id,
                 tool_name,
                 tool_use_id,
                 str(e),
@@ -400,7 +403,8 @@ class HeadroomHookProvider(HookProvider):  # type: ignore[misc]
             )
 
             logger.info(
-                "Compressed tool %s output: %d -> %d tokens (%.1f%% saved)",
+                "[%s] Compressed tool %s output: %d -> %d tokens (%.1f%% saved)",
+                request_id,
                 tool_name,
                 tokens_before,
                 tokens_after,
@@ -418,7 +422,8 @@ class HeadroomHookProvider(HookProvider):  # type: ignore[misc]
                 skip_reason="no_reduction",
             )
             logger.debug(
-                "Compression did not reduce tool %s output (%d tokens)",
+                "[%s] Compression did not reduce tool %s output (%d tokens)",
+                request_id,
                 tool_name,
                 tokens_before,
             )

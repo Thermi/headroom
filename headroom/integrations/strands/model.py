@@ -349,7 +349,8 @@ class HeadroomStrandsModel(Model):  # type: ignore[misc]
         ) as e:
             # Fallback to original messages on pipeline error
             logger.warning(
-                f"Headroom optimization failed, using original messages: {type(e).__name__}: {e}"
+                f"[{request_id}] Headroom optimization failed, using original messages: "
+                f"{type(e).__name__}: {e}"
             )
             optimized = openai_messages
             # Estimate token count (rough approximation: ~4 chars/token)
