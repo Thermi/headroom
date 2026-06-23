@@ -379,28 +379,41 @@ class MemoryHandler:
                 # deps). Routed through the shared, memoized probe so this answer
                 # is consistent with the proxy GPU banner and Kompress, and a
                 # transient early import does not spuriously report it missing.
-                if embedder_backend == "onnx" and not onnxruntime_available():
-                    # Fall back to sentence-transformers (requires torch), but
-                    # only if it's actually installed. On CPU-only containers
-                    # torch is ~6 GB and deliberately excluded from the image,
-                    # so the check is not redundant.
-                    try:
-                        import sentence_transformers  # noqa: F401
-                    except ImportError:
-                        embedder_backend = "none"
-                        embedder_model = "none"
-                        logger.warning(
-                            "Memory: onnxruntime not available and "
-                            "sentence-transformers not installed; "
-                            "disabling embedding. Install sentence-transformers "
-                            "with: pip install sentence-transformers"
-                        )
-                    else:
-                        embedder_backend = "local"
-                        logger.info(
-                            "Memory: onnxruntime not available, "
-                            "falling back to sentence-transformers"
-                        )
+                # Retry with a short sleep because onnxruntime-gpu's first import
+                # can hit a transient CUDA init failure when racing with the
+                # concurrent warm_onnxruntime() background task — the first
+                # attempt raises ImportError, but a subsequent one succeeds once
+                # the CUDA driver is fully visible inside the container.
+                if embedder_backend == "onnx":
+                    _ort_ok = False
+                    for _ in range(5):
+                        if onnxruntime_available():
+                            _ort_ok = True
+                            break
+                        import time as _time
+                        _time.sleep(0.5)
+                    if not _ort_ok:
+                        # Fall back to sentence-transformers (requires torch), but
+                        # only if it's actually installed. On CPU-only containers
+                        # torch is ~6 GB and deliberately excluded from the image,
+                        # so the check is not redundant.
+                        try:
+                            import sentence_transformers  # noqa: F401
+                        except ImportError:
+                            embedder_backend = "none"
+                            embedder_model = "none"
+                            logger.warning(
+                                "Memory: onnxruntime not available and "
+                                "sentence-transformers not installed; "
+                                "disabling embedding. Install sentence-transformers "
+                                "with: pip install sentence-transformers"
+                            )
+                        else:
+                            embedder_backend = "local"
+                            logger.info(
+                                "Memory: onnxruntime not available, "
+                                "falling back to sentence-transformers"
+                            )
 
             backend_config = LocalBackendConfig(
                 db_path=self.config.db_path,
