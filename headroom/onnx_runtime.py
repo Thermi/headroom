@@ -7,6 +7,7 @@ import ctypes
 import os
 import sys
 import threading
+import time
 from typing import Any
 
 # ── Shared onnxruntime availability / provider detection ──────────────
@@ -31,6 +32,30 @@ _ort_available: bool | None = None
 _gpu_providers: tuple[str, ...] | None = None
 
 _GPU_PROVIDER_KEYWORDS = ("cuda", "tensorrt", "dml", "directml", "coreml", "rocm")
+
+# Shared-library names for TensorRT's runtime across onnxruntime versions and
+# platforms. onnxruntime-gpu ships ``TensorrtExecutionProvider`` compiled in,
+# but creating a session with it aborts with a loud ``EP Error`` banner when
+# this library is absent (e.g. our Docker image bundles CUDA/cuDNN but not
+# TensorRT). Probing lets us drop the provider before it is ever requested.
+_TENSORRT_RUNTIME_LIBS = (
+    "libnvinfer.so",
+    "libnvinfer.so.10",
+    "libnvinfer.so.9",
+    "libnvinfer.so.8",
+    "nvinfer.dll",
+)
+
+
+def _tensorrt_runtime_available() -> bool:
+    """Return whether TensorRT's runtime library can be dynamically loaded."""
+    for name in _TENSORRT_RUNTIME_LIBS:
+        try:
+            ctypes.CDLL(name)
+            return True
+        except OSError:
+            continue
+    return False
 
 
 def onnxruntime_available() -> bool:
@@ -81,6 +106,15 @@ def available_gpu_providers() -> list[str]:
         gpu_providers = [
             p for p in all_providers if any(kw in p.lower() for kw in _GPU_PROVIDER_KEYWORDS)
         ]
+        # Drop TensorRT when its runtime library is missing: it is compiled into
+        # onnxruntime-gpu but fails session creation without libnvinfer, emitting
+        # a noisy EP Error before onnxruntime falls back. Filtering it out here
+        # avoids requesting a provider that is known to be unusable.
+        if (
+            any("tensorrt" in p.lower() for p in gpu_providers)
+            and not _tensorrt_runtime_available()
+        ):
+            gpu_providers = [p for p in gpu_providers if "tensorrt" not in p.lower()]
         if "CUDAExecutionProvider" in gpu_providers:
             gpu_providers.insert(0, gpu_providers.pop(gpu_providers.index("CUDAExecutionProvider")))
         _gpu_providers = tuple(gpu_providers)
@@ -90,14 +124,19 @@ def available_gpu_providers() -> list[str]:
 def warm_onnxruntime() -> None:
     """Eagerly import onnxruntime once, serially, warming the shared caches.
 
-    Call this from a single-threaded startup path *before* concurrent
-    subsystems probe onnxruntime. Doing the slow first import here ensures
-    later probes hit a warm ``sys.modules`` entry and the memoized result,
-    instead of racing the in-progress import (which previously surfaced as
-    spurious "onnxruntime not available" / "No GPU detected" logs).
+    Blocks until onnxruntime is importable (retrying up to 30s with 2s
+    pauses) so the memoized provider list is definitive before concurrent
+    subsystems probe it. Subsequent callers always see the warm result,
+    eliminating the race between the slow first import and concurrent probes.
+
+    A genuine absence of onnxruntime is never cached, so a later caller
+    whose import succeeds independently still gets the real answer.
     """
-    if onnxruntime_available():
-        available_gpu_providers()
+    for _ in range(15):
+        if onnxruntime_available():
+            available_gpu_providers()
+            return
+        time.sleep(2)
 
 
 
