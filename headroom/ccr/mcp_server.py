@@ -435,6 +435,14 @@ class HeadroomMCPServer:
             ", ".join(result.transforms_applied) if result.transforms_applied else "passthrough"
         )
         self._stats.record_compression(input_tokens, output_tokens, strategy)
+        logger.info(
+            "ccr_store=%s strategy=%s original_tokens=%s compressed_tokens=%s ttl=%s",
+            hash_key,
+            strategy,
+            input_tokens,
+            output_tokens,
+            MCP_SESSION_TTL,
+        )
 
         # Percentage of tokens removed. Derive from the same token counts used
         # for ``tokens_saved`` so all three fields agree — this mirrors the
@@ -849,7 +857,14 @@ class HeadroomMCPServer:
         logger.info(
             "event=mcp_retrieve_completed hash=%s result=%s",
             hash_key,
-            json.dumps(result, ensure_ascii=False, default=str),
+            json.dumps(query, ensure_ascii=False, default=str),
+        )
+        result = await self._retrieve_content(hash_key, query)
+        logger.info(
+            "event=mcp_retrieve_completed hash=%s query=%s found=%s",
+            hash_key,
+            json.dumps(query, ensure_ascii=False, default=str),
+            "error" not in result,
         )
 
         return [TextContent(type="text", text=json.dumps(result, indent=2))]

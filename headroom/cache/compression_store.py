@@ -95,7 +95,7 @@ def format_retrieval_miss_detail(status: dict[str, Any]) -> str:
 
     if status.get("status") == "expired":
         age_seconds = status.get("age_seconds")
-        if isinstance(age_seconds, (int, float)):
+        if isinstance(age_seconds, int | float):
             return f"Entry expired (CCR TTL: {ttl_seconds} seconds; age: {age_seconds:.0f} seconds)"
         return f"Entry expired (CCR TTL: {ttl_seconds} seconds)"
 
@@ -414,6 +414,15 @@ class CompressionStore:
             # MEDIUM FIX #16: Add to eviction heap for O(log n) eviction
             heapq.heappush(self._eviction_heap, (entry.created_at, hash_key))
 
+        logger.info(
+            "ccr_store=%s tool=%s strategy=%s original_tokens=%s compressed_tokens=%s ttl=%s",
+            hash_key,
+            tool_name,
+            compression_strategy,
+            original_tokens,
+            compressed_tokens,
+            entry.ttl,
+        )
         return hash_key
 
     def retrieve(
