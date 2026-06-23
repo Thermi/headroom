@@ -1,5 +1,20 @@
 # Headroom — agents.md
 
+- if you can not find the reason why something is not working, make a simple code that shows the issue. Keep this simple code as sparse as possible and use it to prove that the issue exists. If the issue exists, then verify it is not a software bug but a hardware bug. It is nearly 99,99999% likely it is a software bug in the software you wrote.
+- commit as you work along.
+- always commit your changes.
+- never undo existing commits.
+- if you are thinking of circumventing user directives, don't.
+- If you are thinking of breaking containment measures, don't.
+- if you are thinking of using docker to run code that you would otherwise be unable to, don't.
+- always make sure the code you are running does not cause out of memory conditions.
+- always make sure the code you are running does not interfere with the operating system or other processes.
+- make use of the available tools to help you.
+- use sequential thinking tool to help you think through the problem step by step.
+- use memories via headroom mcp to remember large pieces of information.
+- only read as little as possible.
+- keep your context clean
+
 ## Quick start
 
 ```bash
