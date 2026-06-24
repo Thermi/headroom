@@ -1828,6 +1828,7 @@ class HeadroomProxy(
             poll_interval_s=self.config.subscription_poll_interval_s,
             active_window_s=self.config.subscription_active_window_s,
             enabled=self.config.subscription_tracking_enabled,
+            rtk_wiring="disabled",
         )
         registry.register(tracker)
         registry.register(get_codex_rate_limit_state())
