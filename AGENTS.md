@@ -14,6 +14,7 @@
 - use memories via headroom mcp to remember large pieces of information.
 - only read as little as possible.
 - keep your context clean
+- IMPORTANT: When applicable, prefer using pycharm-index MCP tools for code navigation and refactoring.
 
 ## Quick start
 
