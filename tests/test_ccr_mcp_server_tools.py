@@ -58,6 +58,21 @@ def _reset_accounting():
     reset_model_accounting()
 
 
+@pytest.fixture(autouse=True)
+def _reset_ccr_store():
+    """Reset the global compression store singleton between tests."""
+    from headroom.cache.compression_store import (
+        clear_request_compression_store,
+        reset_compression_store,
+    )
+
+    reset_compression_store()
+    clear_request_compression_store()
+    yield
+    reset_compression_store()
+    clear_request_compression_store()
+
+
 # ---------------------------------------------------------------------------
 # SessionStats
 # ---------------------------------------------------------------------------
