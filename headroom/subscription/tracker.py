@@ -161,6 +161,10 @@ class SubscriptionTracker(QuotaTracker):
             ``ProxyConfig.subscription_tracking_enabled``).
         persist_path: Where to persist state across restarts.
         client: Injected client (for testing); defaults to SubscriptionClient().
+        rtk_wiring: RTK wiring mode override. ``"disabled"`` skips RTK polling
+            entirely. ``None`` (default) reads from ``HEADROOM_RTK_WIRING`` env
+            var. Proxy mode always passes ``"disabled"`` since RTK has no
+            purpose in proxy context.
     """
 
     # QuotaTracker identity
@@ -174,12 +178,14 @@ class SubscriptionTracker(QuotaTracker):
         enabled: bool = True,
         persist_path: Path | None = None,
         client: SubscriptionClient | None = None,
+        rtk_wiring: str | None = None,
     ) -> None:
         self._enabled = enabled
         self._poll_interval_s = max(1, min(poll_interval_s, 3600))
         self._active_window_s = max(5.0, active_window_s)
         self._persist_path = persist_path or _get_persist_path()
         self._client = client or SubscriptionClient()
+        self._rtk_wiring = rtk_wiring
 
         self._lock = threading.Lock()
         self._state = SubscriptionState()
@@ -376,18 +382,17 @@ class SubscriptionTracker(QuotaTracker):
         that an env var flipped to garbage after startup is at least loud
         in the logs.
         """
-        try:
-            wiring_mode = _rtk_wiring_mode()
-        except ValueError as exc:
-            # PR-G2 remediation (H1): elevate to ERROR — this is config
-            # corruption, not a transient runtime hiccup. The bad value
-            # should have been caught at startup but a rotation could flip
-            # it mid-run; either way the operator must see this.
-            logger.error(
-                "event=subscription_rtk_invalid_env error=%s",
-                exc,
-            )
-            return 0
+        if self._rtk_wiring is not None:
+            wiring_mode = self._rtk_wiring
+        else:
+            try:
+                wiring_mode = _rtk_wiring_mode()
+            except ValueError as exc:
+                logger.error(
+                    "event=subscription_rtk_invalid_env error=%s",
+                    exc,
+                )
+                return 0
         if wiring_mode == "disabled":
             return 0
 
@@ -961,6 +966,7 @@ def configure_subscription_tracker(
     enabled: bool = True,
     persist_path: Path | None = None,
     client: SubscriptionClient | None = None,
+    rtk_wiring: str | None = None,
 ) -> SubscriptionTracker:
     """Create (or return existing) global tracker singleton.
 
@@ -968,6 +974,13 @@ def configure_subscription_tracker(
     a typo (``HEADROOM_RTK_WIRING=enabld``) crashes the proxy at startup
     instead of being silently swallowed at every ``update_contribution``
     call.
+
+    Args:
+        rtk_wiring: RTK wiring override passed through to
+            :class:`SubscriptionTracker`. When ``"disabled"`` the tracker
+            skips all RTK polling. When ``None`` (default) the tracker reads
+            from the ``HEADROOM_RTK_WIRING`` env var. Proxy callers should
+            pass ``"disabled"`` since RTK has no purpose in proxy context.
     """
     _validate_rtk_env_at_startup()
     global _tracker_instance
@@ -979,6 +992,7 @@ def configure_subscription_tracker(
                 enabled=enabled,
                 persist_path=persist_path,
                 client=client,
+                rtk_wiring=rtk_wiring,
             )
     return _tracker_instance
 
