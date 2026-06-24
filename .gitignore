@@ -17,13 +17,7 @@ scripts/*
 !scripts/sync-plugin-versions.py
 !scripts/changelog-gen.py
 !scripts/verify-versions.py
-!scripts/verify-ruff-version.py
 !scripts/pr-governance.py
-!scripts/bootstrap-windows-dev.ps1
-!scripts/build_npm_release_assets.mjs
-!scripts/build_python_release_smoke.py
-!scripts/release_smoke_all.py
-!scripts/verify_npm_release_assets.mjs
 !scripts/tests/
 !scripts/README.md
 !scripts/repro_codex_replay.py
@@ -39,8 +33,6 @@ scripts/*
 !scripts/audit_wheel_glibc_symbols.py
 !scripts/replay_codex_ws_load.py
 !scripts/export_kompress_v2_onnx.py
-!scripts/record_kompress_fixtures.py
-!scripts/record_code_compressor_fixtures.py
 
 # Rust / Cargo build artifacts
 /target/
@@ -129,9 +121,6 @@ venv.bak/
 
 # Node.js dependencies (never commit vendored deps)
 node_modules/
-
-# Local release smoke outputs
-release-assets-local/
 
 # Secrets and API keys - NEVER commit these
 *.pem
@@ -238,9 +227,6 @@ pyrightconfig.json
 \#*\#
 .\#*
 
-# Local git worktrees (isolated feature branches)
-.worktrees/
-
 # Local development configuration
 CLAUDE.md
 
@@ -267,6 +253,9 @@ uv.lock
 # package shadows the maturin overlay on sys.path.
 /headroom/_core.*.so
 /headroom/_core.so
-.tokensave
 
-.codebase-memory/
+# Python stub for `headroom._core` used on platforms without the compiled
+# Rust extension (Windows, no Rust toolchain). Created by tooling for
+# test/dev — never ships in a wheel (maturin replaces the stub with the
+# compiled module).
+/headroom/_core.py
