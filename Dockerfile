@@ -231,9 +231,11 @@ RUN cd /tmp && python -c "from headroom._core import DiffCompressor, SmartCrushe
 # Download rtk binary from GitHub releases
 RUN python -c "from headroom.rtk.installer import download_rtk; download_rtk()"
 
-# Replace CPU-only onnxruntime with GPU-enabled onnxruntime-gpu
+# Replace CPU-only onnxruntime with GPU-enabled onnxruntime-gpu.
+# onnxruntime-gpu >=1.27.0 requires libcudart.so.13 (CUDA 13) which is not
+# in the nvidia/cuda:12.6.3 base image — cap below that threshold.
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install --system --force-reinstall "onnxruntime-gpu>=1.16.0"
+    uv pip install --system --force-reinstall "onnxruntime-gpu>=1.16.0,<1.27.0"
 
 # Strip unnecessary files from site-packages so the runtime-stage COPY
 # (and its subsequent export compression) has far less data to move.
