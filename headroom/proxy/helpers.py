@@ -967,10 +967,16 @@ def _setup_file_logging() -> None:
 
     If the configured log directory is not writable, falls back to a temporary
     directory so logging is never silently lost.
+
+    When ``HEADROOM_NO_FILE_LOG`` is set to a truthy value
+    (true/1/yes/on), the RotatingFileHandler is skipped entirely —
+    only stderr logging remains.
     """
     import tempfile
     import warnings
     from logging.handlers import RotatingFileHandler
+
+    _no_file_log = os.environ.get("HEADROOM_NO_FILE_LOG", "").lower() in ("true", "1", "yes", "on")
 
     log_dir = _headroom_log_dir()
     try:
@@ -994,7 +1000,7 @@ def _setup_file_logging() -> None:
     headroom_logger.addHandler(stream_handler)
     headroom_logger.addFilter(_RequestIdFilter())
 
-    if log_dir is not None:
+    if not _no_file_log and log_dir is not None:
         try:
             log_path = log_dir / "proxy.log"
             file_handler = RotatingFileHandler(

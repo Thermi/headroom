@@ -531,6 +531,15 @@ def dashboard(port: int, no_open: bool) -> None:
     ),
 )
 @click.option(
+    "--no-file-log",
+    is_flag=True,
+    envvar="HEADROOM_NO_FILE_LOG",
+    help=(
+        "Disable the always-on RotatingFileHandler that writes to proxy.log. "
+        "Only stderr logging remains (visible in docker logs). Env: HEADROOM_NO_FILE_LOG."
+    ),
+)
+@click.option(
     "--codex-wire-debug",
     is_flag=True,
     help="Enable local Codex wire snapshots and matching proxy.log frame traces.",
@@ -994,6 +1003,7 @@ def proxy(
     compression_max_workers: int | None,
     log_file: str | None,
     log_messages: bool,
+    no_file_log: bool,
     codex_wire_debug: bool,
     codex_wire_debug_dir: str | None,
     budget: float | None,
@@ -1671,6 +1681,8 @@ Press Ctrl+C to stop.
         # a richer one above. Direct `python -m headroom.proxy.server` keeps
         # the legacy banner via run_server's default.
         run_kwargs["print_banner"] = False
+        if no_file_log:
+            os.environ["HEADROOM_NO_FILE_LOG"] = "true"
         run_server(config, **run_kwargs)
     except KeyboardInterrupt:
         click.echo("\nShutting down...")
