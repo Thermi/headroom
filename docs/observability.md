@@ -278,15 +278,26 @@ LLM itself spends generating the response.
 ```
 
 In the `/stats` JSON response the same breakdown is returned as a
-`latency_ms` sub-object:
+`latency_ms` sub-object within each `recent_requests` entry:
 
 ```json
-"latency_ms": {
-    "total": 4098.25,
-    "optimization": 259.19,
-    "upstream": 3839.06
+{
+    "request_id": "hr_1782257304_000666",
+    "transport": "http",
+    "latency_ms": {
+        "total": 4098.25,
+        "optimization": 259.19,
+        "upstream": 3839.06
+    }
 }
 ```
+
+| Field | Meaning |
+|---|---|
+| `transport` | Request transport: `"http"` (REST API call), `"http_sse"` (streaming SSE), or `"websocket"` (long-lived WebSocket session). For WebSocket sessions `total_latency_ms` is the full session wall-clock duration, not a single request round-trip. |
+| `latency_ms.total` | End-to-end wall-clock. For HTTP requests this is `client request received → response forwarded`. For WebSocket sessions this is the entire session duration (minutes/hours). |
+| `latency_ms.optimization` | Pre-upstream processing (compression, routing, injection). Always a subset of total. |
+| `latency_ms.upstream` | Inferred provider inference time (`total - optimization`). |
 
 The flat `optimization_latency_ms` and `total_latency_ms` fields are
 retained for backward compatibility.
