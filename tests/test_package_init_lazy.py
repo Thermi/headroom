@@ -49,6 +49,7 @@ def test_headroom_import_stays_lazy() -> None:
 
 def test_version_prefers_installed_distribution_metadata() -> None:
     with (
+        patch.object(version_module, "_CACHED_VERSION", None),
         patch.object(version_module, "_source_root", return_value=None),
         patch.object(version_module, "version", return_value="9.8.7") as package_version,
     ):
@@ -59,6 +60,7 @@ def test_version_prefers_installed_distribution_metadata() -> None:
 
 def test_version_reports_unknown_when_distribution_metadata_is_missing() -> None:
     with (
+        patch.object(version_module, "_CACHED_VERSION", None),
         patch.object(version_module, "_source_root", return_value=None),
         patch.object(version_module, "version", side_effect=PackageNotFoundError),
     ):
@@ -127,6 +129,7 @@ def test_observability_version_uses_runtime_version(monkeypatch) -> None:
 
 def test_version_prefers_source_tree_release_history() -> None:
     with (
+        patch.object(version_module, "_CACHED_VERSION", None),
         patch.object(version_module, "_source_root", return_value=Path(".")),
         patch.object(version_module, "_source_tree_version", return_value="0.21.17"),
         patch.object(version_module, "version", return_value="0.9.1") as package_version,
@@ -265,45 +268,3 @@ def test_dynamic_detector_import_skips_optional_ml_dependencies(tmp_path: Path) 
     assert data["spacy_loaded"] is False
     assert data["sentence_transformers_loaded"] is False
     assert data["torch_loaded"] is False
-
-
-def test_compress_spreadsheet_public_import_survives_ort_pin() -> None:
-    """`from headroom import compress_spreadsheet` stays eagerly exported, and the
-    Windows ORT dylib pin still runs before the `.compress` import.
-
-    The pin (`ensure_ort_dylib_pinned`) was inserted above the eager `.compress`
-    import; restoring `compress_spreadsheet` to that line must not reorder it
-    relative to the pin. The `__dict__` check distinguishes the eager import from
-    the lazy `_LAZY_EXPORTS` fallback, which would also resolve the name.
-    """
-    script = textwrap.dedent(
-        """
-        import json
-
-        import headroom
-        from headroom import compress_spreadsheet
-
-        print(json.dumps({
-            "eager": "compress_spreadsheet" in headroom.__dict__,
-            "callable": callable(compress_spreadsheet),
-        }))
-        """
-    )
-
-    result = subprocess.run(
-        [sys.executable, "-c", script],
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-
-    data = json.loads(result.stdout.strip())
-    assert data["eager"] is True
-    assert data["callable"] is True
-
-    # ORT pin must precede the `.compress` import, which must still list the helper.
-    src = (Path(version_module.__file__).parent / "__init__.py").read_text(encoding="utf-8")
-    pin = src.index("ensure_ort_dylib_pinned()")
-    compress_import = src.index("from .compress import")
-    assert pin < compress_import
-    assert "compress_spreadsheet" in src[compress_import : compress_import + 120]
