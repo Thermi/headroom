@@ -189,11 +189,12 @@ def test_restore_idempotent_when_all_placeholders_lost(rng: random.Random) -> No
         # skip — the property under test is the *no-placeholder* case.
         if any(p in compressed for (p, _o) in blocks):
             continue
-        restored = restore_tags(compressed, blocks)
+        restored, had_loss = restore_tags(compressed, blocks)
         assert restored == compressed, (
             f"discard-wrap path corrupted output: blocks={blocks}, "
             f"compressed={compressed!r}, restored={restored!r}"
         )
+        assert had_loss
 
 
 def test_restore_never_introduces_asymmetry(rng: random.Random) -> None:
@@ -210,21 +211,23 @@ def test_restore_never_introduces_asymmetry(rng: random.Random) -> None:
         # carry exactly that asymmetry.
         stripped = _strip_placeholders(cleaned, blocks)
         baseline_skew = count_open_tags(stripped) - count_close_tags(stripped)
-        restored_lost = restore_tags(stripped, blocks)
+        restored_lost, had_loss = restore_tags(stripped, blocks)
         lost_skew = count_open_tags(restored_lost) - count_close_tags(restored_lost)
         assert lost_skew == baseline_skew, (
             f"discard-wrap introduced asymmetry: baseline={baseline_skew}, "
             f"after_restore={lost_skew}, content={content!r}"
         )
+        assert had_loss
 
         # Full restore: skew matches the original input.
-        restored_full = restore_tags(cleaned, blocks)
+        restored_full, had_loss_full = restore_tags(cleaned, blocks)
         full_skew = count_open_tags(restored_full) - count_close_tags(restored_full)
         content_skew = count_open_tags(content) - count_close_tags(content)
         assert full_skew == content_skew, (
             f"full-restore drifted from input skew: input={content_skew}, "
             f"restored={full_skew}, content={content!r}"
         )
+        assert not had_loss_full
 
 
 def test_restore_no_orphan_byte_injection(rng: random.Random) -> None:
@@ -236,7 +239,7 @@ def test_restore_no_orphan_byte_injection(rng: random.Random) -> None:
     for _ in range(_CASES):
         content = _gen_content(rng)
         cleaned, blocks = protect_tags(content)
-        restored = restore_tags(cleaned, blocks)
+        restored, _had_loss = restore_tags(cleaned, blocks)
         # Bytes added by substitution: for each placeholder that
         # appears in `cleaned`, replace it with `original` (delta =
         # len(original) - len(placeholder)).
@@ -264,9 +267,10 @@ def test_restore_lost_real_world_tag_does_not_inject_orphan() -> None:
         )
     ]
     compressed = "compressed body without any placeholder reference"
-    restored = restore_tags(compressed, blocks)
+    restored, had_loss = restore_tags(compressed, blocks)
     # The bug we are killing: opening tag at the END with no body / no close.
     assert not restored.endswith("<system-reminder>")
     assert "<system-reminder>" not in restored
     assert "</system-reminder>" not in restored
     assert restored == compressed
+    assert had_loss

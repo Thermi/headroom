@@ -673,22 +673,27 @@ fn emit_output(
 /// 3. Idempotence on missing placeholders — if every placeholder is
 ///    absent from `compressed`, the function returns `compressed`
 ///    byte-for-byte unchanged.
-pub fn restore_tags(text: &str, blocks: &[(String, String)]) -> String {
+///
+/// Returns `(result, had_loss)` where `had_loss` is true if any
+/// placeholder was not found in `text`. Callers should fall back to
+/// the original uncompressed content when `had_loss` is true.
+pub fn restore_tags(text: &str, blocks: &[(String, String)]) -> (String, bool) {
     restore_tags_with_request_id(text, blocks, None)
 }
 
 /// Variant of [`restore_tags`] that threads an optional `request_id`
-/// into the structured ERROR log emitted on placeholder loss. The
-/// PyO3 binding currently calls [`restore_tags`] (no request id);
-/// this entry point exists so the proxy layer can wire request
-/// context through once it has one available end-to-end.
+/// into the structured ERROR log emitted on placeholder loss.
+///
+/// Returns `(result, had_loss)` where `had_loss` is true if any
+/// placeholder was not found in `text`. Callers should fall back to
+/// the original uncompressed content when `had_loss` is true.
 pub fn restore_tags_with_request_id(
     text: &str,
     blocks: &[(String, String)],
     request_id: Option<&str>,
-) -> String {
+) -> (String, bool) {
     if blocks.is_empty() {
-        return text.to_string();
+        return (text.to_string(), false);
     }
 
     let mut result = text.to_string();
@@ -702,13 +707,7 @@ pub fn restore_tags_with_request_id(
             tag_lost_error(original, compressed_length, request_id);
         }
     }
-    // No tail_appends. The compressed text is returned with the
-    // wraps for the lost placeholders fully discarded — never
-    // appended back as orphan opens (Hotfix-A9).
-    let _ = lost_count; // surfaced via the per-event log; aggregate
-                        // counters live on the stats sidecar in
-                        // callers that have one.
-    result
+    (result, lost_count > 0)
 }
 
 #[inline(never)]
@@ -1190,7 +1189,7 @@ mod tests {
             // With every placeholder lost, restore_tags must return
             // the compressed text with placeholders dropped — which
             // is exactly `stripped`. So asymmetry equals baseline.
-            let restored_all_lost = restore_tags(&stripped, &blocks);
+            let (restored_all_lost, had_loss) = restore_tags(&stripped, &blocks);
             let lost_skew = count_open_tags(&restored_all_lost) as i64
                 - count_close_tags(&restored_all_lost) as i64;
             proptest::prop_assert_eq!(
@@ -1198,11 +1197,12 @@ mod tests {
                 "discard-wrap path introduced asymmetry: baseline={}, after_restore={}, restored={:?}",
                 baseline_skew, lost_skew, restored_all_lost
             );
+            proptest::prop_assert!(had_loss, "all-lost path must report loss");
 
             // With every placeholder PRESENT, restore_tags must round-
             // trip exactly to the original `content`, which by
             // construction has the same skew as `content` itself.
-            let restored_full = restore_tags(&cleaned, &blocks);
+            let (restored_full, had_loss_full) = restore_tags(&cleaned, &blocks);
             let full_skew = count_open_tags(&restored_full) as i64
                 - count_close_tags(&restored_full) as i64;
             let content_skew = count_open_tags(&content) as i64
@@ -1212,6 +1212,7 @@ mod tests {
                 "full-restore path drifted from input skew: input={}, restored={}",
                 content_skew, full_skew
             );
+            proptest::prop_assert!(!had_loss_full, "full-restore path must not report loss");
         }
 
         /// Invariant: when every placeholder is stripped before
@@ -1233,8 +1234,9 @@ mod tests {
                 .iter()
                 .any(|(p, _)| compressed.contains(p.as_str()));
             proptest::prop_assume!(!any_placeholder_present);
-            let restored = restore_tags(&compressed, &blocks);
+            let (restored, had_loss) = restore_tags(&compressed, &blocks);
             proptest::prop_assert_eq!(restored, compressed);
+            proptest::prop_assert!(had_loss, "all-placeholders-lost must report loss");
         }
 
         /// Invariant: `restore_tags` never adds bytes that weren't
@@ -1248,7 +1250,7 @@ mod tests {
             content in "[a-z<>/]{0,200}",
         ) {
             let (cleaned, blocks, _stats) = protect_tags(&content, false);
-            let restored = restore_tags(&cleaned, &blocks);
+            let (restored, _had_loss) = restore_tags(&cleaned, &blocks);
             // Sum of the byte-lengths of the originals that were
             // actually substituted (placeholder still present in
             // `cleaned`). Lost placeholders contribute zero.

@@ -804,7 +804,7 @@ async def test_proxy_creates_tracker_with_rtk_disabled(
     _core_stub.is_html_tag = lambda name: False  # type: ignore[attr-defined]
     _core_stub.known_html_tag_names = lambda: []  # type: ignore[attr-defined]
     _core_stub.protect_tags = lambda text: text  # type: ignore[attr-defined]
-    _core_stub.restore_tags = lambda text, tags: text  # type: ignore[attr-defined]
+    _core_stub.restore_tags = lambda text, tags: (text, False)  # type: ignore[attr-defined]
     _core_stub.detect_content_type = lambda data, kind="": "text"  # type: ignore[attr-defined]
     sys.modules["headroom._core"] = _core_stub
 

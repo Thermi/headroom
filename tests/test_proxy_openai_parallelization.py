@@ -32,7 +32,7 @@ _mock_core.score_line = MagicMock(return_value=(None, 0.0, 0.0))
 _mock_core.is_html_tag = MagicMock(return_value=False)
 _mock_core.known_html_tag_names = MagicMock(return_value=[])
 _mock_core.protect_tags = MagicMock(return_value="")
-_mock_core.restore_tags = MagicMock(return_value="")
+_mock_core.restore_tags = MagicMock(return_value=("", False))
 sys.modules["headroom._core"] = _mock_core
 
 

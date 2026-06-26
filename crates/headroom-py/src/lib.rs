@@ -1543,10 +1543,11 @@ fn protect_tags(
     })
 }
 
-/// Splice protected blocks back into `text`. Missing placeholders fall
-/// back to appending the original block (lossy-compression incident).
+/// Splice protected blocks back into `text`. Returns `(text, had_loss)`
+/// where `had_loss` is true when any placeholder was missing from
+/// the compressed output (callers should fall back to original content).
 #[pyfunction]
-fn restore_tags(py: Python<'_>, text: &str, blocks: Vec<(String, String)>) -> String {
+fn restore_tags(py: Python<'_>, text: &str, blocks: Vec<(String, String)>) -> (String, bool) {
     let owned = text.to_string();
     py.detach(move || rust_restore_tags(&owned, &blocks))
 }
