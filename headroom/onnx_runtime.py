@@ -46,6 +46,23 @@ _TENSORRT_RUNTIME_LIBS = (
     "nvinfer.dll",
 )
 
+# Provider names that require a real, driver-backed NVIDIA CUDA device.
+# ``onnxruntime.get_available_providers()`` reports providers compiled into the
+# build, not providers backed by present hardware; onnxruntime-gpu always lists
+# ``CUDAExecutionProvider`` (and ``TensorrtExecutionProvider``) even on machines
+# with no GPU. These are gated on an actual device probe below.
+_CUDA_DEPENDENT_KEYWORDS = ("cuda", "tensorrt")
+
+# The CUDA *driver* library is installed by the NVIDIA driver (or injected into
+# containers by nvidia-container-toolkit). Its absence — or a device count of
+# zero — definitively means there is no usable CUDA GPU, regardless of which
+# providers onnxruntime was compiled with.
+_CUDA_DRIVER_LIBS = (
+    "libcuda.so.1",
+    "libcuda.so",
+    "nvcuda.dll",
+)
+
 
 def _tensorrt_runtime_available() -> bool:
     """Return whether TensorRT's runtime library can be dynamically loaded."""
@@ -56,6 +73,40 @@ def _tensorrt_runtime_available() -> bool:
         except OSError:
             continue
     return False
+
+
+def _cuda_device_available() -> bool:
+    """Return whether at least one CUDA device is visible via the driver API.
+
+    A provider being compiled into onnxruntime does not mean usable hardware
+    exists. We query the CUDA driver (``libcuda``) directly: load it, call
+    ``cuInit(0)`` and ``cuDeviceGetCount``. If the library is absent, the driver
+    fails to initialise, or no devices are reported, there is no usable CUDA GPU
+    and any CUDA-dependent execution provider must be treated as unavailable.
+    """
+    lib = None
+    for name in _CUDA_DRIVER_LIBS:
+        try:
+            lib = ctypes.CDLL(name)
+            break
+        except OSError:
+            continue
+    if lib is None:
+        return False
+    try:
+        lib.cuInit.restype = ctypes.c_int
+        lib.cuInit.argtypes = [ctypes.c_uint]
+        lib.cuDeviceGetCount.restype = ctypes.c_int
+        lib.cuDeviceGetCount.argtypes = [ctypes.POINTER(ctypes.c_int)]
+        # CUDA_SUCCESS == 0
+        if lib.cuInit(0) != 0:
+            return False
+        count = ctypes.c_int(0)
+        if lib.cuDeviceGetCount(ctypes.byref(count)) != 0:
+            return False
+        return count.value > 0
+    except (OSError, AttributeError, ValueError):
+        return False
 
 
 def onnxruntime_available() -> bool:
@@ -115,6 +166,20 @@ def available_gpu_providers() -> list[str]:
             and not _tensorrt_runtime_available()
         ):
             gpu_providers = [p for p in gpu_providers if "tensorrt" not in p.lower()]
+        # Drop CUDA-dependent providers when no real CUDA device is present.
+        # onnxruntime-gpu lists CUDAExecutionProvider purely because it was
+        # compiled in; without an actual driver-backed GPU it cannot be used,
+        # and reporting it produces a false "GPU detected" banner before
+        # onnxruntime silently falls back to CPU at session creation.
+        if (
+            any(kw in p.lower() for p in gpu_providers for kw in _CUDA_DEPENDENT_KEYWORDS)
+            and not _cuda_device_available()
+        ):
+            gpu_providers = [
+                p
+                for p in gpu_providers
+                if not any(kw in p.lower() for kw in _CUDA_DEPENDENT_KEYWORDS)
+            ]
         if "CUDAExecutionProvider" in gpu_providers:
             gpu_providers.insert(0, gpu_providers.pop(gpu_providers.index("CUDAExecutionProvider")))
         _gpu_providers = tuple(gpu_providers)
