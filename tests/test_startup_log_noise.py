@@ -152,7 +152,7 @@ class TestLiteLLMLogSuppression:
         """litellm.suppress_debug_info must be True after importing the litellm provider."""
         litellm = pytest_importorskip_litellm()
         if litellm is None:
-            return  # litellm not installed — skip gracefully
+            return  # litellm not installed -- skip gracefully
 
         import headroom.providers.litellm  # noqa: F401
 

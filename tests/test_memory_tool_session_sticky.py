@@ -16,7 +16,7 @@ The fix:
 
   * `SessionToolTracker`: bounded LRU keyed by (provider, session_id)
     storing GOLDEN tool-definition bytes from the first injection.
-    Subsequent turns of that session always replay those bytes — even
+    Subsequent turns of that session always replay those bytes -- even
     when memory is disabled mid-session (sticky-on per §6.3 #2).
 
   * `apply_session_sticky_memory_tools`: single coordination point
@@ -24,9 +24,9 @@ The fix:
     OpenAI Chat-Completions + Responses + WS).
 
 Operator opt-in `HEADROOM_TOOL_INJECTION_STICKY=disabled` short-
-circuits the tracker (per-turn decision flows through verbatim — the
+circuits the tracker (per-turn decision flows through verbatim -- the
 broken behavior). That mode is loud and explicit per realignment build
-constraint #4 — NOT a silent fallback. It exists for diagnostic shadow
+constraint #4 -- NOT a silent fallback. It exists for diagnostic shadow
 tracing and emergency rollback only.
 """
 
@@ -343,7 +343,7 @@ def test_injection_in_turn_1_repeats_in_turn_2_same_session_anthropic() -> None:
     defs = _anthropic_memory_defs()
     assert len(defs) >= 2
 
-    # Turn 1: memory enabled — first-time injection.
+    # Turn 1: memory enabled -- first-time injection.
     tools1, was1 = apply_session_sticky_memory_tools(
         provider="anthropic",
         session_id="s-1",
@@ -357,7 +357,7 @@ def test_injection_in_turn_1_repeats_in_turn_2_same_session_anthropic() -> None:
     assert "memory_save" in names1
     assert "memory_search" in names1
 
-    # Turn 2: memory STILL enabled — bytes match turn 1.
+    # Turn 2: memory STILL enabled -- bytes match turn 1.
     tools2, was2 = apply_session_sticky_memory_tools(
         provider="anthropic",
         session_id="s-1",
@@ -545,7 +545,7 @@ def test_disabled_mode_passes_through_per_turn_decision(
 ) -> None:
     """`HEADROOM_TOOL_INJECTION_STICKY=disabled` reverts to per-turn behavior.
 
-    This is the broken behavior — explicit operator opt-in only. Turn 1
+    This is the broken behavior -- explicit operator opt-in only. Turn 1
     injects; turn 2 with `inject_this_turn=False` does NOT replay (the
     sticky guarantee is bypassed).
     """
@@ -563,7 +563,7 @@ def test_disabled_mode_passes_through_per_turn_decision(
     assert was1 is True
     assert "memory_save" in _names_in(tools1)
 
-    # Turn 2: caller says don't inject. Disabled mode → tracker bypassed.
+    # Turn 2: caller says don't inject. Disabled mode -> tracker bypassed.
     tools2, was2 = apply_session_sticky_memory_tools(
         provider="anthropic",
         session_id="s-disabled",
@@ -640,7 +640,7 @@ def test_unknown_provider_raises() -> None:
 
 
 def test_anthropic_fixture_matches_helper_output() -> None:
-    """Fixture file pins the canonical bytes — regenerate if this fails."""
+    """Fixture file pins the canonical bytes -- regenerate if this fails."""
     fixture = json.loads((FIXTURES_DIR / "anthropic.json").read_text())
     assert fixture["provider"] == "anthropic"
 

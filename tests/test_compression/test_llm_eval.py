@@ -248,10 +248,10 @@ class LLMEvalResult:
     details: str = ""
 
     def __str__(self) -> str:
-        status = "✓ PASS" if self.passed else "✗ FAIL"
+        status = "[OK] PASS" if self.passed else "[X] FAIL"
         return (
             f"{status}: {self.test_name}\n"
-            f"  Compression: {self.tokens_original} → {self.tokens_compressed} "
+            f"  Compression: {self.tokens_original} -> {self.tokens_compressed} "
             f"({self.compression_ratio:.1%})\n"
             f"  Expected: {self.expected}\n"
             f"  Actual: {self.actual}\n"
@@ -625,20 +625,20 @@ class TestCompressionEfficacy:
             # Basic validation
             llm_understood = len(response) > 20 and "error" not in response.lower()
 
-            status = "✓" if llm_understood else "✗"
+            status = "[OK]" if llm_understood else "[X]"
             all_passed = all_passed and llm_understood
 
             print(f"\n{name}:")
             print(f"  Type: {result.content_type.name}")
             print(
-                f"  Tokens: {result.tokens_before} → {result.tokens_after} ({result.compression_ratio:.1%})"
+                f"  Tokens: {result.tokens_before} -> {result.tokens_after} ({result.compression_ratio:.1%})"
             )
             print(f"  Savings: {result.tokens_before - result.tokens_after} tokens")
             print(f"  LLM Test ({test_query}): {status}")
             print(f"  LLM Response: {response[:100]}...")
 
         print("\n" + "=" * 70)
-        print(f"Overall: {'✓ ALL TESTS PASSED' if all_passed else '✗ SOME TESTS FAILED'}")
+        print(f"Overall: {'[OK] ALL TESTS PASSED' if all_passed else '[X] SOME TESTS FAILED'}")
         print("=" * 70)
 
         assert all_passed, "Some LLM validation tests failed"

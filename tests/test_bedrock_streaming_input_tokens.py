@@ -2,12 +2,12 @@
 
 Regression coverage for issue #1132.
 
-LiteLLM/Bedrock streaming never surfaces prompt tokens during a stream — it
+LiteLLM/Bedrock streaming never surfaces prompt tokens during a stream -- it
 emits ``message_start`` with ``usage.input_tokens=0`` and only reports
 ``output_tokens`` (at the end, in ``message_delta``). Anthropic clients such as
 Claude Code read ``usage.input_tokens`` from the ``message_start`` SSE event to
 emit OTel/cost metrics, so every Headroom+Bedrock streaming request reported ~0
-input tokens — underreporting token usage by ~99%.
+input tokens -- underreporting token usage by ~99%.
 
 ``StreamingMixin._stream_response_bedrock`` now backfills ``input_tokens`` on
 ``message_start`` with the count Headroom actually sent upstream
@@ -37,7 +37,7 @@ def _make_bedrock_backend(events: list[StreamEvent]) -> MagicMock:
 
     Mirrors ``LiteLLMBackend.stream_message``: it constructs each event from a
     ``data`` dict and never sets ``raw_sse``, so the handler re-serializes
-    ``event.data`` — the exact path that carries the #1132 bug.
+    ``event.data`` -- the exact path that carries the #1132 bug.
     """
 
     async def fake_stream(body: dict, headers: dict) -> AsyncIterator[StreamEvent]:
@@ -62,7 +62,7 @@ def _bedrock_events(input_tokens: int) -> list[StreamEvent]:
             "role": "assistant",
             "type": "message",
             "content": [],
-            # LiteLLM hardcodes this to 0 — the bug under test.
+            # LiteLLM hardcodes this to 0 -- the bug under test.
             "usage": {"input_tokens": input_tokens, "output_tokens": 0},
         },
     }

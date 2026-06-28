@@ -36,8 +36,8 @@ def test_shared_stats_work_without_fcntl(monkeypatch, tmp_path) -> None:
 
 
 # --- Shared compression store wiring ---------------------------------------
-# MCP's _get_local_store() must return the get_compression_store() singleton —
-# the same instance the proxy and response_handler use — so content compressed
+# MCP's _get_local_store() must return the get_compression_store() singleton --
+# the same instance the proxy and response_handler use -- so content compressed
 # on either side is retrievable in-process. These pin that wiring so a private
 # store can't creep back.
 

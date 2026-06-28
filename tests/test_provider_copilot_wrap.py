@@ -189,7 +189,7 @@ def test_model_configured_detects_env_and_cli_variants() -> None:
     assert model_configured(("--model", "gpt-4o"), {}) is True
     assert model_configured(("--model=gpt-4o",), {}) is True
     assert model_configured(("--other", "value"), {}) is False
-    # ``auto`` is not a valid BYOK model — must be treated as unconfigured.
+    # ``auto`` is not a valid BYOK model -- must be treated as unconfigured.
     assert model_configured(("--model", "auto"), {}) is False
     assert model_configured(("--model=auto",), {}) is False
     assert model_configured((), {"COPILOT_MODEL": "auto"}) is False
@@ -244,7 +244,7 @@ def test_is_auto_model(model: str | None, expected: bool) -> None:
         ),
         # Empty args unchanged
         ((), ()),
-        # --model at end with no value (malformed) — leave as-is, don't crash
+        # --model at end with no value (malformed) -- leave as-is, don't crash
         (("--model",), ("--model",)),
     ],
 )

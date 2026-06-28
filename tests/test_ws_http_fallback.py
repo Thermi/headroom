@@ -304,7 +304,7 @@ class TestWsHttpFallback:
         handler.http_client = CapturingClient()
 
         body = {"model": "gpt-5.4", "input": "test"}
-        # API key auth — no ChatGPT-Account-ID header
+        # API key auth -- no ChatGPT-Account-ID header
         headers = {"Authorization": "Bearer sk-abc123"}
         asyncio.run(handler._ws_http_fallback(ws, body, json.dumps(body), headers, "req_6"))
 

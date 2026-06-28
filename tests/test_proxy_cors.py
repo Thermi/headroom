@@ -4,8 +4,8 @@ The proxy binds on localhost and serves content endpoints (e.g. ``/v1/retrieve``
 returns raw, uncompressed tool outputs). A wildcard CORS origin combined with
 ``allow_credentials=True`` let any web page the user had open read those
 responses via a cross-origin fetch to ``127.0.0.1`` (CWE-346). The default
-policy must allow only loopback origins — on *any* port, since the bound port
-lives in the CLI/uvicorn layer, not in ``ProxyConfig`` — while still offering an
+policy must allow only loopback origins -- on *any* port, since the bound port
+lives in the CLI/uvicorn layer, not in ``ProxyConfig`` -- while still offering an
 explicit override for Docker / remote-dashboard deployments. See #863 / #864.
 """
 
@@ -46,7 +46,7 @@ def _preflight(client: TestClient, origin: str) -> httpx.Response:
     [
         "http://localhost:8787",
         "http://127.0.0.1:8787",
-        "http://localhost:9000",  # non-default port — must still be allowed
+        "http://localhost:9000",  # non-default port -- must still be allowed
         "http://127.0.0.1:54321",
         "https://localhost:8787",
         "http://[::1]:8787",  # IPv6 loopback

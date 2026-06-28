@@ -42,7 +42,7 @@ def test_cpu_pinned_backend_attributes_to_override_and_skips_probe(backend):
     msg = _banner(backend=backend, backend_raw="onnx-cpu")
     assert f"pinned to CPU by {BACKEND_ENV}=onnx-cpu" in msg
     assert "GPU detection skipped" in msg
-    # Must not claim "No GPU detected" — that would be a misleading fallback.
+    # Must not claim "No GPU detected" -- that would be a misleading fallback.
     assert "No GPU detected" not in msg
 
 
@@ -65,7 +65,7 @@ def test_gpu_pinned_backend_without_device_falls_back():
 
 def test_auto_with_gpu_detected():
     msg = _banner(backend="auto", probe_gpu=lambda: ["CUDAExecutionProvider"])
-    assert msg == "[bg] GPU detected — Kompress ONNX will use CUDAExecutionProvider"
+    assert msg == "[bg] GPU detected -- Kompress ONNX will use CUDAExecutionProvider"
 
 
 def test_auto_without_gpu_suggests_provider_override():

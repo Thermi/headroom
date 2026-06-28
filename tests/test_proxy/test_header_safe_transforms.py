@@ -34,5 +34,5 @@ def test_passes_through_legacy_and_unrelated_tags():
 def test_joined_header_remains_unambiguous():
     tags = ["smart_crush:2:Bash,Grep", "read_lifecycle:stale:/a,b.py", "router:excluded:tool"]
     header = ",".join(header_safe_transforms(tags))
-    # One token per tag — no stray commas leaking in from enriched detail.
+    # One token per tag -- no stray commas leaking in from enriched detail.
     assert header.split(",") == ["smart_crush:2", "read_lifecycle:stale", "router:excluded:tool"]

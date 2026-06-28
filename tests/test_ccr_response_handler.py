@@ -516,7 +516,7 @@ class TestCCRResponseHandling:
 
         result = await handler.handle_response(mixed_response, [], None, mock_api_call, "anthropic")
 
-        # CCR skipped — no continuation call made (avoids the 400 API round-trip)
+        # CCR skipped -- no continuation call made (avoids the 400 API round-trip)
         assert api_call_count == 0, "should not attempt continuation with mixed tools"
         # Original response returned unchanged so client can handle all tool calls
         assert result is mixed_response

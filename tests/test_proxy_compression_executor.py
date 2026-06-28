@@ -7,10 +7,10 @@ Locks the following invariants:
 
 1. The pool exists and respects ``compression_max_workers`` (auto and explicit).
 2. ``compression_in_flight`` increments while a compression is running and
-   decrements after it completes — under load, the high-water mark moves up
+   decrements after it completes -- under load, the high-water mark moves up
    as expected.
 3. When a compression call exceeds its timeout, the awaiter unblocks with
-   ``TimeoutError`` — but the worker thread keeps running (Python cannot
+   ``TimeoutError`` -- but the worker thread keeps running (Python cannot
    preempt running CPython bytecode or in-flight Rust calls), and when the
    work eventually completes, ``compression_leaked_threads`` increments.
 4. Jobs that time out while still queued do not leak the running gauge.
@@ -21,7 +21,7 @@ Locks the following invariants:
    multiplying the timeout debt across the executor.
 
 These tests also serve as documentation: anyone reading them sees that
-"timeout fired" does not mean "compression was cancelled" — it means "we
+"timeout fired" does not mean "compression was cancelled" -- it means "we
 stopped waiting; the worker is still going". A bounded pool plus the
 leaked-thread counter is how we make that visible.
 """
@@ -128,7 +128,7 @@ def test_in_flight_gauge_tracks_running_compressions() -> None:
 
 
 def test_high_water_mark_persists_after_completion() -> None:
-    """``_compression_in_flight_max`` is monotonic — never decreases."""
+    """``_compression_in_flight_max`` is monotonic -- never decreases."""
     proxy = _make_proxy(compression_max_workers=8)
 
     enter_events = [threading.Event() for _ in range(3)]

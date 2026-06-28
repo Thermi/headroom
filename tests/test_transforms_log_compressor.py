@@ -90,7 +90,7 @@ def test_select_dedupe_add_context_and_format_output(monkeypatch: pytest.MonkeyP
     # fixed_in_3e5: conservative dedupe preserves message prefix (everything
     # before the first `:` or `=`), so warnings without a colon keep their
     # full content as the dedupe key. The two lines below have different
-    # paths/numbers and no `:`, so they DON'T collapse anymore — Python's
+    # paths/numbers and no `:`, so they DON'T collapse anymore -- Python's
     # pre-3e5 aggressive normalization treated them as duplicates, masking
     # distinct error categories.
     distinct = compressor._dedupe_similar(log_lines[3:5])
@@ -122,7 +122,7 @@ def test_log_compressor_compress_and_ccr_paths() -> None:
     helpers (which the old orchestration relied on)."""
     compressor = LogCompressor(LogCompressorConfig(enable_ccr=True, min_lines_for_ccr=3))
     short = compressor.compress("a\nb")
-    # Below min_lines_for_ccr (3 lines from "a\nb" = 2 lines) → verbatim
+    # Below min_lines_for_ccr (3 lines from "a\nb" = 2 lines) -> verbatim
     assert short.format_detected is LogFormat.GENERIC
     assert short.compression_ratio == 1.0
 

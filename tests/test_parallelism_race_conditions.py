@@ -3,10 +3,10 @@
 Validates that every parallelised code path introduced in Phase J
 (REALIGNMENT/13-phase-J-free-threaded-parallelism.md) preserves:
 
-1. **Order** — parallel outputs match input order.
-2. **No data loss** — all items processed; counts/timing accumulate correctly.
-3. **Error isolation** — one failing item does not corrupt neighbours.
-4. **Lock correctness** — concurrent access to shared state is safe.
+1. **Order** -- parallel outputs match input order.
+2. **No data loss** -- all items processed; counts/timing accumulate correctly.
+3. **Error isolation** -- one failing item does not corrupt neighbours.
+4. **Lock correctness** -- concurrent access to shared state is safe.
 """
 
 from __future__ import annotations
@@ -139,7 +139,7 @@ class _DummyHandler(batch_module.BatchHandlerMixin):
 
 
 # ============================================================================
-# 1. BATCH.PY — Order preservation, no data loss, error isolation
+# 1. BATCH.PY -- Order preservation, no data loss, error isolation
 # ============================================================================
 #
 # Google batch compression is inlined inside handle_google_batch_create
@@ -386,7 +386,7 @@ class TestBatchParallelism:
 
 
 # ============================================================================
-# 2. ANTHROPIC.PY — Batch parallelisation
+# 2. ANTHROPIC.PY -- Batch parallelisation
 # ============================================================================
 
 
@@ -419,7 +419,7 @@ class TestAnthropicBatchParallelism:
 
 
 # ============================================================================
-# 3. RATE_LIMITER — Per-key lock correctness
+# 3. RATE_LIMITER -- Per-key lock correctness
 # ============================================================================
 
 
@@ -554,7 +554,7 @@ class TestRateLimiterParallelism:
 
 
 # ============================================================================
-# 4. MEMORY_HANDLER — Parallel tool call execution
+# 4. MEMORY_HANDLER -- Parallel tool call execution
 # ============================================================================
 
 
@@ -683,7 +683,7 @@ class TestMemoryHandlerParallelism:
         results = await mock_handler.handle_memory_tool_calls(
             response, "user-1", provider="anthropic"
         )
-        # call-1 fails → omitted; call-2 and call-3 succeed
+        # call-1 fails -> omitted; call-2 and call-3 succeed
         assert len(results) == 2, f"Expected 2, got {len(results)}: {results}"
         returned_ids = {r["tool_use_id"] for r in results}
         assert "call-2" in returned_ids
@@ -691,7 +691,7 @@ class TestMemoryHandlerParallelism:
 
 
 # ============================================================================
-# 5. IMAGE COMPRESSOR — Parallel image processing
+# 5. IMAGE COMPRESSOR -- Parallel image processing
 # ============================================================================
 
 
@@ -816,21 +816,21 @@ class TestImageCompressorParallelism:
 
 
 # ============================================================================
-# 6. SERVER.PY — Background init / warmup
+# 6. SERVER.PY -- Background init / warmup
 # ============================================================================
 #
 # Background init concurrency and shared-transform dedup are already covered
 # by test_proxy_warmup.py:
-#   - test_startup_runs_shared_transform_once  — eager-load runs exactly once
-#   - test_startup_optimize_false_skips_preload — optimize=False inhibits load
-#   - test_memory_backend_init_failure — clean error path
+#   - test_startup_runs_shared_transform_once  -- eager-load runs exactly once
+#   - test_startup_optimize_false_skips_preload -- optimize=False inhibits load
+#   - test_memory_backend_init_failure -- clean error path
 #
 # These tests validate the WarmupRegistry + asyncio.gather inside
 # _run_background_init with spy transforms and a stubbed proxy.
 
 
 # ============================================================================
-# 7. RUST — py.allow_threads cleanup (indirect validation)
+# 7. RUST -- py.allow_threads cleanup (indirect validation)
 # ============================================================================
 
 
@@ -848,7 +848,7 @@ class TestRustAllowThreadsCleanup:
 
 
 # ============================================================================
-# 8. ANTHROPIC BATCH — Model-level executor + helper sanity
+# 8. ANTHROPIC BATCH -- Model-level executor + helper sanity
 # ============================================================================
 
 

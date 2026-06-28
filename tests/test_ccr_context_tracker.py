@@ -734,7 +734,7 @@ class TestTrackerClear:
 # The bug: the ContextTracker is process-shared (one per proxy process,
 # serving all sessions/projects). Without a workspace gate, Project A's
 # compressed sample content keyword-matches Project B's later query and
-# surfaces as "relevant" — which is exactly what Jocelyn reported on
+# surfaces as "relevant" -- which is exactly what Jocelyn reported on
 # 2026-05-26: a tamag0 Python file (Ollama inference provider) appeared
 # inside an unrelated daphni-rails Ruby/RSpec session.
 #
@@ -747,7 +747,7 @@ class TestTrackerClear:
 
 
 class TestWorkspaceScoping:
-    """Cross-workspace leak prevention — the bug joce reported 2026-05-26."""
+    """Cross-workspace leak prevention -- the bug joce reported 2026-05-26."""
 
     @pytest.fixture(autouse=True)
     def reset_trackers(self):
@@ -779,7 +779,7 @@ class TestWorkspaceScoping:
             workspace_key="ws-rails",
         )
 
-        # Same workspace — match expected (regression: don't accidentally over-filter).
+        # Same workspace -- match expected (regression: don't accidentally over-filter).
         assert len(recommendations) >= 1
         assert recommendations[0].hash_key == "auth_hash"
 
@@ -790,7 +790,7 @@ class TestWorkspaceScoping:
         "ws-tamag0") had Python content stored; daphni-rails workspace
         queried for OAuth/session, the keyword overlap was high enough to
         score above threshold, and without scoping the Python content
-        surfaced as "relevant" — wrong project, wrong language, real
+        surfaced as "relevant" -- wrong project, wrong language, real
         contamination risk.
         """
         config = ContextTrackerConfig(relevance_threshold=0.1)
@@ -811,9 +811,9 @@ class TestWorkspaceScoping:
             ),
         )
 
-        # Workspace B: daphni-rails Ruby code — entirely unrelated repo.
+        # Workspace B: daphni-rails Ruby code -- entirely unrelated repo.
         # The query has heavy keyword overlap with the tamag0 sample
-        # above (provider, oauth, session, authentication, middleware) —
+        # above (provider, oauth, session, authentication, middleware) --
         # exactly the surface-level lexical collision that triggered the
         # production bug.
         recommendations = tracker.analyze_query(
@@ -823,7 +823,7 @@ class TestWorkspaceScoping:
         )
 
         assert len(recommendations) == 0, (
-            "Cross-workspace entry must NOT surface — this is the leak class "
+            "Cross-workspace entry must NOT surface -- this is the leak class "
             "Jocelyn reported on 2026-05-26 (tamag0 Python in daphni-rails Ruby session)."
         )
 
@@ -842,7 +842,7 @@ class TestWorkspaceScoping:
             sample_content="auth middleware",
         )
 
-        # analyze_query with empty workspace_key — caller couldn't resolve a
+        # analyze_query with empty workspace_key -- caller couldn't resolve a
         # project identity for the inbound request. Fail closed: no matches.
         recommendations = tracker.analyze_query(
             query="show auth middleware",
@@ -851,14 +851,14 @@ class TestWorkspaceScoping:
         )
 
         assert recommendations == [], (
-            "Empty workspace_key must return [] — fail-closed per "
+            "Empty workspace_key must return [] -- fail-closed per "
             "feedback_no_silent_fallbacks; otherwise an empty-keyed query "
             "would match nothing on the explicit-workspace branch but might "
             "still leak in any future fallback path."
         )
 
     def test_two_workspaces_each_see_only_their_own(self):
-        """Tracking two workspaces in one tracker — each query sees only its own."""
+        """Tracking two workspaces in one tracker -- each query sees only its own."""
         config = ContextTrackerConfig(relevance_threshold=0.1)
         tracker = ContextTracker(config)
 
@@ -886,7 +886,7 @@ class TestWorkspaceScoping:
             workspace_key="ws-b",
         )
 
-        # Each workspace sees exactly its own entry — no leak in either direction.
+        # Each workspace sees exactly its own entry -- no leak in either direction.
         assert len(rec_a) == 1 and rec_a[0].hash_key == "hash-ws-a"
         assert len(rec_b) == 1 and rec_b[0].hash_key == "hash-ws-b"
 
@@ -908,7 +908,7 @@ class TestWorkspaceScoping:
         header_plain = tracker.format_expansions_for_context(expansions)
         assert "workspace:" not in header_plain
 
-        # With label: provenance appears in header — same surface as the
+        # With label: provenance appears in header -- same surface as the
         # memory-injection block (symmetric, see GH #462 Fix C).
         header_labeled = tracker.format_expansions_for_context(
             expansions, workspace_label="daphni-rails"
@@ -925,7 +925,7 @@ class TestWorkspaceScoping:
         Regression for the production scenario: user works on tamag0,
         tracker accumulates entries. User switches to daphni-rails (same
         proxy process, ~minutes later). New queries on daphni-rails see
-        an empty result set despite the LRU being non-empty — because the
+        an empty result set despite the LRU being non-empty -- because the
         only entries present are scoped to tamag0.
         """
         config = ContextTrackerConfig(relevance_threshold=0.1)
@@ -951,10 +951,10 @@ class TestWorkspaceScoping:
         )
 
         assert recommendations == [], (
-            "Cross-workspace queries must return [] — even with a fully "
+            "Cross-workspace queries must return [] -- even with a fully "
             "populated tracker. The workspace filter is the only gate."
         )
         # And the tracker itself still has its entries (we're filtering on
-        # read, not purging on write — workspace A could come back and use
+        # read, not purging on write -- workspace A could come back and use
         # them again within the age window).
         assert len(tracker.get_tracked_hashes()) == 5

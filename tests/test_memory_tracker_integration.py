@@ -445,14 +445,14 @@ class TestProcessStatsCollection:
 
         stats = tracker.get_process_stats()
 
-        # psutil is optional — without it, stats are all zeros (graceful degradation)
+        # psutil is optional -- without it, stats are all zeros (graceful degradation)
         try:
             import psutil  # noqa: F401
 
             assert stats.rss_bytes > 0  # Process must use some memory
             assert stats.vms_bytes > 0
         except ImportError:
-            assert stats.rss_bytes == 0  # No psutil → zeros expected
+            assert stats.rss_bytes == 0  # No psutil -> zeros expected
         assert stats.percent >= 0  # Could be 0 on some systems
 
     def test_process_stats_in_report(self):
@@ -467,5 +467,5 @@ class TestProcessStatsCollection:
             assert report.process.rss_bytes > 0
             assert report.process.rss_mb > 0
         except ImportError:
-            # Without psutil, process stats are zeros — that's expected
+            # Without psutil, process stats are zeros -- that's expected
             assert report.process.rss_bytes == 0

@@ -13,7 +13,7 @@ from headroom.proxy.server import ProxyConfig, __version__, create_app
 
 @pytest.fixture
 def client(monkeypatch):
-    # Skip the live upstream connectivity probe in unit tests — tests verify
+    # Skip the live upstream connectivity probe in unit tests -- tests verify
     # the check logic separately (see test_readyz_upstream_check_* below).
     monkeypatch.setenv("HEADROOM_SKIP_UPSTREAM_CHECK", "1")
     config = ProxyConfig(

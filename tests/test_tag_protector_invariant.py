@@ -34,7 +34,7 @@ import pytest
 from headroom.transforms.tag_protector import protect_tags, restore_tags
 
 # ──────────────────────────────────────────────────────────────────────
-# Helpers — independent open/close counters that don't share code with
+# Helpers -- independent open/close counters that don't share code with
 # the implementation under test, so a parser bug can't mask itself.
 # ──────────────────────────────────────────────────────────────────────
 
@@ -44,8 +44,8 @@ def _is_name_start(ch: str) -> bool:
 
 
 def count_open_tags(s: str) -> int:
-    """Count `<name…>` style opening tags. Excludes `</…>` closes and
-    `<…/>` self-closers."""
+    """Count `<name...>` style opening tags. Excludes `</...>` closes and
+    `<.../>` self-closers."""
     count = 0
     i = 0
     n = len(s)
@@ -102,7 +102,7 @@ def count_close_tags(s: str) -> int:
 # ──────────────────────────────────────────────────────────────────────
 # Deterministic content generator. Yields a mix of:
 #   - random ASCII letters/punct
-#   - balanced custom-tag pairs (`<sys>x</sys>`, `<tool>y</tool>`, …)
+#   - balanced custom-tag pairs (`<sys>x</sys>`, `<tool>y</tool>`, ...)
 #   - bare orphan opens / closes / self-closers
 #   - HTML tags that should not be protected
 # Seed is fixed so failures reproduce.
@@ -133,7 +133,7 @@ def _gen_content(rng: random.Random, max_segments: int = 8) -> str:
             name = rng.choice(_TAG_NAMES)
             parts.append(f"<{name}/>")
         elif roll < 0.55:
-            # Orphan open (no close) — exercises the asymmetric-input case.
+            # Orphan open (no close) -- exercises the asymmetric-input case.
             name = rng.choice(_TAG_NAMES)
             parts.append(f"<{name}>")
         elif roll < 0.65:
@@ -141,7 +141,7 @@ def _gen_content(rng: random.Random, max_segments: int = 8) -> str:
             name = rng.choice(_TAG_NAMES)
             parts.append(f"</{name}>")
         elif roll < 0.75:
-            # HTML tag — should be passthrough.
+            # HTML tag -- should be passthrough.
             parts.append("<div>plain</div>")
         else:
             # Plain text segment.
@@ -186,7 +186,7 @@ def test_restore_idempotent_when_all_placeholders_lost(rng: random.Random) -> No
         compressed = _gen_content(rng)
         # If the random `compressed` happens to contain a placeholder
         # (vanishingly unlikely with our alphabet, but defensive),
-        # skip — the property under test is the *no-placeholder* case.
+        # skip -- the property under test is the *no-placeholder* case.
         if any(p in compressed for (p, _o) in blocks):
             continue
         restored, had_loss = restore_tags(compressed, blocks)

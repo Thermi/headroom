@@ -10,7 +10,7 @@ Verifies:
      event with a 24 KB output_item; the fake upstream receives the
      COMPRESSED frame (much smaller than what was sent).
   2. Multi-frame compression: a second `response.create` on the same
-     WS session is also compressed (the new behavior — was previously
+     WS session is also compressed (the new behavior -- was previously
      first-frame-only).
   3. Other event types (e.g. `response.cancel`) pass through
      unchanged.
@@ -79,7 +79,7 @@ def make_response_create_payload(turn_no: int) -> dict:
                     "content": [
                         {
                             "type": "input_text",
-                            "text": f"Turn {turn_no} — please summarize the build output.",
+                            "text": f"Turn {turn_no} -- please summarize the build output.",
                         }
                     ],
                 },
@@ -207,9 +207,9 @@ async def main_async() -> int:
             await ws.send(json.dumps(payload_2))
             await asyncio.sleep(2.0)
 
-            # Frame 3: a non-response.create event — should pass through
+            # Frame 3: a non-response.create event -- should pass through
             cancel = {"type": "response.cancel"}
-            print("[ws-e2e] sending frame 3 (response.cancel — passthrough)")
+            print("[ws-e2e] sending frame 3 (response.cancel -- passthrough)")
             await ws.send(json.dumps(cancel))
             await asyncio.sleep(1.0)
 

@@ -3,8 +3,8 @@
 In Tool mode, the memory subsystem must be invisible to the prompt-construction
 path. The model can still call ``memory_search`` explicitly (the tool is
 registered through the existing tool-injection plumbing), but
-``search_and_format_context`` — the auto-injection chokepoint that returns
-text for the proxy to splice into the latest user turn — must return
+``search_and_format_context`` -- the auto-injection chokepoint that returns
+text for the proxy to splice into the latest user turn -- must return
 ``None`` unconditionally.
 
 This is the load-bearing guarantee that lets us flip a deployment from
@@ -47,7 +47,7 @@ class _LoudBackend:
 
     async def search_memories(self, **_: Any) -> list[_StubResult]:
         self.calls += 1
-        # Return data that would be appended in AutoTail mode — if Tool
+        # Return data that would be appended in AutoTail mode -- if Tool
         # mode incorrectly auto-injects we can detect via the text content.
         return [
             _StubResult(
@@ -85,7 +85,7 @@ def test_tool_mode_skips_auto_injection() -> None:
     This is the single chokepoint enforcement: every provider handler
     (Anthropic /v1/messages, OpenAI /v1/chat/completions and /v1/responses,
     Gemini) calls this method. If it returns ``None``, no tail-injection
-    happens anywhere — without per-handler audit.
+    happens anywhere -- without per-handler audit.
     """
     handler, backend = _build_tool_mode_handler()
     messages = [
@@ -169,7 +169,7 @@ def test_auto_tail_mode_does_query_backend() -> None:
 def test_tool_mode_enum_value_is_stable() -> None:
     """The ``"tool"`` string is the persistent on-the-wire identifier.
 
-    Pinned to catch accidental rename — the ProxyConfig.memory_mode field
+    Pinned to catch accidental rename -- the ProxyConfig.memory_mode field
     accepts the string and must be able to round-trip via
     ``MemoryMode("tool")``.
     """

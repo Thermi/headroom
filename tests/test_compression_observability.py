@@ -5,15 +5,15 @@ production, a `CompressionObserver` notification fires once per real
 compression event, and `PrometheusMetrics` accumulates per-strategy
 counters that the test suite asserts on directly.
 
-The TOIN→SmartCrusher silent disconnect (caught three weeks late by
+The TOIN->SmartCrusher silent disconnect (caught three weeks late by
 manual audit) was invisible because no signal distinguished by
 strategy. These tests exist so the next regression of that shape
 fails the suite the day it lands instead of waiting on an audit.
 
 The counters live ONLY as in-process state on the metrics instance;
-they are deliberately NOT exported as new Prometheus metric names
-(to avoid unbounded metric-series growth) — they remain observable
-via /stats. CI-level
+they are deliberately NOT exported through the Prometheus scrape or
+OTel surface, because the metric->Supabase pipeline treats each
+metric name as a column and we cannot add new columns. CI-level
 observability via these tests is enough to catch silent regressions;
 production export waits on a non-column-adding pipeline.
 
@@ -24,10 +24,10 @@ Coverage:
 3. Both transforms tolerate an observer that raises (compression must
    still succeed).
 4. `PrometheusMetrics` correctly satisfies the `CompressionObserver`
-   protocol — `record_compression` increments per-strategy counters
+   protocol -- `record_compression` increments per-strategy counters
    and `tokens_saved_by_strategy` accumulates only positive savings.
 5. The Prometheus scrape output (`export()`) does NOT emit any new
-   metric names — the per-strategy state stays internal.
+   metric names -- the per-strategy state stays internal.
 """
 
 from __future__ import annotations
@@ -84,7 +84,7 @@ class ExplodingObserver:
 
 def test_spy_satisfies_observer_protocol():
     spy = SpyObserver()
-    # `runtime_checkable` Protocol — isinstance check works.
+    # `runtime_checkable` Protocol -- isinstance check works.
     assert isinstance(spy, CompressionObserver)
 
 
@@ -102,7 +102,7 @@ def test_content_router_records_observer_call_per_routing_decision():
     spy = SpyObserver()
     router = ContentRouter(ContentRouterConfig(), observer=spy)
 
-    # Forge a routing log directly via the result object — the observer
+    # Forge a routing log directly via the result object -- the observer
     # call site walks `result.routing_log`, so we assert the contract
     # without depending on which compressor would actually fire.
     result = RouterCompressionResult(
@@ -120,7 +120,7 @@ def test_content_router_records_observer_call_per_routing_decision():
                 content_type=ContentType.SOURCE_CODE,
                 strategy=CompressionStrategy.CODE_AWARE,
                 original_tokens=300,
-                compressed_tokens=300,  # passthrough — still recorded
+                compressed_tokens=300,  # passthrough -- still recorded
             ),
         ],
     )
@@ -167,7 +167,7 @@ def test_content_router_swallows_observer_failures():
             )
         ],
     )
-    # Must not raise — observability failures are not compression failures.
+    # Must not raise -- observability failures are not compression failures.
     router._observe(result)
     assert boom.raised == 1
 
@@ -223,7 +223,7 @@ def test_smart_crusher_apply_records_observer_per_crushed_message(isolated_toin)
     ]
     result = crusher.apply(messages, tok)
     # If the analyzer chose passthrough this run, the observer wasn't
-    # fired; that's fine for the wiring test — we only assert it WAS
+    # fired; that's fine for the wiring test -- we only assert it WAS
     # fired in the case it crushed.
     if "smart_crush:" in ",".join(result.transforms_applied):
         assert spy.calls, "smart_crusher crushed but observer wasn't notified"
@@ -234,7 +234,7 @@ def test_smart_crusher_apply_records_observer_per_crushed_message(isolated_toin)
 
 
 def test_smart_crusher_apply_swallows_observer_failures(isolated_toin):
-    """Observer raises → compression still completes, returns valid
+    """Observer raises -> compression still completes, returns valid
     TransformResult, count of raises matches the crushed_count."""
     from headroom.providers.openai import OpenAITokenCounter
     from headroom.tokenizer import Tokenizer
@@ -245,7 +245,7 @@ def test_smart_crusher_apply_swallows_observer_failures(isolated_toin):
     messages = [{"role": "tool", "content": _bigger_array(60)}]
     result = crusher.apply(messages, tok)
     # Either the analyzer didn't crush (boom.raised == 0) or it did
-    # (boom.raised >= 1) — but in both cases compression returned a
+    # (boom.raised >= 1) -- but in both cases compression returned a
     # valid TransformResult. No exception escaped.
     assert result.messages is not None
 
@@ -387,11 +387,11 @@ def test_prometheus_metrics_accumulates_codex_ws_unit_and_frame_counters():
 
 def test_prometheus_export_does_not_leak_per_strategy_metrics():
     """Per-strategy state is tracked in-process only. The Prometheus
-    scrape output deliberately must NOT emit new metric names (to avoid
-    unbounded metric-series growth); the state stays observable via
-    /stats. This test guards that constraint: if a future change adds
-    the metric to the scrape, this fails and forces a conscious
-    decision."""
+    scrape output deliberately must NOT emit new metric names -- the
+    metric->Supabase pipeline treats each metric name as a column, and
+    we cannot add new columns. This test guards that constraint: if a
+    future change adds the metric to the scrape, this fails and forces
+    a conscious decision."""
     import asyncio
 
     from headroom.proxy.prometheus_metrics import PrometheusMetrics
@@ -453,7 +453,7 @@ def test_router_with_prometheus_observer_increments_counters():
     }
 
 
-# IntelligentContextManager observability tests retired with PR-B1 —
+# IntelligentContextManager observability tests retired with PR-B1 --
 # the manager itself was deleted along with the message-dropping
 # strategy. Inner-router observability is now exercised solely
 # through ContentRouter, covered by

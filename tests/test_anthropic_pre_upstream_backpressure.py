@@ -263,7 +263,7 @@ class _DummyAnthropicHandler(AnthropicHandlerMixin):
     ):
         # PR-A8 follow-up: A3 added byte-faithful kwargs to the real
         # ``_retry_request`` signature. The dummy stub doesn't need
-        # to use them — just accept them so existing tests don't
+        # to use them -- just accept them so existing tests don't
         # break with TypeError on the new call sites.
         del original_body_bytes, body_mutated, mutation_reasons
         del request_id, forwarder_name, path_for_log, timeout
@@ -640,7 +640,7 @@ def test_livez_unaffected_under_anthropic_backpressure():
     proxy = app.state.proxy
 
     async def _drain_sem() -> None:
-        # Acquire both permits — no request can enter the pre-upstream region.
+        # Acquire both permits -- no request can enter the pre-upstream region.
         await proxy.anthropic_pre_upstream_sem.acquire()
         await proxy.anthropic_pre_upstream_sem.acquire()
 
@@ -670,7 +670,7 @@ def test_livez_unaffected_under_anthropic_backpressure():
 
     # With only 20 samples `statistics.quantiles(n=100)[98]` collapses to
     # max(latencies), so any single CI hiccup trips the assertion. Drop the
-    # one worst outlier and assert on the next-worst — that still fails hard
+    # one worst outlier and assert on the next-worst -- that still fails hard
     # if /livez is genuinely being blocked by the drained semaphore (every
     # sample would cluster near the drained timeout) but tolerates a single
     # GC pause or scheduler jitter in the 20-sample window.
@@ -742,7 +742,7 @@ def test_compression_is_not_bypassed_when_gated(stage_log_capture):
 def _run_cli_capture(args: list[str], env: dict | None = None) -> ProxyConfig:
     """Invoke the proxy CLI, intercepting ``run_server`` to capture config.
 
-    We do NOT want the CLI to actually start a server — monkeypatching the
+    We do NOT want the CLI to actually start a server -- monkeypatching the
     ``run_server`` entry point (imported lazily inside the click command
     via ``from headroom.proxy.server import ... run_server``) short-
     circuits it and lets us inspect the ``ProxyConfig`` that was built.
@@ -938,7 +938,7 @@ def test_early_exit_paths_release_semaphore_under_contention(scenario):
                     f"raised={raised!r} result={result!r}"
                 )
                 assert raised.status_code == 429, (
-                    f"{scenario}: wrong status code — got {raised.status_code}"
+                    f"{scenario}: wrong status code -- got {raised.status_code}"
                 )
             else:
                 # security returns a JSONResponse; cache returns a Response.

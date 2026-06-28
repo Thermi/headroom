@@ -2,8 +2,8 @@
 
 The rapidocr ecosystem split after 1.4.x:
 
-* `rapidocr-onnxruntime` 1.4.x — Python <3.13 only; tuple result.
-* `rapidocr` 3.x — Python 3.13+; `RapidOCROutput` dataclass result.
+* `rapidocr-onnxruntime` 1.4.x -- Python <3.13 only; tuple result.
+* `rapidocr` 3.x -- Python 3.13+; `RapidOCROutput` dataclass result.
 
 `headroom/image/compressor.py` adapts both at runtime via
 `_resolve_rapidocr` + per-version branches in `_ocr_extract`. These
@@ -87,7 +87,7 @@ def test_resolve_rapidocr_returns_none_when_neither_installed(
 
 
 # ---------------------------------------------------------------------------
-# _ocr_extract — v1 tuple shape
+# _ocr_extract -- v1 tuple shape
 # ---------------------------------------------------------------------------
 
 
@@ -148,7 +148,7 @@ def test_ocr_extract_v1_empty_result_returns_none(monkeypatch: pytest.MonkeyPatc
 
 
 # ---------------------------------------------------------------------------
-# _ocr_extract — v3 dataclass shape
+# _ocr_extract -- v3 dataclass shape
 # ---------------------------------------------------------------------------
 
 

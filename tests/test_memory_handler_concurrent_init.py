@@ -112,7 +112,7 @@ async def test_ensure_initialized_timeout_leaves_handler_unready(tmp_path, monke
             self.config = config
 
         async def _ensure_initialized(self) -> None:
-            # Hang forever — timeout must cancel this.
+            # Hang forever -- timeout must cancel this.
             await asyncio.Event().wait()
 
         async def close(self) -> None:
@@ -126,7 +126,7 @@ async def test_ensure_initialized_timeout_leaves_handler_unready(tmp_path, monke
         MemoryConfig(enabled=True, backend="local", db_path=str(tmp_path / "mem.db"))
     )
 
-    # Attach a handler directly to the module logger — caplog has trouble
+    # Attach a handler directly to the module logger -- caplog has trouble
     # when third-party conftest monkeys with propagation settings.
     import logging as _logging
 
@@ -203,7 +203,7 @@ async def test_ensure_initialized_timeout_nulls_partially_initialized_backend(
 @pytest.mark.asyncio
 async def test_ensure_initialized_cancellation_propagates_and_resets_state(tmp_path, monkeypatch):
     """External cancellation of an in-flight ``_ensure_initialized`` must
-    propagate (CancelledError is BaseException — not a swallowable error)
+    propagate (CancelledError is BaseException -- not a swallowable error)
     and leave the handler in a clean state."""
 
     close_hits = {"n": 0}
@@ -239,7 +239,7 @@ async def test_ensure_initialized_cancellation_propagates_and_resets_state(tmp_p
 
 
 # -------------------------------------------------------------------
-# Real backend init (no monkeypatching) — integration smoke test
+# Real backend init (no monkeypatching) -- integration smoke test
 # -------------------------------------------------------------------
 
 
@@ -283,7 +283,7 @@ async def test_real_localbackend_initializes_via_public_entrypoint(tmp_path):
 @pytest.mark.asyncio
 async def test_warmup_embedder_returns_false_without_backend():
     handler = MemoryHandler(MemoryConfig(enabled=True, backend="local"))
-    # _initialized=False, _backend=None → no-op, no crash.
+    # _initialized=False, _backend=None -> no-op, no crash.
     result = await handler.warmup_embedder()
     assert result is False
 

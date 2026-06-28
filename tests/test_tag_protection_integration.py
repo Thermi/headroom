@@ -93,7 +93,7 @@ class TestCompressPreservesTags:
         assert "Step 1: Parse input" in output
 
     def test_html_tags_still_compressible(self):
-        """Standard HTML tags are NOT protected — they're just text to the compressor."""
+        """Standard HTML tags are NOT protected -- they're just text to the compressor."""
         from headroom.transforms.tag_protector import protect_tags
 
         html_text = "<div>Some content</div> <span>More content</span>"
@@ -144,7 +144,7 @@ class TestRealAPIWithTags:
 
         This tests the compression pipeline, not Claude's behavior.
         We verify the compressed output still contains the protected tags
-        and their content — which is what matters for tool/workflow correctness.
+        and their content -- which is what matters for tool/workflow correctness.
         """
         from headroom import compress
 

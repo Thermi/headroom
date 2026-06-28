@@ -1,7 +1,7 @@
 """Tests for memory notification push-back mechanism.
 
 Covers:
-1. ``MemoryHandler.format_memory_events()`` — structured event parsing
+1. ``MemoryHandler.format_memory_events()`` -- structured event parsing
 2. Streaming SSE ``event: memory_op`` generation (via generator iteration)
 3. Non-streaming ``X-Headroom-Memory-*`` response headers (proxy integration)
 """
@@ -30,7 +30,11 @@ class TestFormatMemoryEvents:
     """Direct unit tests for ``MemoryHandler.format_memory_events()``."""
 
     def test_save_event(self) -> None:
-        results = [_tool_result(json.dumps({"status": "saved", "memory_id": "m1", "content": "Prefers Python"}))]
+        results = [
+            _tool_result(
+                json.dumps({"status": "saved", "memory_id": "m1", "content": "Prefers Python"})
+            )
+        ]
         events = MemoryHandler.format_memory_events(results)
         assert len(events) == 1
         assert events[0]["op"] == "memory_save"
@@ -149,7 +153,7 @@ class TestMemoryNotificationHeaders:
     than going through the full proxy stack (which requires a running
     FastAPI application with a built Rust extension, HTTP/2 support,
     etc.).  The header construction happens inline in the handler after
-    ``handle_memory_tool_calls`` returns — verifying the format of
+    ``handle_memory_tool_calls`` returns -- verifying the format of
     ``format_memory_events`` plus the header keys is sufficient to
     validate the push-back mechanism.
     """

@@ -90,7 +90,7 @@ def test_router_result_helpers_and_summary() -> None:
     assert pure.compression_ratio == 0.4
     assert pure.tokens_saved == 6
     assert pure.savings_percentage == 60.0
-    assert pure.summary() == "Pure text: 10→4 tokens (60% saved)"
+    assert pure.summary() == "Pure text: 10->4 tokens (60% saved)"
 
     mixed = RouterCompressionResult(
         compressed="joined",
@@ -118,7 +118,7 @@ def test_router_result_helpers_and_summary() -> None:
 
 def test_content_signature_and_detection_helpers(monkeypatch: pytest.MonkeyPatch) -> None:
     """Stage-3d (PR5) wired `_detect_content` through the Rust chain
-    (`headroom._core.detect_content_type` → magika → unidiff →
+    (`headroom._core.detect_content_type` -> magika -> unidiff ->
     PlainText). The pre-PR5 Python-side `_get_magika_detector`
     fallback path is gone.
 
@@ -138,7 +138,7 @@ def test_content_signature_and_detection_helpers(monkeypatch: pytest.MonkeyPatch
 
     # Pin the Rust backend so this test exercises the native delegation
     # path on every platform (Windows now defaults to the pure-Python
-    # detector — see content_router._resolve_detect_backend).
+    # detector -- see content_router._resolve_detect_backend).
     monkeypatch.setenv("HEADROOM_DETECT_BACKEND", "rust")
 
     fake_rust_result = SimpleNamespace(
@@ -876,7 +876,7 @@ def test_source_code_passthrough_does_not_invoke_kompress(
 # Cache-safety tests for _process_content_blocks. These pin down the
 # block-level invariants that protect upstream prefix caches:
 #
-#   * cache_control on a block is the client's explicit cache breakpoint —
+#   * cache_control on a block is the client's explicit cache breakpoint --
 #     never modified, regardless of role/type.
 #   * assistant text blocks are part of the cache prefix in subsequent
 #     turns; default-skipped, opt-in via compress_assistant_text_blocks.
@@ -1056,7 +1056,7 @@ def test_tool_role_text_blocks_compressed_by_default(
         set(),
         set(),
     )
-    # tool role ≈ tool output — compress freely
+    # tool role ≈ tool output -- compress freely
     assert "[compressed]" in result["content"][0]["text"]
 
 
@@ -1127,7 +1127,7 @@ def test_detect_backend_env_python_forces_python_path(
 
     monkeypatch.setattr(_core, "detect_content_type", _record)
 
-    # Should not raise — native detector must be bypassed entirely.
+    # Should not raise -- native detector must be bypassed entirely.
     result = _detect_content('[{"id": 1}]')
     assert result.content_type is ContentType.JSON_ARRAY
     assert called == [], "native detect_content_type was called despite python backend"

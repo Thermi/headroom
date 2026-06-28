@@ -309,7 +309,7 @@ class TestCCRFeedbackExtraction:
 
 
 class TestStreamingFeedbackIntegration:
-    """Bug 2: Full feedback loop — streaming headroom_retrieve reaches TOIN."""
+    """Bug 2: Full feedback loop -- streaming headroom_retrieve reaches TOIN."""
 
     def test_record_ccr_feedback_calls_store_retrieve(self):
         """_record_ccr_feedback_from_response calls store.retrieve by hash.

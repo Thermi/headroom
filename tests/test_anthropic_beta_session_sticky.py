@@ -21,7 +21,7 @@ The fix:
 
 Operator opt-in `HEADROOM_BETA_HEADER_STICKY=disabled` short-circuits
 the tracker (returns the client value verbatim). That mode is loud and
-explicit per realignment build constraint #4 — NOT a silent fallback.
+explicit per realignment build constraint #4 -- NOT a silent fallback.
 """
 
 from __future__ import annotations
@@ -45,7 +45,7 @@ from headroom.proxy.helpers import (
 
 
 def test_merge_helper_pure_function() -> None:
-    """Same inputs → same output, no global state."""
+    """Same inputs -> same output, no global state."""
     result1 = merge_anthropic_beta("a,b", ["c"])
     result2 = merge_anthropic_beta("a,b", ["c"])
     assert result1 == result2 == "a,b,c"
@@ -99,7 +99,7 @@ def test_merge_helper_skips_empty_tokens() -> None:
 
 
 def test_merge_helper_no_double_inject_when_already_present() -> None:
-    # Headroom token already in client value → not re-appended.
+    # Headroom token already in client value -> not re-appended.
     assert (
         merge_anthropic_beta("context-management-2025-06-27", ["context-management-2025-06-27"])
         == "context-management-2025-06-27"
@@ -122,7 +122,7 @@ def _isolate_tracker(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_beta_seen_turn_1_present_in_turn_2_even_if_client_drops() -> None:
-    """The core sticky-on guarantee — token observed in turn 1 stays in turn 2."""
+    """The core sticky-on guarantee -- token observed in turn 1 stays in turn 2."""
     tracker = SessionBetaTracker(max_sessions=10)
 
     # Turn 1: client sends two tokens.
@@ -243,12 +243,12 @@ def test_disabled_mode_passes_through(monkeypatch: pytest.MonkeyPatch) -> None:
     out2 = tracker.record_and_get_sticky_betas(
         provider="anthropic", session_id="s-1", client_value=None
     )
-    # Disabled mode: empty client value → empty result; NOT sticky.
+    # Disabled mode: empty client value -> empty result; NOT sticky.
     assert out2 == ""
 
 
 def test_disabled_mode_invalid_value_raises(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Unknown values raise loudly — no silent fallback."""
+    """Unknown values raise loudly -- no silent fallback."""
     monkeypatch.setenv("HEADROOM_BETA_HEADER_STICKY", "yolo")
     with pytest.raises(ValueError, match="HEADROOM_BETA_HEADER_STICKY"):
         get_beta_header_sticky_mode()
@@ -331,7 +331,7 @@ def test_singleton_reset_replaces_instance() -> None:
 
 
 def test_memory_injection_appends_deterministic_order() -> None:
-    """End-to-end: client value + memory beta token → deterministic merged value.
+    """End-to-end: client value + memory beta token -> deterministic merged value.
 
     Mirrors the ad-hoc concat that the handler used to do but via the
     new merge helper. Order is client first, headroom token after.

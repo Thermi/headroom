@@ -2,15 +2,15 @@
 
 ``MemoryQuery`` is the multi-source query value type that replaces
 the pre-PR pattern of "use the latest user message, truncated to 500
-chars". The truncation was a real bug — none of Letta/Mem0/Cognee/
+chars". The truncation was a real bug -- none of Letta/Mem0/Cognee/
 Supermemory truncate the embedding input.
 
 The query is built from three sources, all preserved at full fidelity:
 
-* ``user_text`` — latest user message, untruncated
-* ``recent_tool_outputs`` — last N tool results (often the most
+* ``user_text`` -- latest user message, untruncated
+* ``recent_tool_outputs`` -- last N tool results (often the most
   relevant signal in coding sessions)
-* ``recent_assistant_turns`` — last K assistant turns for intent
+* ``recent_assistant_turns`` -- last K assistant turns for intent
 
 Building the embedding input is a simple concatenation with delimiters
 so the embedding model sees structured context, not a wall of text.
@@ -50,13 +50,13 @@ def test_memory_query_value_equal() -> None:
     assert a == b
 
 
-# ── NO TRUNCATION — the entire point of this type ────────────────────
+# ── NO TRUNCATION -- the entire point of this type ────────────────────
 
 
 def test_full_user_message_is_preserved_no_500_char_cap() -> None:
     """Pre-PR: ``_extract_user_query`` capped at 500 chars. None of
     the four memory systems we surveyed truncate. MemoryQuery must
-    preserve the full message — embedding models handle their own
+    preserve the full message -- embedding models handle their own
     window (MiniLM 512 tok; BGE-small 8K tok)."""
     long_msg = "a" * 8000  # 8KB user message
     q = MemoryQuery(
@@ -66,13 +66,13 @@ def test_full_user_message_is_preserved_no_500_char_cap() -> None:
         conversation_id=None,
     )
     embedding_input = q.to_embedding_input()
-    # Original content fully present — count actual occurrences of "a" run.
+    # Original content fully present -- count actual occurrences of "a" run.
     assert "a" * 8000 in embedding_input
 
 
 def test_tool_outputs_preserved_at_full_fidelity() -> None:
-    """Tool results — often the strongest retrieval signal in coding
-    sessions — must NOT be truncated."""
+    """Tool results -- often the strongest retrieval signal in coding
+    sessions -- must NOT be truncated."""
     big_tool_output = "GREP RESULT\n" + "match line\n" * 1000  # large grep output
     q = MemoryQuery(
         user_text="how do I fix this?",
@@ -105,7 +105,7 @@ def test_embedding_input_includes_all_sources() -> None:
 
 def test_empty_sources_still_produce_valid_query() -> None:
     """A user-msg-only query (no tools, no prior assistant) is the
-    minimum viable case — common on first turn."""
+    minimum viable case -- common on first turn."""
     q = MemoryQuery(
         user_text="hello",
         recent_tool_outputs=(),
@@ -134,7 +134,7 @@ def test_empty_user_text_is_valid_when_only_tool_signal() -> None:
 
 
 def test_from_messages_extracts_latest_user_text() -> None:
-    """Construct from a chat-style messages list — picks the most
+    """Construct from a chat-style messages list -- picks the most
     recent ``role: user`` content."""
     messages = [
         {"role": "user", "content": "first turn"},
@@ -175,7 +175,7 @@ def test_from_messages_caps_assistant_lookback() -> None:
 
 def test_from_messages_extracts_tool_outputs() -> None:
     """Tool results are pulled from ``role: tool`` messages (OpenAI
-    shape) — pre-PR these never participated in retrieval at all."""
+    shape) -- pre-PR these never participated in retrieval at all."""
     messages = [
         {"role": "user", "content": "list files"},
         {"role": "assistant", "content": "I'll run ls"},
@@ -204,7 +204,7 @@ def test_from_messages_handles_anthropic_tool_result_shape() -> None:
 
 
 def test_from_messages_empty_returns_empty_query() -> None:
-    """No messages → empty query, no exception."""
+    """No messages -> empty query, no exception."""
     q = MemoryQuery.from_messages([], lookback_assistant=2, lookback_tools=2)
     assert q.user_text == ""
     assert q.recent_assistant_turns == ()

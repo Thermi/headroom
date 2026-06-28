@@ -2,7 +2,7 @@
 
 Mirrors the Rust matrix in ``crates/headroom-core/tests/auth_mode.rs``
 byte-for-byte. The two implementations MUST agree on every header set
-covered here. Any divergence is a bug — we catch it at PR review by
+covered here. Any divergence is a bug -- we catch it at PR review by
 running both suites side by side.
 """
 
@@ -69,7 +69,7 @@ def test_cursor_ua_classified_subscription() -> None:
 
 
 def test_no_auth_no_user_agent_default_payg() -> None:
-    """Empty headers → safest default is PAYG.
+    """Empty headers -> safest default is PAYG.
 
     The OAuth/bedrock branch fires only when there's a positive
     non-Bearer auth signal. Choosing PAYG by default favors the

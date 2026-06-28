@@ -1,6 +1,6 @@
 """Hard eval: Cases where the LLM has NO reason to check compressed data.
 
-The previous eval asked "are there failures?" — that's too easy, the LLM
+The previous eval asked "are there failures?" -- that's too easy, the LLM
 will proactively check regardless of summary.
 
 This eval tests the SUBTLE case: the user asks a DIFFERENT question,
@@ -144,12 +144,12 @@ class TestHardCases:
         if text:
             print(f"  Text: {text[:200]}")
 
-        # WITH summary mentioning "staging" → should retrieve
+        # WITH summary mentioning "staging" -> should retrieve
         if resp.get("stop_reason") == "tool_use":
             assert tool_calls[0]["name"] == "headroom_retrieve"
             query = tool_calls[0]["input"].get("query", "").lower()
             assert "staging" in query or "database" in query
-            print("  RESULT: Retrieved staging config ✓")
+            print("  RESULT: Retrieved staging config [OK]")
         else:
             # If LLM didn't retrieve, it should at least mention the data is compressed
             assert "compressed" in text.lower() or "staging" in text.lower()
@@ -246,6 +246,6 @@ class TestHardCases:
         if resp.get("stop_reason") == "tool_use":
             query = tool_calls[0]["input"].get("query", "").lower()
             assert "admin" in query
-            print(f"  RESULT: Retrieved admin users (query='{query}') ✓")
+            print(f"  RESULT: Retrieved admin users (query='{query}') [OK]")
         else:
             print("  RESULT: Did not retrieve admin users")

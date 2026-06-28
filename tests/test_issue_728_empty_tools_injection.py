@@ -72,7 +72,7 @@ class TestHandlerGuardCondition:
     """Verify the guard condition that decides whether to write body['tools']."""
 
     def test_no_tools_no_injection_does_not_inject(self):
-        """Client sent no tools and nothing was injected → body must stay tools-free."""
+        """Client sent no tools and nothing was injected -> body must stay tools-free."""
         original_tools = None  # client did not send tools
         tools_after_helpers = []  # helpers return [] when existing_tools=None and no inject
 
@@ -81,7 +81,7 @@ class TestHandlerGuardCondition:
         )
 
     def test_client_sent_empty_tools_is_preserved(self):
-        """Client explicitly sent ``tools: []`` → preserve that field (their choice)."""
+        """Client explicitly sent ``tools: []`` -> preserve that field (their choice)."""
         original_tools = []  # client explicitly sent an empty array
         tools_after_helpers = []  # nothing injected
 
@@ -90,7 +90,7 @@ class TestHandlerGuardCondition:
         )
 
     def test_ccr_injection_sets_body_tools(self):
-        """When CCR injects a tool into an originally tool-free request → set body."""
+        """When CCR injects a tool into an originally tool-free request -> set body."""
         original_tools = None
         from headroom.ccr.tool_injection import create_ccr_tool_definition
 
@@ -101,7 +101,7 @@ class TestHandlerGuardCondition:
         )
 
     def test_client_tools_always_set(self):
-        """Client provided real tools → always write body['tools']."""
+        """Client provided real tools -> always write body['tools']."""
         original_tools = [{"type": "function", "function": {"name": "my_tool"}}]
         tools_after_helpers = original_tools[:]
 
@@ -138,7 +138,7 @@ class TestCCRHelperNoToolsNoCompression:
     """Verify what the helper returns when there are no tools and no CCR happened."""
 
     def test_returns_empty_list_and_false_when_no_session_ccr(self):
-        """No session CCR history + no compression this turn → ([], False)."""
+        """No session CCR history + no compression this turn -> ([], False)."""
         tools_out, was_injected = apply_session_sticky_ccr_tool(
             provider="openai",
             session_id="fresh-session-728",
@@ -147,11 +147,11 @@ class TestCCRHelperNoToolsNoCompression:
             has_compressed_content_this_turn=False,
         )
         assert was_injected is False
-        # Helper still returns [] — the guard in the handler is what prevents injection.
+        # Helper still returns [] -- the guard in the handler is what prevents injection.
         assert tools_out == []
 
     def test_returns_tool_list_when_compression_occurred(self):
-        """First turn with CCR → helper returns the CCR tool definition."""
+        """First turn with CCR -> helper returns the CCR tool definition."""
         tools_out, was_injected = apply_session_sticky_ccr_tool(
             provider="openai",
             session_id="ccr-session-728",

@@ -595,7 +595,7 @@ class TestRereadDetection:
         assert waste.reread_tokens == 0
 
     def test_polling_chain_never_accumulates(self, mock_tokenizer):
-        """Each poll advances the baseline — long chains stay at zero."""
+        """Each poll advances the baseline -- long chains stay at zero."""
         msg = {"role": "tool", "tool_call_id": "c", "content": self.LARGE_CONTENT}
         nudge = {"role": "assistant", "content": "polling"}
         messages = [dict(msg), dict(nudge), dict(msg), dict(nudge), dict(msg), dict(nudge)]

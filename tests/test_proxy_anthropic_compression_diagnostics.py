@@ -8,7 +8,7 @@ distinguish a real pipeline failure from a thread-pool starvation timeout:
    correlated with a specific request rather than guessed at from
    interleaved concurrent logs.
 2. When ``compression_first_stage`` raises, the warning includes the
-   exception type — ``str(asyncio.TimeoutError())`` is empty, which is
+   exception type -- ``str(asyncio.TimeoutError())`` is empty, which is
    why issue #296 shows ``Optimization failed:`` with nothing after the
    colon.
 """
@@ -106,7 +106,7 @@ def test_request_id_plumbed_to_pipeline_apply() -> None:
 
 def test_optimization_failure_logs_exception_type() -> None:
     """When pipeline.apply raises, the warning must include the
-    exception type — issue #296 reported ``Optimization failed:`` with
+    exception type -- issue #296 reported ``Optimization failed:`` with
     an empty message because asyncio.TimeoutError has no str repr.
 
     We patch the handler module's ``logger.warning`` directly rather than

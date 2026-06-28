@@ -53,7 +53,7 @@ def smart_crusher():
     Those properties belong to the lossy + CCR-Dropped path, not
     the lossless path which substitutes a CSV+schema string.
     `with_compaction=False` keeps these tests on the legacy lossy
-    path — same as the retention tests in `test_quality_retention.py`.
+    path -- same as the retention tests in `test_quality_retention.py`.
     """
     config = SmartCrusherConfig(
         enabled=True,
@@ -207,7 +207,7 @@ class TestErrorPreservation:
         compressed_data = json.loads(json_match.group(1) if json_match else compressed_output)
 
         # Count preserved errors. Strip CCR-dropped sentinel objects
-        # before iterating — they carry the retrieval marker for the LLM
+        # before iterating -- they carry the retrieval marker for the LLM
         # but don't share the entry schema.
         compressed_errors = [
             e for e in strip_ccr_sentinels(compressed_data["entries"]) if e["level"] == "ERROR"

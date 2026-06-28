@@ -277,7 +277,7 @@ async def test_finalize_openai_responses_stream_uses_provider_usage_for_dashboar
 async def test_finalize_stream_response_recovers_usage_from_truncated_buffer() -> None:
     """When upstream truncates mid-event (no trailing \\n\\n), the per-chunk
     parser leaves the message_start usage event sitting in sse_buffer and
-    PERF logs cache_read=cache_write=0 — which then poisons the freeze
+    PERF logs cache_read=cache_write=0 -- which then poisons the freeze
     heuristic on the next request. The finalizer must flush the residual
     buffer so the real cache_read / cache_creation tokens still land in
     the log even on aborted streams.

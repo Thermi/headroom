@@ -2,7 +2,7 @@
 
 The SQLite backend is the default for `get_compression_store()` because the
 30-minute TTL assumes entries survive proxy restarts and are visible across
-worker processes — neither holds for the in-memory dict.
+worker processes -- neither holds for the in-memory dict.
 """
 
 from __future__ import annotations
@@ -132,7 +132,7 @@ class TestSQLiteBackend:
 class TestMultiWorkerSafety:
     def test_busy_error_does_not_delete_database(self, db_path):
         """SQLITE_BUSY (OperationalError, a DatabaseError subclass) under
-        multi-worker write contention must be treated as transient — NOT
+        multi-worker write contention must be treated as transient -- NOT
         as corruption that deletes every stored original."""
         b = SQLiteBackend(db_path)
         b.set("h1", make_entry())

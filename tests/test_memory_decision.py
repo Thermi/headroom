@@ -1,6 +1,6 @@
 """Tests for :class:`headroom.proxy.memory_decision.MemoryDecision`.
 
-The point of this file is the *contract* — every behavioural assertion
+The point of this file is the *contract* -- every behavioural assertion
 here is the canonical answer to "should this request have memory
 context injected into it?" that today is computed inline across the
 proxy's handlers with subtle drift.
@@ -9,7 +9,7 @@ Specifically locks (post-PR-this):
 
 * Sites 1/2/3 (Anthropic ``/v1/messages``, Gemini
   ``:generateContent``, OpenAI ``/v1/chat/completions``) MUST gate on
-  bypass — pre-this-PR they didn't, so memory injection silently
+  bypass -- pre-this-PR they didn't, so memory injection silently
   mutated requests under ``x-headroom-bypass: true``.
 * Site 4 (OpenAI ``/v1/responses``) already gated; locked here.
 * Site 6 (OpenAI WS ``/v1/responses``) already gated; locked here.
@@ -18,7 +18,7 @@ Specifically locks (post-PR-this):
   ``tool``) all surface as explicit ``skip_reason`` values, not as
   hidden conditional code.
 
-The decision is **input-side only** — it gates whether mutation of the
+The decision is **input-side only** -- it gates whether mutation of the
 request bytes happens. It does NOT gate background memory STORAGE
 (traffic-learner runs on a separate path and is unaffected by this
 decision).
@@ -42,7 +42,7 @@ def _memory_handler() -> Any:
 
 
 def test_decision_is_frozen() -> None:
-    """Frozen dataclass — mutation would let a handler patch the
+    """Frozen dataclass -- mutation would let a handler patch the
     decision after handing it to the funnel."""
     d = MemoryDecision.decide(
         headers={}, memory_handler=_memory_handler(), memory_user_id="u1", mode_name="auto_tail"
@@ -80,7 +80,7 @@ def test_injects_when_every_gate_open() -> None:
 
 def test_bypass_header_wins_over_every_other_gate() -> None:
     """``x-headroom-bypass: true`` is the user's "do not touch my
-    bytes" signal — highest priority, even when memory is otherwise
+    bytes" signal -- highest priority, even when memory is otherwise
     fully wired. Memory injection mutates the request bytes; bypass
     must skip it. (This was the 3-bug Gemini-class problem pre-PR
     on Anthropic, OpenAI chat, Gemini.)"""
@@ -96,7 +96,7 @@ def test_bypass_header_wins_over_every_other_gate() -> None:
 
 def test_passthrough_mode_header_also_triggers_bypass_skip() -> None:
     """``x-headroom-mode: passthrough`` is the alternate spelling of
-    the bypass signal — mirrors _headroom_bypass_enabled semantics."""
+    the bypass signal -- mirrors _headroom_bypass_enabled semantics."""
     d = MemoryDecision.decide(
         headers={"x-headroom-mode": "passthrough"},
         memory_handler=_memory_handler(),
@@ -108,7 +108,7 @@ def test_passthrough_mode_header_also_triggers_bypass_skip() -> None:
 
 
 def test_no_handler_is_skip() -> None:
-    """No memory backend configured → ``no_handler`` reason."""
+    """No memory backend configured -> ``no_handler`` reason."""
     d = MemoryDecision.decide(
         headers={}, memory_handler=None, memory_user_id="u1", mode_name="auto_tail"
     )
@@ -117,7 +117,7 @@ def test_no_handler_is_skip() -> None:
 
 
 def test_no_user_id_is_skip() -> None:
-    """Memory wired but per-request user_id missing → ``no_user_id``."""
+    """Memory wired but per-request user_id missing -> ``no_user_id``."""
     d = MemoryDecision.decide(
         headers={}, memory_handler=_memory_handler(), memory_user_id=None, mode_name="auto_tail"
     )
@@ -157,7 +157,7 @@ def test_mode_tool_is_skip() -> None:
 
 
 def test_bypass_beats_no_handler() -> None:
-    """When both bypass AND no_handler would skip, surface bypass —
+    """When both bypass AND no_handler would skip, surface bypass --
     user's explicit signal is the more informative dashboard slice."""
     d = MemoryDecision.decide(
         headers={"x-headroom-bypass": "true"},
@@ -216,7 +216,7 @@ def test_observability_booleans_populated_when_injecting() -> None:
 
 
 def test_observability_booleans_populated_when_skipping() -> None:
-    """Same on the skip path — every constituent must be visible."""
+    """Same on the skip path -- every constituent must be visible."""
     d = MemoryDecision.decide(
         headers={"x-headroom-bypass": "true"},
         memory_handler=None,
@@ -229,7 +229,7 @@ def test_observability_booleans_populated_when_skipping() -> None:
     assert d.mode_name == "auto_tail"
 
 
-# ── apply_to_tags — mirror CompressionDecision pattern ───────────────
+# ── apply_to_tags -- mirror CompressionDecision pattern ───────────────
 
 
 def test_apply_to_tags_stamps_reason_when_skipping() -> None:
@@ -247,7 +247,7 @@ def test_apply_to_tags_stamps_reason_when_skipping() -> None:
 
 
 def test_apply_to_tags_is_a_noop_when_injecting() -> None:
-    """No tag when injecting — absence is the signal for "memory was
+    """No tag when injecting -- absence is the signal for "memory was
     used". Avoids spurious ``memory_skip_reason=None`` strings."""
     d = MemoryDecision.decide(
         headers={}, memory_handler=_memory_handler(), memory_user_id="u1", mode_name="auto_tail"

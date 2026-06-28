@@ -880,8 +880,8 @@ def test_anthropic_assistant_message_helper_requires_assistant_role() -> None:
 # These tests pin the `_resolve_ccr_workspace` static helper that the
 # anthropic handler uses to scope the proactive-expansion cache by
 # project identity. The resolver shares its tier order with the memory
-# subsystem's ProjectResolver: x-headroom-project-id → x-headroom-cwd →
-# system-prompt `cwd:` line. Returns `("", None)` on no signal — the
+# subsystem's ProjectResolver: x-headroom-project-id -> x-headroom-cwd ->
+# system-prompt `cwd:` line. Returns `("", None)` on no signal -- the
 # fail-closed signal that callers gate on.
 # ============================================================================
 
@@ -905,7 +905,7 @@ def test_resolve_ccr_workspace_cwd_header() -> None:
     request = _fake_request({"x-headroom-cwd": "/home/user/code/daphni-rails"})
     body = {}
     key, label = AnthropicHandlerMixin._resolve_ccr_workspace(request, body)
-    # Key format: "{basename}-{sha256[:16]}" — stable per absolute cwd.
+    # Key format: "{basename}-{sha256[:16]}" -- stable per absolute cwd.
     assert key.startswith("daphni-rails-")
     assert len(key) >= len("daphni-rails-") + 16
     assert label == "daphni-rails"
@@ -923,7 +923,7 @@ def test_resolve_ccr_workspace_two_cwds_get_distinct_keys() -> None:
 
 
 def test_resolve_ccr_workspace_no_signal_returns_empty() -> None:
-    """No project-id, no cwd header, no system prompt → fail-closed signal."""
+    """No project-id, no cwd header, no system prompt -> fail-closed signal."""
     request = _fake_request({})
     body = {}
     key, label = AnthropicHandlerMixin._resolve_ccr_workspace(request, body)
@@ -953,7 +953,7 @@ def test_resolve_ccr_workspace_malformed_request_returns_empty() -> None:
     request = SimpleNamespace(headers=_BrokenHeaders())
     body = {}
     # The helper catches the exception, logs it, and returns the fail-
-    # closed sentinel ("", None). Critically, it does NOT raise — the
+    # closed sentinel ("", None). Critically, it does NOT raise -- the
     # proxy must continue serving the request even if CCR scoping fails.
     key, label = AnthropicHandlerMixin._resolve_ccr_workspace(request, body)
     assert key == ""

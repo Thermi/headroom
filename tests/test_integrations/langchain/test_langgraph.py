@@ -117,7 +117,7 @@ class TestCompressToolMessages:
 
         result = compress_tool_messages(messages)
 
-        # Should be unchanged — error preserved
+        # Should be unchanged -- error preserved
         assert result.messages[2].content == error_output
         assert result.metrics[0].skip_reason == "error_content_preserved"
 
@@ -195,7 +195,7 @@ class TestCompressToolMessages:
         """Custom min_tokens_to_compress should be respected."""
         from headroom.integrations.langchain.langgraph import compress_tool_messages
 
-        # Content that's ~100 tokens (400 chars) — below a 200 token threshold
+        # Content that's ~100 tokens (400 chars) -- below a 200 token threshold
         medium_output = json.dumps({"data": "x" * 400})
         messages = _make_messages_with_tool_output(medium_output)
 

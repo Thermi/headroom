@@ -3,7 +3,7 @@
 ``headroom mcp serve`` writes every compress / retrieve invocation to a
 shared file-locked log (``_append_shared_event``). Before this fix,
 ``/stats`` only reported proxy-HTTP-path compressions and silently
-ignored the MCP tool work — which is exactly where Strands-style
+ignored the MCP tool work -- which is exactly where Strands-style
 agents spend most of their compression budget when the LLM calls
 ``headroom_compress`` directly.
 
@@ -75,8 +75,8 @@ def test_missing_token_fields_default_to_zero_without_raising() -> None:
     with _mock_events(events):
         result = _aggregate_mcp_events()
     assert result["compressions"] == 3
-    # First contributes 0 (both missing); second contributes 0 (None→0,
-    # and output 0 → input - output = 200... wait that's NOT zero); third 0.
+    # First contributes 0 (both missing); second contributes 0 (None->0,
+    # and output 0 -> input - output = 200... wait that's NOT zero); third 0.
     # Let me re-derive: max(0, 0 - 0) + max(0, 200 - 0) + max(0, 100 - 100)
     #                 = 0 + 200 + 0 = 200
     assert result["tokens_removed"] == 200

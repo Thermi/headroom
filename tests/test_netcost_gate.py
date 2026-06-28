@@ -216,7 +216,7 @@ class TestNetCostFrozenUnlock:
 
     def test_flag_off_frozen_stays_frozen(self, router, tokenizer, monkeypatch):
         # Default (flag off): a message in the prefix cache is never mutated,
-        # however compressible it is — the binary floor wins.
+        # however compressible it is -- the binary floor wins.
         monkeypatch.delenv("HEADROOM_NET_COST_POLICY", raising=False)
         messages = _frozen_messages(_tool_json(2000), suffix_filler_words=5)
         result = router.apply([dict(m) for m in messages], tokenizer, frozen_message_count=2)

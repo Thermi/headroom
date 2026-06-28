@@ -1,6 +1,6 @@
 """Hotfix-A0 smoke tests: deployment-stage Rust core verification.
 
-Background — Finding #2 of HEADROOM_PROXY_LOG_FINDINGS_2026_05_03.md.
+Background -- Finding #2 of HEADROOM_PROXY_LOG_FINDINGS_2026_05_03.md.
 A customer's production proxy was silently running without the
 `headroom._core` PyO3 extension because the Docker image never built it
 into the runtime layer. Diff compression failed 54 times in one day;
@@ -20,7 +20,7 @@ These tests pin the contract for the fix:
    supervisors recognize this as a deliberate configuration failure
    rather than a crash they should retry forever.
 
-3. An explicit opt-out — ``HEADROOM_REQUIRE_RUST_CORE=false`` — keeps
+3. An explicit opt-out -- ``HEADROOM_REQUIRE_RUST_CORE=false`` -- keeps
    the dev-time `pip install -e .` workflow alive without forcing every
    contributor to run maturin.
 
@@ -41,7 +41,7 @@ def test_rust_core_imports() -> None:
 
     The deployment smoke test (`headroom.proxy.server._check_rust_core`)
     asserts on the exact return value so a stale or mis-linked .so is
-    caught — not just a complete `ImportError`. If you change the marker
+    caught -- not just a complete `ImportError`. If you change the marker
     string, you also need to update the lifespan check to match.
     """
     from headroom._core import hello
@@ -71,7 +71,7 @@ def test_proxy_refuses_to_start_when_rust_core_missing(
 
     # Force the import to raise. Patching the symbol on the module is
     # not enough because `_check_rust_core` runs `from headroom._core
-    # import hello` inside its body — we need the import machinery to
+    # import hello` inside its body -- we need the import machinery to
     # raise. `sys.modules` is the cleanest hook for that.
     import sys
 
@@ -95,7 +95,7 @@ def test_proxy_refuses_to_start_when_rust_core_missing(
 
 
 # ──────────────────────────────────────────────────────────────────────────
-# 3. Opt-out path: HEADROOM_REQUIRE_RUST_CORE=false → degraded mode + /health.
+# 3. Opt-out path: HEADROOM_REQUIRE_RUST_CORE=false -> degraded mode + /health.
 # ──────────────────────────────────────────────────────────────────────────
 def test_proxy_starts_in_degraded_mode_when_opt_out_set(
     monkeypatch: pytest.MonkeyPatch,
@@ -105,7 +105,7 @@ def test_proxy_starts_in_degraded_mode_when_opt_out_set(
     `rust_core: "disabled"` so operators can detect the degraded mode.
 
     We spin up a real FastAPI app via `TestClient` because the spec
-    requires the health endpoint to reflect the lifespan state — the
+    requires the health endpoint to reflect the lifespan state -- the
     helper alone doesn't tell us the wiring is right.
     """
     from fastapi.testclient import TestClient
@@ -157,7 +157,7 @@ def test_proxy_starts_in_degraded_mode_when_opt_out_set(
 
 
 # ──────────────────────────────────────────────────────────────────────────
-# 4. Happy path through the helper: real extension present → status=loaded.
+# 4. Happy path through the helper: real extension present -> status=loaded.
 # ──────────────────────────────────────────────────────────────────────────
 def test_check_rust_core_returns_loaded_when_extension_present(
     monkeypatch: pytest.MonkeyPatch,

@@ -67,7 +67,7 @@ def test_custom_interceptor_plugs_in(tokenizer):
             return tool_name == "Echo"
 
         def transform(self, tool_name, tool_input, tool_output):
-            # Must REDUCE tokens — use a single short marker.
+            # Must REDUCE tokens -- use a single short marker.
             return "X"
 
     dummy: ToolResultInterceptor = UpperCase()  # type: ignore[assignment]
@@ -262,7 +262,7 @@ def test_astgrep_skips_non_code_extensions(tokenizer):
 
 
 def test_astgrep_skips_when_line_range_requested(tokenizer):
-    """If the tool_input specifies a line range, the model wants those lines — pass through."""
+    """If the tool_input specifies a line range, the model wants those lines -- pass through."""
     messages = [
         {
             "role": "assistant",
@@ -291,7 +291,7 @@ def test_astgrep_skips_when_line_range_requested(tokenizer):
 def test_progressive_disclosure_second_read_passes_through(tokenizer):
     """First Read of a file gets outlined; second Read of the same path is untouched."""
     messages = [
-        # Turn 1: Read foo.py → outlined
+        # Turn 1: Read foo.py -> outlined
         {
             "role": "assistant",
             "content": [
@@ -307,7 +307,7 @@ def test_progressive_disclosure_second_read_passes_through(tokenizer):
             "role": "user",
             "content": [{"type": "tool_result", "tool_use_id": "t1", "content": _PY_FIXTURE}],
         },
-        # Turn 2: Read foo.py again (model came back for more) → pass through
+        # Turn 2: Read foo.py again (model came back for more) -> pass through
         {
             "role": "assistant",
             "content": [
@@ -371,7 +371,7 @@ def test_progressive_disclosure_different_file_still_outlined(tokenizer):
         },
     ]
     result = apply_to_messages(messages, tokenizer)
-    # Both files get outlined — different keys.
+    # Both files get outlined -- different keys.
     assert len(result.spans) == 2
 
 
@@ -540,7 +540,7 @@ def test_refuses_to_enlarge(tokenizer):
 def test_orphaned_tool_result_does_not_crash(tokenizer):
     """A tool_result with no matching tool_use still runs safely (no tool_name)."""
     messages = [
-        # No tool_use block — the model's prior turn is missing.
+        # No tool_use block -- the model's prior turn is missing.
         {
             "role": "user",
             "content": [
@@ -587,7 +587,7 @@ def test_transform_adapter_respects_frozen_message_count(tokenizer):
     """Messages in the frozen prefix must be untouched to preserve prefix caches."""
     transform = ToolResultInterceptorTransform()
     messages = [
-        # Frozen prefix (first tool_result) — MUST pass through unchanged.
+        # Frozen prefix (first tool_result) -- MUST pass through unchanged.
         {
             "role": "assistant",
             "content": [
@@ -603,7 +603,7 @@ def test_transform_adapter_respects_frozen_message_count(tokenizer):
             "role": "user",
             "content": [{"type": "tool_result", "tool_use_id": "t1", "content": _PY_FIXTURE}],
         },
-        # Mutable tail (second Read of a different file) — free to outline.
+        # Mutable tail (second Read of a different file) -- free to outline.
         {
             "role": "assistant",
             "content": [
@@ -630,7 +630,7 @@ def test_transform_adapter_respects_frozen_message_count(tokenizer):
 
 def test_progressive_disclosure_respects_frozen_prefix_history(tokenizer):
     """If a file was Read in the frozen prefix, re-reading it in the mutable
-    tail passes through — even though apply_to_messages only sees the tail
+    tail passes through -- even though apply_to_messages only sees the tail
     for rewriting, it pre-scans the frozen prefix to seed `fired` keys.
     """
     transform = ToolResultInterceptorTransform()
@@ -658,7 +658,7 @@ def test_progressive_disclosure_respects_frozen_prefix_history(tokenizer):
                 }
             ],
         },
-        # Mutable tail: model reads payments.py again — should pass through
+        # Mutable tail: model reads payments.py again -- should pass through
         # because the frozen prefix already served it.
         {
             "role": "assistant",

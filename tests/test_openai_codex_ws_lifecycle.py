@@ -118,7 +118,7 @@ class _FakeWebSocketDisconnect(Exception):
     """Mirrors the ``WebSocketDisconnect`` type-name check in the handler.
 
     The production code identifies "normal client gone" by
-    ``"WebSocketDisconnect" in type(e).__name__`` — so the fake exception
+    ``"WebSocketDisconnect" in type(e).__name__`` -- so the fake exception
     type name must start with ``WebSocketDisconnect``.
     """
 
@@ -228,11 +228,11 @@ class _FakeUpstream:
     """Upstream that streams scripted events then optionally blocks.
 
     ``hold_after_events`` makes the async iterator wait forever after the
-    scripted events are exhausted — that mirrors a real upstream that
+    scripted events are exhausted -- that mirrors a real upstream that
     keeps the connection open after a ``response.completed`` event. The
     handler's ``_upstream_to_client`` will block on it, so the only way
     the outer ``asyncio.wait`` can progress is via the client-side task
-    completing — which is exactly the cancel-partner path we want to
+    completing -- which is exactly the cancel-partner path we want to
     test.
     """
 
@@ -274,7 +274,7 @@ class _FakeUpstream:
         if self._raise_mid_stream is not None:
             raise self._raise_mid_stream
         if self._hold_after_events:
-            # Wait forever — until the task is cancelled by the handler.
+            # Wait forever -- until the task is cancelled by the handler.
             await asyncio.Event().wait()
 
 
@@ -651,7 +651,7 @@ async def test_ws_later_frame_timeout_records_failed_frame(caplog, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_happy_path_registry_empty_after_response_completed():
-    """Normal session completes — both relay tasks done, registry empty."""
+    """Normal session completes -- both relay tasks done, registry empty."""
     upstream_events = [
         json.dumps({"type": "response.created", "response": {"id": "r_1"}}),
         json.dumps({"type": "response.completed", "response": {"id": "r_1"}}),
@@ -669,7 +669,7 @@ async def test_happy_path_registry_empty_after_response_completed():
     assert handler.metrics.active_ws_sessions == 0
     # termination_cause captured
     assert handler.metrics.termination_causes
-    # Either "response_completed" or "client_disconnect" — both are
+    # Either "response_completed" or "client_disconnect" -- both are
     # acceptable here depending on which relay half exited first; the
     # important thing is we recorded one.
     assert handler.metrics.termination_causes[-1] in {
@@ -885,14 +885,14 @@ async def test_client_disconnect_cancels_upstream_relay_within_100ms():
             except asyncio.CancelledError:
                 pass
 
-    # Registry must be empty — the finally block deregistered the session.
+    # Registry must be empty -- the finally block deregistered the session.
     assert handler.ws_sessions.active_count() == 0, (
-        "session leaked — deregister did not run in outermost finally"
+        "session leaked -- deregister did not run in outermost finally"
     )
     assert handler.metrics.active_ws_sessions == 0
     # We recorded a session duration (came through deregister path).
     assert handler.metrics.ws_session_durations, (
-        "record_ws_session_duration never fired — deregister path broken"
+        "record_ws_session_duration never fired -- deregister path broken"
     )
     # And we tagged the cause. For a client-side exit it should be one
     # of: client_disconnect, client_error, upstream_disconnect (if
@@ -1292,7 +1292,7 @@ async def test_api_key_ws_connect_happens_before_accept():
 async def test_ws_forwards_codex_headers_to_client_accept():
     """OpenAI's x-codex-* subscription window from the upstream WS
     handshake must be forwarded onto the client-facing 101 (and only
-    that subset — never set-cookie/authorization), and Python /stats
+    that subset -- never set-cookie/authorization), and Python /stats
     state must be refreshed.
     """
     upstream_events = [

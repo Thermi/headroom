@@ -129,7 +129,7 @@ class TestVerbositySteering:
         }
         body = {"system": [copy.deepcopy(cached)]}
         assert apply_verbosity_steering(body, 2) is True
-        # The cached block is byte-identical and still first — prefix intact.
+        # The cached block is byte-identical and still first -- prefix intact.
         assert body["system"][0] == cached
         assert body["system"][1] == {"type": "text", "text": steering_text(2)}
         # Our block carries no cache_control (breakpoints are a scarce resource).

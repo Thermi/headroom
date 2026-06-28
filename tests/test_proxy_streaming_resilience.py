@@ -36,12 +36,12 @@ class TestModelResolutionCaching:
             "headroom.pricing.litellm_pricing._resolve_litellm_model_uncached",
             return_value="anthropic/claude-opus-4-6",
         ) as mock_uncached:
-            # First call — should invoke uncached resolution
+            # First call -- should invoke uncached resolution
             result1 = lp.resolve_litellm_model("claude-opus-4-6")
             assert result1 == "anthropic/claude-opus-4-6"
             assert mock_uncached.call_count == 1
 
-            # Second call — should use cache, NOT call uncached again
+            # Second call -- should use cache, NOT call uncached again
             result2 = lp.resolve_litellm_model("claude-opus-4-6")
             assert result2 == "anthropic/claude-opus-4-6"
             assert mock_uncached.call_count == 1  # Still 1, not 2
@@ -76,7 +76,7 @@ class TestModelResolutionCaching:
         elapsed_ms = (time.perf_counter() - start) * 1000
 
         # 10k lookups should take < 50ms (dict lookup is ~0.001ms each)
-        assert elapsed_ms < 50, f"10k cached lookups took {elapsed_ms:.1f}ms — too slow"
+        assert elapsed_ms < 50, f"10k cached lookups took {elapsed_ms:.1f}ms -- too slow"
 
     def test_uncached_adds_provider_prefix_for_claude(self):
         """_resolve_litellm_model_uncached tries provider prefix for claude- models."""
@@ -351,7 +351,7 @@ class TestStreamingErrorHandling:
         """Call the streaming generate pattern matching server.py's generate() function.
 
         Since generate() is a nested closure inside _handle_openai_streaming,
-        we test the error handling pattern directly — same try/except/finally
+        we test the error handling pattern directly -- same try/except/finally
         structure as the real code.
         """
         url = "https://api.openai.com/v1/chat/completions"
@@ -380,7 +380,7 @@ class TestStreamingErrorHandling:
             }
             yield f"event: error\ndata: {json.dumps(error_event)}\n\n".encode()
         finally:
-            # Mirrors the finally block in server.py — should not raise
+            # Mirrors the finally block in server.py -- should not raise
             pass
 
     def _parse_sse_error(self, chunk: bytes) -> dict:
@@ -431,7 +431,7 @@ class TestConcurrentSessionSafety:
         # All should get the same result
         assert all(r == "resolved/claude-opus-4-6" for r in results)
         # Uncached should be called very few times (ideally 1, but a few races are OK)
-        assert call_count <= 5, f"Uncached called {call_count} times — expected ~1"
+        assert call_count <= 5, f"Uncached called {call_count} times -- expected ~1"
 
     @pytest.mark.asyncio
     async def test_concurrent_resolution_different_models(self):
@@ -459,7 +459,7 @@ class TestConcurrentSessionSafety:
 
     @pytest.mark.asyncio
     async def test_concurrent_streaming_errors_are_independent(self):
-        """Each session's streaming error should be independent — one failure shouldn't affect others."""
+        """Each session's streaming error should be independent -- one failure shouldn't affect others."""
 
         async def simulate_session(session_id: int, should_fail: bool):
             """Simulate a streaming session that either succeeds or fails."""
@@ -537,7 +537,7 @@ class TestConcurrentSessionSafety:
 
 
 # ---------------------------------------------------------------------------
-# Cost tracking — no double-counting of cache tokens
+# Cost tracking -- no double-counting of cache tokens
 # ---------------------------------------------------------------------------
 
 

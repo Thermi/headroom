@@ -156,7 +156,7 @@ class TestCompressionCacheFrozenCount:
 
     def test_user_assistant_stable_with_live_zone_cap(self, cache: CompressionCache) -> None:
         """Plain user/assistant turns are individually stable, but the
-        trailing message is reserved as the live zone — the new turn
+        trailing message is reserved as the live zone -- the new turn
         cannot be in any provider prefix cache. See docstring on
         ``CompressionCache.compute_frozen_count``."""
         messages = [
@@ -224,7 +224,7 @@ class TestCompressionCacheFrozenCount:
         self, cache: CompressionCache
     ) -> None:
         """Tool_results marked stable should not stop the frozen count walk."""
-        tool_content = "excluded Read output — big file contents"
+        tool_content = "excluded Read output -- big file contents"
         h = CompressionCache.content_hash(tool_content)
         cache.mark_stable(h)
 
@@ -236,7 +236,7 @@ class TestCompressionCacheFrozenCount:
             },
             {"role": "user", "content": "follow up"},
         ]
-        # Without mark_stable, the walk would stop at msg[1] → frozen=1.
+        # Without mark_stable, the walk would stop at msg[1] -> frozen=1.
         # With stable hash, the walk continues past msg[1]; structural
         # count = 3, then capped at len-1 = 2 (live-zone reservation).
         assert cache.compute_frozen_count(messages) == 2
@@ -302,7 +302,7 @@ class TestCompressionCacheFrozenCount:
         assert hb not in cache._stable_hashes  # msg[2] not included
 
     def test_should_defer_compression_new_content(self, cache: CompressionCache) -> None:
-        """First-time content should NOT be deferred — there is no
+        """First-time content should NOT be deferred -- there is no
         prefix-cache entry to preserve, so compression carries no bust
         cost. Issue #327: prior behavior deferred first-sight, which
         marked every fresh tool_result as stable and disabled
@@ -445,7 +445,7 @@ class TestCompressionCacheApplyAndUpdate:
 #
 # CompressionCache must be safe under multi-threaded mutation. The proxy is
 # async and dispatches multiple concurrent requests per `session_id` into
-# `asyncio.to_thread` workers — a single CompressionCache instance therefore
+# `asyncio.to_thread` workers -- a single CompressionCache instance therefore
 # sees concurrent calls to `store_compressed` / `get_compressed` /
 # `mark_stable_from_messages` / `apply_cached` / `update_from_result`.
 # These tests provoke the race conditions that motivated adding `_lock`.
@@ -480,7 +480,7 @@ class TestCompressionCacheConcurrency:
         stats = cache.get_stats()
         assert stats["entries"] == n_threads * per_thread
         # The expected token count is exact only because each (thread, item)
-        # produces a unique hash → no overwrite path. Pre-lock this would be
+        # produces a unique hash -> no overwrite path. Pre-lock this would be
         # < expected due to lost updates.
         assert stats["tokens_saved"] == expected
 
@@ -591,7 +591,7 @@ class TestCompressionCacheConcurrency:
             t.join()
 
         stats = cache.get_stats()
-        # Each (tid, i) is a unique hash → cache entries == n_threads * per_thread_calls.
+        # Each (tid, i) is a unique hash -> cache entries == n_threads * per_thread_calls.
         assert stats["entries"] == n_threads * per_thread_calls
         assert stats["tokens_saved"] > 0
 

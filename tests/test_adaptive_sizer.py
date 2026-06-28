@@ -126,19 +126,19 @@ class TestNearTotalRedundancy:
 
 class TestHighDiversity:
     def test_all_unique_keeps_most(self):
-        """15 completely unique items → should keep >= 10 (not 4 like before)."""
+        """15 completely unique items -> should keep >= 10 (not 4 like before)."""
         items = _make_unique_items(15)
         k = compute_optimal_k(items)
         assert k >= 10, f"Expected k >= 10 for 15 unique items, got k={k}"
 
     def test_twenty_unique_keeps_most(self):
-        """20 unique items → should keep >= 14."""
+        """20 unique items -> should keep >= 14."""
         items = _make_unique_items(20)
         k = compute_optimal_k(items)
         assert k >= 14, f"Expected k >= 14 for 20 unique items, got k={k}"
 
     def test_twelve_unique_rag_chunks(self):
-        """12 unique RAG chunks → should keep >= 8."""
+        """12 unique RAG chunks -> should keep >= 8."""
         items = _make_unique_items(12)
         k = compute_optimal_k(items)
         assert k >= 8, f"Expected k >= 8 for 12 unique RAG chunks, got k={k}"
@@ -146,13 +146,13 @@ class TestHighDiversity:
 
 class TestLowDiversity:
     def test_repetitive_items_unchanged(self):
-        """15 items from 3 templates → k should stay small (same as before)."""
+        """15 items from 3 templates -> k should stay small (same as before)."""
         items = _make_repetitive_items(15, templates=3)
         k = compute_optimal_k(items)
         assert k <= 8, f"Expected k <= 8 for repetitive items, got k={k}"
 
     def test_twenty_repetitive_stays_small(self):
-        """20 items from 3 templates → k stays small."""
+        """20 items from 3 templates -> k stays small."""
         items = _make_repetitive_items(20, templates=3)
         k = compute_optimal_k(items)
         assert k <= 10, f"Expected k <= 10 for 20 repetitive items, got k={k}"
@@ -160,7 +160,7 @@ class TestLowDiversity:
 
 class TestModerateDiversity:
     def test_half_unique_scales(self):
-        """20 items, 50% unique → k should be in middle range."""
+        """20 items, 50% unique -> k should be in middle range."""
         items = _make_mixed_items(20, unique_fraction=0.5)
         k = compute_optimal_k(items)
         assert 6 <= k <= 16, f"Expected 6 <= k <= 16 for 50% unique, got k={k}"
@@ -176,7 +176,7 @@ class TestKneeInteraction:
         assert k >= 10, f"Expected k >= 10 with high diversity floor, got k={k}"
 
     def test_knee_with_low_diversity_stays(self):
-        """Low diversity + knee found → k stays at knee."""
+        """Low diversity + knee found -> k stays at knee."""
         items = _make_repetitive_items(15, templates=3)
         k = compute_optimal_k(items)
         assert k <= 8, f"Expected knee-derived k <= 8 for low diversity, got k={k}"

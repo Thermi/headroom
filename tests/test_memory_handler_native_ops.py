@@ -861,7 +861,7 @@ def test_inject_tools_extract_query_and_has_tool_calls(
     assert handler._extract_user_query([{"role": "assistant", "content": "skip"}]) == ""
     # Pre-PR-this method truncated at 500 chars; that was a real bug
     # (none of Letta / Mem0 / Cognee / Supermemory truncate the
-    # retrieval query). Now returns the full message — embedder
+    # retrieval query). Now returns the full message -- embedder
     # handles its own context window. See ``MemoryQuery``.
     assert handler._extract_user_query([{"role": "user", "content": "x" * 600}]) == "x" * 600
     assert (
@@ -1212,7 +1212,7 @@ async def test_init_backend_locked_local_and_bridge_import(
     await handler._init_backend_locked()
 
     assert handler.initialized is True
-    # Backend is created but lazy-initialized — _ensure_initialized
+    # Backend is created but lazy-initialized -- _ensure_initialized
     # runs on first memory operation, not during init.
     assert "backend_initialized" not in seen
     assert seen["bridge_called"] is True
@@ -1304,7 +1304,7 @@ def test_memory_handler_init_defaults_and_tool_injection_edges(
     )
     handler = MemoryHandler(MemoryConfig(enabled=False, use_native_tool=True), agent_type="codex")
     assert handler._native_memory_dir == native_dir
-    # Directory is NOT created eagerly — deferred until first write
+    # Directory is NOT created eagerly -- deferred until first write
     assert not native_dir.exists()
 
     disabled_injection = MemoryHandler(
@@ -1476,7 +1476,7 @@ async def test_extract_tool_calls_and_handle_tool_calls_parse_edges(
 @pytest.mark.asyncio
 async def test_execute_list_returns_recent_memories_with_ids(handler: MemoryHandler) -> None:
     """memory_list returns memories in reverse-chronological order with
-    IDs, content, and timestamps. Distinct from memory_search — no
+    IDs, content, and timestamps. Distinct from memory_search -- no
     semantic query required; model can browse to discover IDs."""
 
     class ListBackend:
@@ -1508,7 +1508,7 @@ async def test_execute_list_falls_back_to_search_when_list_unavailable(
     handler: MemoryHandler,
 ) -> None:
     """Backends without list_memories fall back to an empty-query
-    search — most backends treat that as "return recent." Locks the
+    search -- most backends treat that as "return recent." Locks the
     fallback path so a future backend without list_memories still works."""
 
     class SearchOnlyBackend:

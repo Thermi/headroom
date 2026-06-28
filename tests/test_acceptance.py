@@ -94,7 +94,7 @@ class TestDateTrap:
         ]
         result1 = aligner.apply(messages1, tokenizer)
 
-        # Same bytes → same hash, prefix_changed False.
+        # Same bytes -> same hash, prefix_changed False.
         messages2 = [
             {"role": "system", "content": "You are helpful. Current Date: 2024-01-15"},
             {"role": "user", "content": "Hello"},
@@ -105,9 +105,9 @@ class TestDateTrap:
             result1.cache_metrics.stable_prefix_hash
         )
 
-        # Different bytes → hash flips. The detector NEVER strips dynamic
+        # Different bytes -> hash flips. The detector NEVER strips dynamic
         # content, so any byte difference is reflected in the hash. This
-        # is the correct behavior — the customer must move dynamic content
+        # is the correct behavior -- the customer must move dynamic content
         # to the live zone (live-zone tail per PR-A2) to get cache hits.
         messages3 = [
             {"role": "system", "content": "You are VERY helpful. Current Date: 2024-01-15"},
@@ -198,7 +198,7 @@ class TestQueryAnchorExtraction:
         ]
 
         # End-to-end behavior: the relevance scorer (HybridScorer in
-        # the Rust port — BM25 + embedding) should pick up "Alice"
+        # the Rust port -- BM25 + embedding) should pick up "Alice"
         # from the user message and preserve the matching tool item
         # even though it sits at index 50.
         config = SmartCrusherConfig(

@@ -289,7 +289,7 @@ def test_anthropic_no_optimize_preserves_client_tool_order():
 
 def test_anthropic_http_invalid_body_still_emits_stage_timings(stage_log_capture):
     async def receive():
-        # Invalid JSON — produces ``ValueError`` from ``_read_request_json``.
+        # Invalid JSON -- produces ``ValueError`` from ``_read_request_json``.
         return {"type": "http.request", "body": b"not-json", "more_body": False}
 
     scope = {

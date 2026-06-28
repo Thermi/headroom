@@ -1,7 +1,7 @@
 """End-to-end isolation test for the per-project memory router (GH #462).
 
 Verifies that two sessions running in different working directories
-never see each other's memories — neither at search-time, nor in the
+never see each other's memories -- neither at search-time, nor in the
 injected ``## Relevant Memories`` block.
 
 The test stubs out the real backend so we don't have to load embedders
@@ -201,7 +201,7 @@ def test_legacy_callers_without_ctx_hit_legacy_backend(handler: MemoryHandler) -
 
     Verifies the backward-compatibility seam: legacy tests / mocks that
     call ``search_and_format_context(user, messages)`` get the same
-    behaviour they had before — the legacy single-DB backend, no scope
+    behaviour they had before -- the legacy single-DB backend, no scope
     header. This is the path tests + qdrant deployments take.
     """
 
@@ -260,7 +260,7 @@ def test_user_mode_partitions_by_user_id(tmp_path: Path) -> None:
 # When `mode=PROJECT` and `unresolved_project_fallback="empty"` (the new
 # default), an inbound request with no project-resolution signal
 # (x-headroom-project-id / x-headroom-cwd / system-prompt cwd:) must
-# return None from search_and_format_context — NOT silently pool the
+# return None from search_and_format_context -- NOT silently pool the
 # request's memory into the GLOBAL bucket. The old GLOBAL fallback was
 # what surfaced a memory from a prior unrelated TAM-550 session into
 # a live PR-review thread, where the agent misread it as a new command.
@@ -268,7 +268,7 @@ def test_user_mode_partitions_by_user_id(tmp_path: Path) -> None:
 
 
 def test_unresolved_project_returns_no_context(tmp_path: Path) -> None:
-    """No project signals + PROJECT mode + empty fallback → no memory injection."""
+    """No project signals + PROJECT mode + empty fallback -> no memory injection."""
     cfg = MemoryConfig(
         enabled=True,
         backend="local",
@@ -276,7 +276,7 @@ def test_unresolved_project_returns_no_context(tmp_path: Path) -> None:
         inject_context=True,
         mode=MemoryMode.AUTO_TAIL,
         storage_mode=sr_mod.MemoryStorageMode.PROJECT,  # PROJECT mode triggers resolution.
-        # unresolved_project_fallback="empty" — the new default applied
+        # unresolved_project_fallback="empty" -- the new default applied
         # by MemoryHandler when building the BackendRouterConfig.
     )
     handler = MemoryHandler(cfg, agent_type="test")
@@ -292,7 +292,7 @@ def test_unresolved_project_returns_no_context(tmp_path: Path) -> None:
             base_user_id="alice",
         )
 
-        # Seed a backend so search WOULD return something — to prove the
+        # Seed a backend so search WOULD return something -- to prove the
         # gate is at the scope-resolution layer, not just an empty store.
         for backend in _FakeBackend.instances:
             backend.search_results = [
@@ -310,7 +310,7 @@ def test_unresolved_project_returns_no_context(tmp_path: Path) -> None:
 
         # Fail-closed: no memory injected even though backends have data.
         assert context is None, (
-            "Unresolved project in PROJECT mode must skip injection — "
+            "Unresolved project in PROJECT mode must skip injection -- "
             "incident on 2026-05-26 (TAM-550) was caused by the GLOBAL "
             "fallback pooling prior-session content into a fresh thread."
         )

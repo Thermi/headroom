@@ -1,9 +1,6 @@
-"""Tests for headroom.accounting — model usage tracking with statistics."""
+"""Tests for headroom.accounting -- model usage tracking with statistics."""
 
 from __future__ import annotations
-
-import math
-import time
 
 import pytest
 
@@ -17,7 +14,6 @@ from headroom.accounting import (
     get_model_accounting,
     reset_model_accounting,
 )
-
 
 # ---------------------------------------------------------------------------
 # Statistical helpers
@@ -204,10 +200,7 @@ class TestModelCompressionStatsFromRecords:
         assert stats.p50_runtime_ms == 10.0
 
     def test_preserves_order_for_percentiles(self):
-        records = [
-            ModelUsageRecord("m", i * 100, i * 30, i * 5.0)
-            for i in range(1, 101)
-        ]
+        records = [ModelUsageRecord("m", i * 100, i * 30, i * 5.0) for i in range(1, 101)]
         stats = ModelCompressionStats.from_records(records)
         # With 100 values, p1 is roughly the 1st value, p99 roughly the 99th
         assert 0 < stats.p1_input_tokens <= 200
@@ -256,9 +249,11 @@ class TestModelCompressionStatsToDict:
         assert isinstance(d["runtime_ms_distribution"], dict)
 
     def test_populated_to_dict(self):
-        stats = ModelCompressionStats.from_records([
-            ModelUsageRecord("test-model", 150, 75, 12.5),
-        ])
+        stats = ModelCompressionStats.from_records(
+            [
+                ModelUsageRecord("test-model", 150, 75, 12.5),
+            ]
+        )
         d = stats.to_dict()
         assert d["total_calls"] == 1
         assert d["total_input_tokens"] == 150
@@ -278,9 +273,11 @@ class TestModelCompressionStatsToDict:
         for key, value in d.items():
             assert value is not None, f"Key {key!r} is None"
 
-        stats2 = ModelCompressionStats.from_records([
-            ModelUsageRecord("m", 100, 50, 10.0),
-        ])
+        stats2 = ModelCompressionStats.from_records(
+            [
+                ModelUsageRecord("m", 100, 50, 10.0),
+            ]
+        )
         d2 = stats2.to_dict()
         for key, value in d2.items():
             assert value is not None, f"Key {key!r} is None"
@@ -395,7 +392,7 @@ class TestModelAccounting:
         acc = ModelAccounting()
 
         def record_calls(model: str, n: int):
-            for i in range(n):
+            for _i in range(n):
                 acc.record(model, 100, 50, 10.0)
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=4) as ex:

@@ -1,7 +1,7 @@
-"""Integration tests for headroom learn — using real session data.
+"""Integration tests for headroom learn -- using real session data.
 
 These tests run against actual conversation data on the machine.
-They verify the full pipeline: scan → analyze → recommend → write.
+They verify the full pipeline: scan -> analyze -> recommend -> write.
 Tests are skipped if the required data directories don't exist.
 The LLM-based analyzer tests require ANTHROPIC_API_KEY.
 
@@ -164,7 +164,7 @@ class TestClaudeCodeIntegration:
 
     @pytest.mark.skipif(not HAS_API_KEY, reason="No ANTHROPIC_API_KEY")
     def test_full_pipeline_produces_output(self):
-        """Scan → analyze on real data produces valid output."""
+        """Scan -> analyze on real data produces valid output."""
         from headroom.learn.scanner import ClaudeCodeScanner
 
         scanner = ClaudeCodeScanner()
@@ -220,7 +220,7 @@ class TestClaudeCodeIntegration:
 
 
 class TestDecodeProjectPath:
-    """Unit tests for _greedy_path_decode — covers dot-in-path bug (GitHub.nosync)."""
+    """Unit tests for _greedy_path_decode -- covers dot-in-path bug (GitHub.nosync)."""
 
     def test_dot_in_directory_name(self, tmp_path):
         """Paths with dots (e.g. GitHub.nosync) must decode correctly.

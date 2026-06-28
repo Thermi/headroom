@@ -2,7 +2,7 @@
 
 Validates the two claims unit tests cannot: the real API accepts our
 transformed message shapes, and the model can still answer correctly from
-them — the no-accuracy-loss contract, end to end.
+them -- the no-accuracy-loss contract, end to end.
 
 Skipped without ANTHROPIC_API_KEY. Costs: a few hundred haiku tokens/run.
 """
@@ -108,7 +108,7 @@ class TestLifecycleMarkerLive:
                         "type": "tool_result",
                         "tool_use_id": "toolu_e1",
                         "content": "[Read content stale: /src/magic.py was modified after this "
-                        "read — re-read the file for current content. "
+                        "read -- re-read the file for current content. "
                         "Retrieve original: hash=abc123def456abc123def456]",
                     }
                 ],

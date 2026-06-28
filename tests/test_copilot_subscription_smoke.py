@@ -1,8 +1,8 @@
 """Cross-platform smoke test for GitHub Copilot subscription routing.
 
 The subscription flow has to behave identically on macOS, Linux, and Windows
-(and in headless Docker/CI), but the only OS-specific part — reading the
-Copilot CLI token from the platform secret store — is impossible to exercise
+(and in headless Docker/CI), but the only OS-specific part -- reading the
+Copilot CLI token from the platform secret store -- is impossible to exercise
 portably. This suite proves the *portable* contract instead:
 
 1. With an explicit Copilot API token in the environment, resolution + API-URL
@@ -10,12 +10,12 @@ portably. This suite proves the *portable* contract instead:
    is the deterministic escape hatch (``GITHUB_COPILOT_API_TOKEN``) for
    headless CI. OAuth tokens still need successful token exchange before
    subscription mode can use them.
-2. Each OS-specific secret reader is inert on a foreign platform — so on any
+2. Each OS-specific secret reader is inert on a foreign platform -- so on any
    given OS only that OS's reader can fire, and a missing/foreign secret store
    degrades to ``None`` rather than crashing.
 3. The proxy injects exactly the token the wrapper validated (the
    deterministic-handoff fix), never a different discoverable one.
-4. The full wrapper→proxy chain carries one consistent token end to end.
+4. The full wrapper->proxy chain carries one consistent token end to end.
 
 Everything here is hermetic: no Keychain, no ``secret-tool``, no Credential
 Manager, no network. It runs the same on every OS.
@@ -86,7 +86,7 @@ def test_api_url_falls_back_to_default_when_user_info_unavailable(
     monkeypatch.delenv("GITHUB_COPILOT_API_URL", raising=False)
     monkeypatch.setattr(copilot_auth, "_fetch_copilot_user_info", lambda token: None)
 
-    # No network / no endpoints advertised → safe default, never a crash.
+    # No network / no endpoints advertised -> safe default, never a crash.
     assert copilot_auth.resolve_copilot_api_url("gho-anything") == copilot_auth.DEFAULT_API_URL
 
 
@@ -159,7 +159,7 @@ def test_proxy_injects_explicit_token_over_discovered_one(
     monkeypatch.setenv("GITHUB_COPILOT_API_TOKEN", "gho-validated")
     monkeypatch.setenv("GITHUB_COPILOT_API_URL", BUSINESS_API)
     monkeypatch.setenv("GITHUB_COPILOT_USE_TOKEN_EXCHANGE", "false")
-    # A *different* token is discoverable — it must be ignored entirely.
+    # A *different* token is discoverable -- it must be ignored entirely.
     monkeypatch.setattr(
         copilot_auth, "read_cached_oauth_token", lambda: "gho-WRONG-should-not-be-used"
     )
@@ -176,13 +176,13 @@ def test_proxy_injects_explicit_token_over_discovered_one(
 
 
 # ---------------------------------------------------------------------------
-# 4. Full wrapper→proxy chain carries one consistent token to a pinned host.
+# 4. Full wrapper->proxy chain carries one consistent token to a pinned host.
 # ---------------------------------------------------------------------------
 def test_end_to_end_subscription_chain(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(copilot_auth, "_provider", None)
 
     # (a) wrapper side: resolve + validate the subscription token. The API host
-    #     comes from the GITHUB_COPILOT_API_URL pin — the supported way to target
+    #     comes from the GITHUB_COPILOT_API_URL pin -- the supported way to target
     #     a dedicated enterprise / data-residency host. user-info is NOT used to
     #     route (#610), so it advertises a *different* host here to prove it is
     #     ignored when picking the upstream.

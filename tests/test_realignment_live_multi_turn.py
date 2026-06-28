@@ -1,4 +1,4 @@
-"""Wave 3 — multi-turn live integration tests for the Phase A+B realignment.
+"""Wave 3 -- multi-turn live integration tests for the Phase A+B realignment.
 
 These tests guard the load-bearing claims of the megamerge branch
 (``realign-phase-AB-cache-safety-and-live-zone``) against real upstream
@@ -8,15 +8,15 @@ default ``pytest -m "not live"`` run never touches the network.
 
 Each test maps to one or more A+B PR claims:
 
-* ``test_anthropic_cache_hit_across_two_turns`` — A2/A6/E (cache hot zone)
-* ``test_anthropic_cache_stable_when_live_zone_compresses`` — B2/B3
-* ``test_anthropic_cache_control_passthrough_byte_faithful`` — A3/A4
-* ``test_openai_chat_completions_multi_turn_through_proxy`` — A8/B
-* ``test_openai_streaming_sse_chunks_arrive_in_order`` — A8 (SSE wire)
-* ``test_gemini_multi_turn_through_proxy`` — Gemini handler reachability
-* ``test_ccr_marker_round_trip_live`` — B7 (CCR persistence)
-* ``test_memory_tail_injection_does_not_modify_system_prompt_live`` — B6/A2
-* ``test_classify_auth_mode_routes_payg_vs_oauth`` — Phase F-prep / B5
+* ``test_anthropic_cache_hit_across_two_turns`` -- A2/A6/E (cache hot zone)
+* ``test_anthropic_cache_stable_when_live_zone_compresses`` -- B2/B3
+* ``test_anthropic_cache_control_passthrough_byte_faithful`` -- A3/A4
+* ``test_openai_chat_completions_multi_turn_through_proxy`` -- A8/B
+* ``test_openai_streaming_sse_chunks_arrive_in_order`` -- A8 (SSE wire)
+* ``test_gemini_multi_turn_through_proxy`` -- Gemini handler reachability
+* ``test_ccr_marker_round_trip_live`` -- B7 (CCR persistence)
+* ``test_memory_tail_injection_does_not_modify_system_prompt_live`` -- B6/A2
+* ``test_classify_auth_mode_routes_payg_vs_oauth`` -- Phase F-prep / B5
 
 Run with::
 
@@ -58,27 +58,27 @@ from tests._dotenv import autouse_apply_env, load_env_overrides  # noqa: E402
 # ``feedback_realignment_build_constraints.md``).
 
 LIVE_CONFIG: dict[str, Any] = {
-    # Anthropic — primary model with explicit fallback. The fallback path
+    # Anthropic -- primary model with explicit fallback. The fallback path
     # only triggers if the primary returns 4xx for "model not found".
     "anthropic_model_primary": os.environ.get("HEADROOM_LIVE_ANTHROPIC_MODEL", "claude-sonnet-4-5"),
     "anthropic_model_fallback": "claude-3-5-sonnet-20241022",
     "anthropic_version": "2023-06-01",
-    # OpenAI — small + cheap.
+    # OpenAI -- small + cheap.
     "openai_model": os.environ.get("HEADROOM_LIVE_OPENAI_MODEL", "gpt-4o-mini"),
-    # Gemini — flash variants.
+    # Gemini -- flash variants.
     "gemini_model": os.environ.get("HEADROOM_LIVE_GEMINI_MODEL", "gemini-2.0-flash"),
-    # Token budgets — keep small so each test stays under 30s.
+    # Token budgets -- keep small so each test stays under 30s.
     "max_tokens_short": 32,
     "max_tokens_med": 128,
-    # Cache prefix size — must exceed Anthropic's prompt-cache minimum
+    # Cache prefix size -- must exceed Anthropic's prompt-cache minimum
     # (~1024 tokens for Sonnet/Opus). We pad with deterministic English
     # sentences so each turn is byte-identical.
     "cache_prefix_min_chars": 6000,
-    # Live-zone tool_result payload — must be large enough that ContentRouter
+    # Live-zone tool_result payload -- must be large enough that ContentRouter
     # routes it through SmartCrusher (default min_tokens_to_crush=500). 8KB
     # of JSON dicts gets us comfortably above that.
     "live_zone_tool_result_items": 200,
-    # CCR test payload — same shape, bigger.
+    # CCR test payload -- same shape, bigger.
     "ccr_tool_result_items": 250,
     # Memory test fixtures.
     "memory_user_id": "wave3-test-user",
@@ -105,9 +105,9 @@ def proxy_client() -> Iterator[TestClient]:
     """Module-scoped proxy client with live-zone compression enabled.
 
     The default config exercises the full A+B pipeline:
-      * ``optimize=True`` — live-zone block dispatcher runs (B2/B3)
-      * ``ccr_inject_tool=True`` — CCR persists + tool injected (B7)
-      * cache/rate-limit disabled — keep tests deterministic
+      * ``optimize=True`` -- live-zone block dispatcher runs (B2/B3)
+      * ``ccr_inject_tool=True`` -- CCR persists + tool injected (B7)
+      * cache/rate-limit disabled -- keep tests deterministic
     """
     config = ProxyConfig(
         optimize=True,
@@ -131,7 +131,7 @@ def _build_cache_prefix() -> str:
         "Headroom is a context-engineering layer for LLM applications. "
         "It compresses tool outputs, aligns prefix caches, and routes content "
         "to specialized compressors. The realignment branch (Phase A+B) hardens "
-        "cache stability and constrains compression to the live zone — the "
+        "cache stability and constrains compression to the live zone -- the "
         "latest user message tail. Frozen prefixes are never mutated. "
     )
     out = []
@@ -190,11 +190,11 @@ def _resolve_anthropic_model(client: TestClient, api_key: str) -> str:
 
 @pytest.mark.skipif(not ANTHROPIC_KEY, reason="ANTHROPIC_API_KEY not set")
 def test_anthropic_cache_hit_across_two_turns(proxy_client: TestClient) -> None:
-    """A2/A6/E — sending identical cache_control'd system+messages twice
+    """A2/A6/E -- sending identical cache_control'd system+messages twice
     must produce a cache_read_input_tokens > 0 on turn 2.
 
     The proxy's cache hot zone (system prompt + frozen prefix) is
-    invariant I2 from the realignment plan — if compression mutates any
+    invariant I2 from the realignment plan -- if compression mutates any
     of those bytes, this hit count goes to 0 and the test fails.
     """
     model = _resolve_anthropic_model(proxy_client, ANTHROPIC_KEY)
@@ -234,14 +234,14 @@ def test_anthropic_cache_hit_across_two_turns(proxy_client: TestClient) -> None:
     cache_create_t1 = usage1.get("cache_creation_input_tokens", 0)
     cache_read_t1 = usage1.get("cache_read_input_tokens", 0)
     assert cache_create_t1 > 0 or cache_read_t1 > 0, (
-        "Anthropic did neither cache-create nor cache-read on turn 1 — "
+        "Anthropic did neither cache-create nor cache-read on turn 1 -- "
         f"prefix likely below the per-model minimum. usage={usage1}"
     )
 
     # Anthropic's prompt cache write is eventually consistent: a turn-2
     # read immediately after turn-1's write occasionally returns 0
     # cache_read tokens even though the bytes are byte-identical. Retry up
-    # to N times before declaring the cache broken — this isolates "proxy
+    # to N times before declaring the cache broken -- this isolates "proxy
     # broke cache stability" (always 0) from "Anthropic write hadn't
     # propagated yet" (eventually > 0). The realignment claim is cache
     # STABILITY across turns, not first-turn-write latency.
@@ -278,12 +278,12 @@ def test_anthropic_cache_hit_across_two_turns(proxy_client: TestClient) -> None:
 def test_anthropic_cache_stable_when_live_zone_compresses(
     proxy_client: TestClient,
 ) -> None:
-    """B2/B3 — turn 2 mutates only the LATEST user message (a fresh tool_result
+    """B2/B3 -- turn 2 mutates only the LATEST user message (a fresh tool_result
     block large enough to compress). The cached prefix must still hit.
 
     Asserts:
       (a) cache_read_input_tokens > 0 on turn 2 (prefix preserved)
-      (b) the proxy emitted a compression header — proving the live-zone
+      (b) the proxy emitted a compression header -- proving the live-zone
           dispatcher actually ran on the new tail block.
     """
     model = _resolve_anthropic_model(proxy_client, ANTHROPIC_KEY)
@@ -297,7 +297,7 @@ def test_anthropic_cache_stable_when_live_zone_compresses(
         }
     ]
 
-    # Turn 1 — small conversation. Warms the cache.
+    # Turn 1 -- small conversation. Warms the cache.
     body1 = {
         "model": model,
         "max_tokens": LIVE_CONFIG["max_tokens_short"],
@@ -309,11 +309,11 @@ def test_anthropic_cache_stable_when_live_zone_compresses(
     resp1 = _anthropic_call(proxy_client, api_key=ANTHROPIC_KEY, body=body1)
     assert resp1.status_code == 200, resp1.text
 
-    # Turn 2 — same prefix + a NEW large user content carrying a JSON-ish
+    # Turn 2 -- same prefix + a NEW large user content carrying a JSON-ish
     # payload. ContentRouter should route this through the live-zone
     # compressor. Anthropic doesn't accept arbitrary tool_result on a
     # standalone turn (it must follow a prior tool_use), so we put the
-    # payload in a text block on the latest user turn — same load-bearing
+    # payload in a text block on the latest user turn -- same load-bearing
     # claim, same code path through the live-zone block dispatcher.
     big_payload = json.dumps(
         [
@@ -364,7 +364,7 @@ def test_anthropic_cache_stable_when_live_zone_compresses(
     assert tokens_before is not None, "proxy did not emit x-headroom-tokens-before"
     assert tokens_after is not None, "proxy did not emit x-headroom-tokens-after"
     assert int(tokens_before) >= int(tokens_after), (
-        f"tokens_after ({tokens_after}) > tokens_before ({tokens_before}) — "
+        f"tokens_after ({tokens_after}) > tokens_before ({tokens_before}) -- "
         "live-zone compression should never inflate"
     )
 
@@ -378,7 +378,7 @@ def test_anthropic_cache_stable_when_live_zone_compresses(
 def test_anthropic_cache_control_passthrough_byte_faithful(
     proxy_client: TestClient,
 ) -> None:
-    """A3/A4 — when no compression is needed, the bytes the proxy forwards
+    """A3/A4 -- when no compression is needed, the bytes the proxy forwards
     upstream must be byte-identical to what the client sent (modulo the
     proxy's own internal x-headroom-* header strip and the Authorization
     rewrite).
@@ -456,7 +456,7 @@ def test_anthropic_cache_control_passthrough_byte_faithful(
         f"cache_control mutated: {sys_blocks[0]!r}"
     )
     # And the user content block was preserved as a list-of-content-blocks
-    # (not flattened to a string — that would break cache hashing
+    # (not flattened to a string -- that would break cache hashing
     # downstream).
     user_msg = captured_body["messages"][0]
     assert isinstance(user_msg["content"], list), f"user content flattened: {user_msg!r}"
@@ -472,7 +472,7 @@ def test_anthropic_cache_control_passthrough_byte_faithful(
 def test_openai_chat_completions_multi_turn_through_proxy(
     proxy_client: TestClient,
 ) -> None:
-    """A8/B — three-turn conversation through ``/v1/chat/completions`` works,
+    """A8/B -- three-turn conversation through ``/v1/chat/completions`` works,
     and the proxy doesn't drop earlier assistant turns from the messages
     list when forwarding subsequent turns.
     """
@@ -503,7 +503,7 @@ def test_openai_chat_completions_multi_turn_through_proxy(
     assert assistant1.get("content"), "turn 1 returned empty content"
     messages.append({"role": "assistant", "content": assistant1["content"]})
 
-    # Turn 2 — referencing turn 1 implicitly forces the model to use prior
+    # Turn 2 -- referencing turn 1 implicitly forces the model to use prior
     # context. If the proxy drops earlier turns, the answer will be
     # nonsense, but we only assert structure (content non-empty + valid
     # role), not semantic correctness.
@@ -540,7 +540,7 @@ def test_openai_chat_completions_multi_turn_through_proxy(
 
     # Final transcript carries 7 messages (sys + 3 user + 3 assistant).
     # If the proxy were dropping prior assistants from the forwarded
-    # messages list (a B-zone bug), turn 3 would still respond — but
+    # messages list (a B-zone bug), turn 3 would still respond -- but
     # earlier turns' content would have been silently lost. We assert the
     # client-side list is intact; live-zone compression is not allowed to
     # mutate the agent's view of prior turns.
@@ -558,7 +558,7 @@ def test_openai_chat_completions_multi_turn_through_proxy(
 def test_openai_streaming_sse_chunks_arrive_in_order(
     proxy_client: TestClient,
 ) -> None:
-    """A8 — SSE wire-format invariants: each event is ``data: ...\\n\\n``,
+    """A8 -- SSE wire-format invariants: each event is ``data: ...\\n\\n``,
     chunks reassemble to non-empty content, terminator is ``data: [DONE]``.
     """
     model = LIVE_CONFIG["openai_model"]
@@ -611,7 +611,7 @@ def test_openai_streaming_sse_chunks_arrive_in_order(
     for raw_data in data_lines:
         try:
             obj = json.loads(raw_data)
-        except json.JSONDecodeError:  # pragma: no cover — should never happen
+        except json.JSONDecodeError:  # pragma: no cover -- should never happen
             pytest.fail(f"non-JSON SSE data chunk: {raw_data!r}")
         for choice in obj.get("choices", []):
             delta = choice.get("delta", {}) or {}
@@ -628,7 +628,7 @@ def test_openai_streaming_sse_chunks_arrive_in_order(
 
 @pytest.mark.skipif(not GEMINI_KEY, reason="GEMINI_API_KEY not set")
 def test_gemini_multi_turn_through_proxy(proxy_client: TestClient) -> None:
-    """Gemini handler reachability — two-turn conversation through the
+    """Gemini handler reachability -- two-turn conversation through the
     native ``/v1beta/models/{model}:generateContent`` endpoint.
     """
     model = LIVE_CONFIG["gemini_model"]
@@ -661,17 +661,17 @@ def test_gemini_multi_turn_through_proxy(proxy_client: TestClient) -> None:
 
 @pytest.mark.skipif(not ANTHROPIC_KEY, reason="ANTHROPIC_API_KEY not set")
 def test_ccr_marker_round_trip_live() -> None:
-    """B7 — CCR round-trip across the live proxy.
+    """B7 -- CCR round-trip across the live proxy.
 
     Verifies two halves of the B7 contract:
 
-      (a) **Tool injection** — when ``ccr_inject_tool=True``, the proxy
+      (a) **Tool injection** -- when ``ccr_inject_tool=True``, the proxy
           injects the ``headroom_retrieve`` tool into the upstream-bound
           ``tools`` array on every request. This is the load-bearing claim
           of PR-B7's "always-on tool" hardening: the model can always call
           retrieve, even before any compression has happened.
 
-      (b) **Retrieve round-trip** — given a CCR hash present in the
+      (b) **Retrieve round-trip** -- given a CCR hash present in the
           compression store, ``POST /v1/retrieve`` returns the original
           bytes verbatim by hash. We pre-populate the store with a fixture
           entry (matching the established CCR-test pattern in
@@ -691,7 +691,7 @@ def test_ccr_marker_round_trip_live() -> None:
 
     # Pre-populate the compression store with a fixture entry. This is
     # the same pattern existing CCR tests use to drive the retrieve
-    # surface — the round-trip path is what we're guarding here, not the
+    # surface -- the round-trip path is what we're guarding here, not the
     # SmartCrusher write path (which is exercised by other tests).
     fixture_items = [
         {
@@ -756,10 +756,10 @@ def test_ccr_marker_round_trip_live() -> None:
         proxy._retry_request = _capture  # type: ignore[assignment]
         try:
             # Body carries:
-            #   * a user-defined tool — ensures the proxy MERGES
+            #   * a user-defined tool -- ensures the proxy MERGES
             #     headroom_retrieve with existing tools rather than only
             #     injecting on empty-tools requests.
-            #   * a CCR compression marker on the prior tool_result —
+            #   * a CCR compression marker on the prior tool_result --
             #     this triggers ``has_compressed_content_this_turn=True``
             #     in the session-sticky tool injector (PR-B7), which
             #     forces ``headroom_retrieve`` into the tools array on
@@ -861,7 +861,7 @@ def test_ccr_marker_round_trip_live() -> None:
 def test_memory_tail_injection_does_not_modify_system_prompt_live(
     proxy_client: TestClient,
 ) -> None:
-    """B6/A2 — with ``MemoryMode.AUTO_TAIL`` and ``inject_context=True``,
+    """B6/A2 -- with ``MemoryMode.AUTO_TAIL`` and ``inject_context=True``,
     retrieved memory must be appended to the latest user message, NOT the
     system prompt.
 
@@ -931,7 +931,7 @@ def test_memory_tail_injection_does_not_modify_system_prompt_live(
                 **kwargs: Any,
             ) -> httpx.Response:
                 captured["body"] = body_arg
-                # Return a synthetic 200 — no need to hit upstream for an
+                # Return a synthetic 200 -- no need to hit upstream for an
                 # injection-positioning assertion.
                 return httpx.Response(
                     200,
@@ -1042,7 +1042,7 @@ def _classify_auth_mode_from_headers(headers: dict[str, str]) -> str:
 
 
 def test_classify_auth_mode_routes_payg_vs_oauth(proxy_client: TestClient) -> None:
-    """Phase F-prep / B5 — no network calls. Three header shapes are sent
+    """Phase F-prep / B5 -- no network calls. Three header shapes are sent
     to the proxy; we capture what the dispatcher saw and classify each.
 
     NB: This is the only test in the file that does NOT make a live API

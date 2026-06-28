@@ -684,11 +684,11 @@ class EvalMetrics:
 
     def __str__(self) -> str:
         lines = [
-            f"Compression: {self.compression_ratio:.1%} ({self.original_length} → {self.compressed_length} chars)",
-            f"Tokens: {self.tokens_before} → {self.tokens_after} ({self.tokens_before - self.tokens_after} saved)",
+            f"Compression: {self.compression_ratio:.1%} ({self.original_length} -> {self.compressed_length} chars)",
+            f"Tokens: {self.tokens_before} -> {self.tokens_after} ({self.tokens_before - self.tokens_after} saved)",
             f"Keys: {self.key_preservation_ratio:.0%} ({len(self.keys_preserved)}/{len(self.keys_preserved) + len(self.keys_missing)})",
             f"Signatures: {self.signature_preservation_ratio:.0%} ({len(self.signatures_preserved)}/{len(self.signatures_preserved) + len(self.signatures_missing)})",
-            f"Detection: {'✓' if self.detection_correct else '✗'} ({self.detected_type.name})",
+            f"Detection: {'[OK]' if self.detection_correct else '[X]'} ({self.detected_type.name})",
         ]
         if self.keys_missing:
             lines.append(f"Missing keys: {self.keys_missing[:5]}...")
@@ -1059,7 +1059,7 @@ class TestMultiToolAgentScenario:
         total_compressed = sum(r.tokens_after for r in results)
 
         print("\nBatch compression results:")
-        print(f"  Total tokens: {total_original} → {total_compressed}")
+        print(f"  Total tokens: {total_original} -> {total_compressed}")
         print(
             f"  Savings: {total_original - total_compressed} tokens ({(1 - total_compressed / total_original):.1%})"
         )
@@ -1207,11 +1207,11 @@ class TestCompressionQualityMetrics:
             print(f"\n{name}:")
             print(f"  Type: {result.content_type.name} (expected: {expected_type.name})")
             print(f"  Compression: {result.compression_ratio:.1%}")
-            print(f"  Tokens: {result.tokens_before} → {result.tokens_after}")
+            print(f"  Tokens: {result.tokens_before} -> {result.tokens_after}")
             print(f"  Handler: {result.handler_used}")
 
         print("\n" + "-" * 60)
-        print(f"TOTAL: {total_original} → {total_compressed} tokens")
+        print(f"TOTAL: {total_original} -> {total_compressed} tokens")
         print(
             f"OVERALL SAVINGS: {total_original - total_compressed} tokens ({(1 - total_compressed / total_original):.1%})"
         )

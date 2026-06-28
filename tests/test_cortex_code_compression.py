@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """End-to-end token-savings test for Cortex Code (CoCo) + Headroom.
 
-Simulates a real Cortex Code session using JSON-format tool results —
+Simulates a real Cortex Code session using JSON-format tool results --
 the format Snowflake's Python connector and most tool wrappers actually
 emit.  Headroom's SmartCrusher compresses JSON natively without any ML
 model, so this test works with the base install (no [ml] extra needed).
@@ -27,7 +27,7 @@ MODEL = "claude-sonnet-4-5-20250929"
 
 
 def snowflake_tables_json() -> str:
-    """JSON array returned by INFORMATION_SCHEMA.TABLES — SmartCrusher target."""
+    """JSON array returned by INFORMATION_SCHEMA.TABLES -- SmartCrusher target."""
     rows = [
         {
             "TABLE_CATALOG": "PROD_DB",
@@ -46,7 +46,7 @@ def snowflake_tables_json() -> str:
 
 
 def snowflake_schema_json() -> str:
-    """JSON array from DESCRIBE TABLE — repeated structure SmartCrusher loves."""
+    """JSON array from DESCRIBE TABLE -- repeated structure SmartCrusher loves."""
     base = [
         {
             "COLUMN_NAME": "order_id",
@@ -209,7 +209,7 @@ def snowflake_schema_json() -> str:
             "COMMENT": "SCD validity end",
         },
     ]
-    # Three tables introspected in sequence — same schema, different table names
+    # Three tables introspected in sequence -- same schema, different table names
     result = []
     for table in ["stg_orders", "int_orders_enriched", "fct_revenue"]:
         for col in base:
@@ -218,7 +218,7 @@ def snowflake_schema_json() -> str:
 
 
 def dbt_run_results_json() -> str:
-    """JSON run-results.json from a dbt invocation — realistic CoCo tool output."""
+    """JSON run-results.json from a dbt invocation -- realistic CoCo tool output."""
     nodes = [
         {
             "unique_id": f"model.analytics.{'stg_' if i < 10 else 'fct_'}model_{i:03d}",
@@ -246,7 +246,7 @@ def dbt_run_results_json() -> str:
 
 
 def rag_cortex_search_json() -> str:
-    """JSON results from a Cortex Search query — common in CoCo sessions."""
+    """JSON results from a Cortex Search query -- common in CoCo sessions."""
     docs = [
         {
             "rank": i + 1,
@@ -283,10 +283,10 @@ def build_coco_session_messages() -> list[dict]:
 
     Turn structure mirrors what CoCo actually does:
       1. User asks to fix fct_revenue
-      2. CoCo queries table catalog  (→ large JSON tool result)
-      3. CoCo introspects schema     (→ large JSON tool result)
-      4. CoCo runs dbt, reads results (→ large JSON tool result)
-      5. CoCo searches the wiki      (→ large JSON tool result)
+      2. CoCo queries table catalog  (-> large JSON tool result)
+      3. CoCo introspects schema     (-> large JSON tool result)
+      4. CoCo runs dbt, reads results (-> large JSON tool result)
+      5. CoCo searches the wiki      (-> large JSON tool result)
       6. User asks follow-up
     """
     return [
@@ -411,7 +411,7 @@ def _table_row(label: str, before: int, after: int) -> str:
     saved = before - after
     pct = saved / max(before, 1) * 100
     bar = "█" * int(pct / 5)
-    return f"  {label:<35} {before:>7,} → {after:>7,}   {pct:>5.1f}%  {bar}"
+    return f"  {label:<35} {before:>7,} -> {after:>7,}   {pct:>5.1f}%  {bar}"
 
 
 # ── Pytest tests ──────────────────────────────────────────────────────────────
@@ -572,8 +572,8 @@ if __name__ == "__main__":
 
     print()
     print("=" * 65)
-    print("  Cortex Code × Headroom  —  token savings benchmark")
-    print("  (No API key needed — compression is fully local)")
+    print("  Cortex Code × Headroom  --  token savings benchmark")
+    print("  (No API key needed -- compression is fully local)")
     print("=" * 65)
 
     payloads = [
@@ -675,5 +675,5 @@ if __name__ == "__main__":
             f"  PASS  headroom saved {total_saved:,} tokens ({total_pct:.0f}%) across all CoCo payload types"
         )
     else:
-        print("  FAIL  no compression — run: pip install 'headroom-ai[all]'")
+        print("  FAIL  no compression -- run: pip install 'headroom-ai[all]'")
     print()

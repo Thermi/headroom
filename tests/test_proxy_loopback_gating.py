@@ -3,7 +3,7 @@
 ``/transformations/feed`` can return full prompt + completion bodies (when
 ``log_full_messages`` is on) and ``/cache/clear`` mutates server state. With the
 default ``--host 0.0.0.0`` Docker bind, neither should be reachable by an
-arbitrary network client — they are gated to the loopback interface via
+arbitrary network client -- they are gated to the loopback interface via
 ``require_loopback`` (the same guard already used for ``/admin/*`` and
 ``/debug/*``). See #863.
 """
@@ -42,7 +42,7 @@ def _make_app() -> FastAPI:
 
 
 def _loopback_client() -> TestClient:
-    # A real loopback peer + a loopback Host header — passes both guard gates
+    # A real loopback peer + a loopback Host header -- passes both guard gates
     # (client-IP check and the DNS-rebinding Host-header check).
     return TestClient(_make_app(), base_url="http://127.0.0.1", client=("127.0.0.1", 12345))
 
@@ -184,7 +184,7 @@ def _client(*, loopback: bool) -> TestClient:
     app = _make_app()
     if loopback:
         return TestClient(app, base_url="http://127.0.0.1", client=("127.0.0.1", 12345))
-    # Default TestClient presents client.host="testclient" — not loopback.
+    # Default TestClient presents client.host="testclient" -- not loopback.
     return TestClient(app)
 
 

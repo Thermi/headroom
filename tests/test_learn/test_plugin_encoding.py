@@ -1,4 +1,4 @@
-"""Regression tests for #1202 — the ``learn`` session scanners must read agent
+"""Regression tests for #1202 -- the ``learn`` session scanners must read agent
 transcripts as UTF-8 with replacement, so a stray non-UTF-8 byte cannot abort
 (or silently drop) a scan.
 
@@ -27,7 +27,7 @@ def _stray_byte_line() -> bytes:
 def test_claude_scan_recovers_session_with_stray_byte(tmp_path: Path) -> None:
     jsonl = tmp_path / "session.jsonl"
     valid = json.dumps(
-        {"type": "assistant", "message": {"usage": {"input_tokens": 5}}, "text": "em — arrow →"}
+        {"type": "assistant", "message": {"usage": {"input_tokens": 5}}, "text": "em -- arrow ->"}
     )
     jsonl.write_bytes(valid.encode() + b"\n" + _stray_byte_line())
 

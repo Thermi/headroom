@@ -594,7 +594,7 @@ def test_macos_stop_tolerates_missing_job(monkeypatch) -> None:
 
 def test_macos_stop_raises_on_non_esrch_failure(monkeypatch) -> None:
     # A non-3 `bootout` failure (e.g. permissions) is a real error and must
-    # surface — otherwise `restart` could report success with a stale job still
+    # surface -- otherwise `restart` could report success with a stale job still
     # running.
     monkeypatch.setattr("headroom.install.supervisors.sys.platform", "darwin")
     monkeypatch.setattr("headroom.install.supervisors.os.getuid", lambda: 77, raising=False)

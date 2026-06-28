@@ -484,6 +484,10 @@ filterwarnings = [
     # test-teardown thread; this is a test-harness artifact, not a production issue
     # (production threads are long-lived and drop their parsers on themselves).
     "ignore::pytest.PytestUnraisableExceptionWarning",
+    # Windows: subprocess.Popen output-capture reader thread decodes with the
+    # system encoding (cp1252).  Any non-ASCII character in test output triggers
+    # a UnicodeDecodeError in the reader — harmless (output already collected).
+    "ignore::pytest.PytestUnhandledThreadExceptionWarning",
 ]
 markers = [
     "slow: slow tests (model loads, large fixtures)",

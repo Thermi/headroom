@@ -7,15 +7,15 @@ present here), but consolidating into a value type still pays off:
 
 * test-lockable contract (no future site can forget bypass)
 * ``apply_to_tags()`` surfaces ``image_skip_reason`` in
-  ``RequestOutcome.tags`` — dashboards can slice image-skipped
+  ``RequestOutcome.tags`` -- dashboards can slice image-skipped
   traffic by cause (same observability surface as
   ``passthrough_reason`` and ``memory_skip_reason``)
 * Rust-portable shape mirrors :class:`CompressionDecision` exactly
 
 Precedence (highest first):
-  1. ``bypass_header``           — user opt-out
-  2. ``image_optimize_disabled`` — operator config off
-  3. ``no_messages``             — nothing to inspect
+  1. ``bypass_header``           -- user opt-out
+  2. ``image_optimize_disabled`` -- operator config off
+  3. ``no_messages``             -- nothing to inspect
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ from headroom.proxy.image_compression_decision import ImageCompressionDecision
 
 
 def _config(*, image_optimize: bool = True) -> Any:
-    """Minimal stand-in for ``HeadroomConfig`` — only the field the
+    """Minimal stand-in for ``HeadroomConfig`` -- only the field the
     decision reads."""
     return SimpleNamespace(image_optimize=image_optimize)
 
@@ -70,7 +70,7 @@ def test_compresses_when_every_gate_open() -> None:
 
 
 def test_bypass_header_wins() -> None:
-    """Bypass is the user's explicit "don't touch my bytes" signal —
+    """Bypass is the user's explicit "don't touch my bytes" signal --
     image compression mutates bytes (tile-aligns / re-encodes), so
     bypass must skip it. Mirror of CompressionDecision."""
     d = ImageCompressionDecision.decide(
@@ -83,7 +83,7 @@ def test_bypass_header_wins() -> None:
 
 
 def test_passthrough_mode_header_also_triggers_bypass_skip() -> None:
-    """``x-headroom-mode: passthrough`` alt spelling — mirrors
+    """``x-headroom-mode: passthrough`` alt spelling -- mirrors
     ``_headroom_bypass_enabled`` semantics across all proxy gates."""
     d = ImageCompressionDecision.decide(
         headers={"x-headroom-mode": "passthrough"},
@@ -95,7 +95,7 @@ def test_passthrough_mode_header_also_triggers_bypass_skip() -> None:
 
 
 def test_image_optimize_disabled_is_skip() -> None:
-    """Operator config — ``config.image_optimize = False``. Distinct
+    """Operator config -- ``config.image_optimize = False``. Distinct
     reason from ``compression_disabled`` (text compression's gate);
     operators can enable text + disable image independently."""
     d = ImageCompressionDecision.decide(
@@ -106,7 +106,7 @@ def test_image_optimize_disabled_is_skip() -> None:
 
 
 def test_no_messages_is_skip() -> None:
-    """Empty or missing messages — nothing to look at. Same shape as
+    """Empty or missing messages -- nothing to look at. Same shape as
     CompressionDecision's no_messages reason."""
     d = ImageCompressionDecision.decide(headers={}, config=_config(), messages=[])
     assert d.should_compress is False
@@ -124,7 +124,7 @@ def test_messages_none_is_skip() -> None:
 
 
 def test_bypass_beats_image_optimize_disabled() -> None:
-    """User signal beats operator signal — bypass is the more
+    """User signal beats operator signal -- bypass is the more
     informative dashboard slice."""
     d = ImageCompressionDecision.decide(
         headers={"x-headroom-bypass": "true"},
@@ -135,7 +135,7 @@ def test_bypass_beats_image_optimize_disabled() -> None:
 
 
 def test_bypass_beats_no_messages() -> None:
-    """Bypass+no-messages surfaces bypass — user opted out, the
+    """Bypass+no-messages surfaces bypass -- user opted out, the
     empty body is incidental."""
     d = ImageCompressionDecision.decide(
         headers={"x-headroom-bypass": "true"},
@@ -147,7 +147,7 @@ def test_bypass_beats_no_messages() -> None:
 
 def test_image_optimize_disabled_beats_no_messages() -> None:
     """When config is off AND messages empty, surface the operator
-    decision — more meaningful for dashboards."""
+    decision -- more meaningful for dashboards."""
     d = ImageCompressionDecision.decide(
         headers={}, config=_config(image_optimize=False), messages=[]
     )
@@ -198,7 +198,7 @@ def test_apply_to_tags_is_a_noop_when_compressing() -> None:
 
 def test_apply_to_tags_preserves_pre_existing_entries() -> None:
     """Image skip reason coexists with other slicing tags (client,
-    passthrough_reason, memory_skip_reason) — they all live in the
+    passthrough_reason, memory_skip_reason) -- they all live in the
     same RequestOutcome.tags dict."""
     d = ImageCompressionDecision.decide(
         headers={}, config=_config(image_optimize=False), messages=_msgs()

@@ -1,7 +1,7 @@
 """Tests for :class:`headroom.proxy.compression_decision.CompressionDecision`,
 the input-side analog of :class:`RequestOutcome`.
 
-The point of this file is the *contract* — every behavioural assertion
+The point of this file is the *contract* -- every behavioural assertion
 here is the canonical answer to "should this request be compressed?"
 that the four handler files previously computed inline with subtle
 drift. Locking the contract in tests prevents the drift from coming back.
@@ -9,7 +9,7 @@ drift. Locking the contract in tests prevents the drift from coming back.
 Specifically, pre-this-PR:
 
 * ``handlers/gemini.py`` had THREE compression sites that NEVER checked
-  the ``x-headroom-bypass`` header — explicit user requests to skip
+  the ``x-headroom-bypass`` header -- explicit user requests to skip
   compression were silently ignored on Gemini paths.
 * ``handlers/gemini.py:handle_gemini_count_tokens`` also skipped the
   license check.
@@ -34,7 +34,7 @@ from headroom.proxy.compression_decision import CompressionDecision
 
 
 def _config(*, optimize: bool = True) -> Any:
-    """Minimal stand-in for ``HeadroomConfig`` — only the fields the
+    """Minimal stand-in for ``HeadroomConfig`` -- only the fields the
     decision reads."""
     return SimpleNamespace(optimize=optimize)
 
@@ -68,7 +68,7 @@ def test_decision_is_frozen() -> None:
 
 
 def test_decision_is_value_equal() -> None:
-    """Two decisions made from the same inputs must compare equal — value
+    """Two decisions made from the same inputs must compare equal -- value
     semantics. Tested because frozen != value-equal in general; the
     dataclass decorator must include ``eq=True`` (the default)."""
     a = CompressionDecision.decide(
@@ -100,7 +100,7 @@ def test_compresses_when_every_gate_open() -> None:
 def test_bypass_header_wins_over_every_other_gate() -> None:
     """``x-headroom-bypass`` is the user's explicit "do not touch my
     bytes" signal. It is the HIGHEST-priority reason for passthrough,
-    above operator config, message presence, or license status —
+    above operator config, message presence, or license status --
     because a user who set the header is making a contract assertion
     about prefix-cache stability and the operator must honour it."""
     d = CompressionDecision.decide(
@@ -115,7 +115,7 @@ def test_bypass_header_wins_over_every_other_gate() -> None:
 
 def test_passthrough_mode_header_also_triggers_bypass() -> None:
     """``x-headroom-mode: passthrough`` is the alternate spelling of the
-    bypass signal — both go through the same path. This mirrors the
+    bypass signal -- both go through the same path. This mirrors the
     pre-existing ``_headroom_bypass_enabled`` semantics in helpers.py;
     re-asserted here so a refactor of that helper can't silently
     diverge."""
@@ -131,10 +131,10 @@ def test_passthrough_mode_header_also_triggers_bypass() -> None:
 
 def test_bypass_header_is_case_insensitive() -> None:
     """Real client UAs send ``X-Headroom-Bypass`` (title-case) or
-    ``x-headroom-bypass`` (lower-case). Both must work — the existing
+    ``x-headroom-bypass`` (lower-case). Both must work -- the existing
     helper normalised both, so the consolidated decision must too."""
     for header_key in ("X-Headroom-Bypass", "x-headroom-bypass", "X-HEADROOM-BYPASS"):
-        # The decide() input is what handlers pass — fastapi headers
+        # The decide() input is what handlers pass -- fastapi headers
         # are case-insensitive multidicts that surface keys as-typed,
         # so we test both the canonical key and an upper variant.
         # Our normalisation must accept whatever shape arrives.
@@ -163,14 +163,14 @@ def test_bypass_header_value_must_be_true() -> None:
             usage_reporter=_usage_reporter(),
             messages=_msgs(),
         )
-        # All these values mean "don't bypass" — compress should be True.
+        # All these values mean "don't bypass" -- compress should be True.
         assert d.should_compress is True, value
 
 
 def test_config_optimize_disabled_is_passthrough() -> None:
     """Operator-level kill switch: ``config.optimize=False`` means the
     proxy is in observability-only mode (no compression). Every handler
-    must respect this — pre-this-PR they did, but inline."""
+    must respect this -- pre-this-PR they did, but inline."""
     d = CompressionDecision.decide(
         headers={},
         config=_config(optimize=False),
@@ -182,7 +182,7 @@ def test_config_optimize_disabled_is_passthrough() -> None:
 
 
 def test_no_messages_is_passthrough() -> None:
-    """Empty messages list — probe requests, health checks, malformed
+    """Empty messages list -- probe requests, health checks, malformed
     bodies. Nothing to compress. Pre-this-PR every site checked
     ``messages`` explicitly; the decision codifies it."""
     d = CompressionDecision.decide(
@@ -197,7 +197,7 @@ def test_no_messages_is_passthrough() -> None:
 
 def test_messages_none_is_passthrough() -> None:
     """``messages=None`` (missing field on the request body) is treated
-    identically to an empty list — also "no_messages". The handler
+    identically to an empty list -- also "no_messages". The handler
     code paths that pass ``None`` would otherwise crash on
     ``and messages``, but we want the decision to absorb the case."""
     d = CompressionDecision.decide(
@@ -214,7 +214,7 @@ def test_license_denied_is_passthrough() -> None:
     """Commercial gating: usage reporter says "this customer is over their
     free-tier quota / unlicensed". Pre-this-PR every site computed
     ``_license_ok = self.usage_reporter.should_compress if self.usage_reporter else True``
-    — three Gemini sites checked it, one didn't."""
+    -- three Gemini sites checked it, one didn't."""
     d = CompressionDecision.decide(
         headers={},
         config=_config(),
@@ -226,9 +226,9 @@ def test_license_denied_is_passthrough() -> None:
 
 
 def test_usage_reporter_none_is_treated_as_license_allows() -> None:
-    """Most deployments don't run with a usage_reporter — OSS users, dev
+    """Most deployments don't run with a usage_reporter -- OSS users, dev
     setups, integration tests. ``None`` means "no licensing system
-    configured" → license_allows=True. Pre-this-PR every site
+    configured" -> license_allows=True. Pre-this-PR every site
     encoded this fallback inline."""
     d = CompressionDecision.decide(
         headers={},
@@ -245,7 +245,7 @@ def test_usage_reporter_none_is_treated_as_license_allows() -> None:
 
 def test_bypass_beats_compression_disabled() -> None:
     """When BOTH bypass and config-disabled gates would close compression,
-    surface the bypass reason — it's the user's explicit signal, which
+    surface the bypass reason -- it's the user's explicit signal, which
     is more informative for the dashboard than the operator default."""
     d = CompressionDecision.decide(
         headers={"x-headroom-bypass": "true"},
@@ -272,7 +272,7 @@ def test_bypass_beats_no_messages() -> None:
 
 
 def test_bypass_beats_license_denied() -> None:
-    """Bypass overrides license denial too — if the user explicitly
+    """Bypass overrides license denial too -- if the user explicitly
     requested passthrough they should get it regardless of license."""
     d = CompressionDecision.decide(
         headers={"x-headroom-bypass": "true"},
@@ -329,7 +329,7 @@ def test_observability_booleans_populated_when_compressing() -> None:
 
 
 def test_observability_booleans_populated_when_passthrough() -> None:
-    """Same on the passthrough path — every constituent value must be
+    """Same on the passthrough path -- every constituent value must be
     visible. A bypass passthrough should still expose
     ``config_optimize_enabled`` so dashboards can spot "user opted out
     AND operator also had compression off" as distinct from
@@ -388,10 +388,10 @@ def test_decide_with_missing_messages_field_on_body() -> None:
 # pass that dict through to every downstream ``RequestOutcome``
 # construction. ``decision.apply_to_tags(tags)`` is a one-liner mutation
 # at the post-decision point that gives every downstream outcome the
-# ``passthrough_reason`` for free — no need to thread the decision
+# ``passthrough_reason`` for free -- no need to thread the decision
 # through five layers of helper calls. The outcome funnel then surfaces
 # ``tags["passthrough_reason"]`` in ``RequestLog.tags`` (dashboard
-# slicing) — same mechanism the funnel already uses for ``client``.
+# slicing) -- same mechanism the funnel already uses for ``client``.
 
 
 def test_apply_to_tags_stamps_reason_when_passthrough() -> None:
@@ -412,7 +412,7 @@ def test_apply_to_tags_stamps_reason_when_passthrough() -> None:
 
 def test_apply_to_tags_is_a_noop_when_compressing() -> None:
     """When the decision is "compress" (``passthrough_reason is None``),
-    the tags dict must be left untouched — no spurious
+    the tags dict must be left untouched -- no spurious
     ``passthrough_reason=None`` string entry, which would mislead any
     dashboard that filters on tag presence."""
     d = CompressionDecision.decide(
@@ -443,7 +443,7 @@ def test_apply_to_tags_preserves_pre_existing_entries() -> None:
 
 def test_apply_to_tags_for_every_passthrough_reason() -> None:
     """Every passthrough reason name must round-trip through
-    ``apply_to_tags`` exactly — these strings are the dashboard's
+    ``apply_to_tags`` exactly -- these strings are the dashboard's
     slicing keys; a typo would silently break filtering."""
     reason_to_inputs: dict[str, dict[str, Any]] = {
         "bypass_header": {
@@ -479,7 +479,7 @@ def test_apply_to_tags_for_every_passthrough_reason() -> None:
 
 
 def test_apply_to_tags_overwrites_a_pre_existing_passthrough_reason() -> None:
-    """If a tag with the same key existed before (a contrived case —
+    """If a tag with the same key existed before (a contrived case --
     handlers don't write this tag elsewhere), the decision overwrites
     it. The decision is the canonical source of truth for this tag;
     anything earlier was stale or wrong."""

@@ -1,11 +1,11 @@
-"""Eval: Compression summary quality — generic, unbiased.
+"""Eval: Compression summary quality -- generic, unbiased.
 
 Tests that compression summaries are:
 1. Accurate (categories match actual dropped items)
 2. Useful (contain information that would help retrieval)
 3. Not misleading (don't hallucinate categories)
 
-These are NOT skewed to show summaries as amazing — they test
+These are NOT skewed to show summaries as amazing -- they test
 real-world data patterns and verify correctness.
 """
 

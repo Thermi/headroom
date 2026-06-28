@@ -8,7 +8,7 @@ Each case is a JSON tool output (a list of records) plus the question it should
 let a model answer and the evidence that must survive compression. Critical
 ``answer_evidence`` is always placed in an *error* or *anomaly* row, because
 those are the rows SmartCrusher formally guarantees to retain
-(see ``tests/test_quality_retention.py``) — so the hard ``recall == 1.0`` gate
+(see ``tests/test_quality_retention.py``) -- so the hard ``recall == 1.0`` gate
 holds on a healthy tree. ``supporting_facts`` are softer details that may live
 in droppable rows; they feed the aggregate-recall baseline, not the hard gate.
 
@@ -31,7 +31,7 @@ def _filler(n: int, msg: str) -> list[dict]:
 def _cases() -> list[dict]:
     cases: list[dict] = []
 
-    # 1. OOM crash buried in benign logs — error-keyword retention.
+    # 1. OOM crash buried in benign logs -- error-keyword retention.
     rows = _filler(28, "heartbeat ping")
     rows.insert(
         17,
@@ -57,7 +57,7 @@ def _cases() -> list[dict]:
         }
     )
 
-    # 2. Payment exception — error-keyword retention.
+    # 2. Payment exception -- error-keyword retention.
     rows = _filler(30, "GET /healthz 200")
     rows.insert(
         21,
@@ -80,7 +80,7 @@ def _cases() -> list[dict]:
         }
     )
 
-    # 3. Latency anomaly — anomaly (>2 sigma) retention. Values cluster near 100ms,
+    # 3. Latency anomaly -- anomaly (>2 sigma) retention. Values cluster near 100ms,
     #    one row spikes to 99999ms.
     rows = [
         {"seq": i, "region": "us-west-2", "latency_ms": 95 + (i % 11), "status": "ok"}
@@ -105,7 +105,7 @@ def _cases() -> list[dict]:
         }
     )
 
-    # 4. CI test failure among many passes — "failed" keyword retention.
+    # 4. CI test failure among many passes -- "failed" keyword retention.
     rows = [
         {"seq": i, "test": f"test_module_{i}", "outcome": "passed", "duration_ms": 5 + i}
         for i in range(30)

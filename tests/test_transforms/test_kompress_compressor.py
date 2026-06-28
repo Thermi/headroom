@@ -398,7 +398,7 @@ class TestKompressTransformInterface:
 class TestKompressCompressorBatch:
     """Tests for the batched compression API (compress_batch).
 
-    These exercise the non-model paths — passthrough handling, argument
+    These exercise the non-model paths -- passthrough handling, argument
     validation, order preservation, and fallback behavior on model-load
     failure. The actual batched inference path is covered by integration
     tests that require the model to be downloaded.
@@ -515,7 +515,7 @@ class TestKompressCompressorBatch:
         from headroom.transforms.kompress_compressor import KompressCompressor
 
         compressor = KompressCompressor()
-        # Short texts — passthrough regardless of ratio
+        # Short texts -- passthrough regardless of ratio
         contents = ["short a", "short b", "short c"]
 
         results = compressor.compress_batch(contents, target_ratio=0.3)

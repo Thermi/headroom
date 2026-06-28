@@ -210,7 +210,7 @@ class TestTOINBackendWiring:
         assert "patterns" in store
         assert len(store["patterns"]) == 1
 
-        # Create a new TOIN instance with same backend — should load patterns
+        # Create a new TOIN instance with same backend -- should load patterns
         toin2 = ToolIntelligenceNetwork(config, backend=MemBackend())
         stats = toin2.get_stats()
         assert stats["patterns_tracked"] == 1
@@ -258,22 +258,22 @@ class TestTOINEntryPointLoading:
     """Verify _create_default_toin_backend() env-based loading."""
 
     def test_no_env_returns_none(self, monkeypatch):
-        """No HEADROOM_TOIN_BACKEND env → returns None (use default)."""
+        """No HEADROOM_TOIN_BACKEND env -> returns None (use default)."""
         monkeypatch.delenv("HEADROOM_TOIN_BACKEND", raising=False)
         assert _create_default_toin_backend() is None
 
     def test_empty_env_returns_none(self, monkeypatch):
-        """Empty HEADROOM_TOIN_BACKEND → returns None."""
+        """Empty HEADROOM_TOIN_BACKEND -> returns None."""
         monkeypatch.setenv("HEADROOM_TOIN_BACKEND", "")
         assert _create_default_toin_backend() is None
 
     def test_filesystem_env_returns_none(self, monkeypatch):
-        """HEADROOM_TOIN_BACKEND=filesystem → returns None (use default)."""
+        """HEADROOM_TOIN_BACKEND=filesystem -> returns None (use default)."""
         monkeypatch.setenv("HEADROOM_TOIN_BACKEND", "filesystem")
         assert _create_default_toin_backend() is None
 
     def test_unknown_backend_returns_none(self, monkeypatch):
-        """Unknown backend name with no entry point → returns None with warning."""
+        """Unknown backend name with no entry point -> returns None with warning."""
         monkeypatch.setenv("HEADROOM_TOIN_BACKEND", "nonexistent_backend_xyz")
         result = _create_default_toin_backend()
         assert result is None
@@ -324,7 +324,7 @@ class TestCCRContextVarScoping:
         assert get_compression_store() is global_store
 
     def test_request_store_isolated_per_thread(self):
-        """ContextVars are per-thread — each thread sees its own store."""
+        """ContextVars are per-thread -- each thread sees its own store."""
         global_store = get_compression_store()
         results: dict[str, CompressionStore | None] = {}
 
@@ -386,7 +386,7 @@ class TestCCREntryPointLoading:
     """Verify _create_default_ccr_backend() env-based loading."""
 
     def test_no_env_returns_sqlite(self, monkeypatch, tmp_path):
-        """No HEADROOM_CCR_BACKEND → SQLiteBackend (the persistent default;
+        """No HEADROOM_CCR_BACKEND -> SQLiteBackend (the persistent default;
         restart survival + cross-worker sharing for the 30-min TTL)."""
         monkeypatch.delenv("HEADROOM_CCR_BACKEND", raising=False)
         monkeypatch.setenv("HEADROOM_CCR_SQLITE_PATH", str(tmp_path / "ccr.db"))
@@ -397,14 +397,14 @@ class TestCCREntryPointLoading:
         assert backend.get_stats()["backend_type"] == "sqlite"
 
     def test_memory_env_returns_none(self, monkeypatch):
-        """HEADROOM_CCR_BACKEND=memory → returns None (use default)."""
+        """HEADROOM_CCR_BACKEND=memory -> returns None (use default)."""
         monkeypatch.setenv("HEADROOM_CCR_BACKEND", "memory")
         from headroom.cache.compression_store import _create_default_ccr_backend
 
         assert _create_default_ccr_backend() is None
 
     def test_unknown_backend_returns_none(self, monkeypatch):
-        """Unknown backend with no entry point → returns None."""
+        """Unknown backend with no entry point -> returns None."""
         monkeypatch.setenv("HEADROOM_CCR_BACKEND", "nonexistent_backend_xyz")
         from headroom.cache.compression_store import _create_default_ccr_backend
 
@@ -529,7 +529,7 @@ class TestAdapterLifecycle:
 
         PR-B5 retired the request-time `get_recommendation()` API
         (it now returns None with a deprecation warning). Stats and
-        on-disk patterns must still survive save/load — that's the
+        on-disk patterns must still survive save/load -- that's the
         observation API B5 preserves.
         """
         config = TOINConfig(storage_path=tmp_toin_path)
@@ -557,6 +557,6 @@ class TestAdapterLifecycle:
         assert stats["total_compressions"] >= 15
 
         # PR-B5: get_recommendation is observation-only and returns None.
-        # Recommendations now flow through the publish CLI →
-        # recommendations.toml → Rust loader path.
+        # Recommendations now flow through the publish CLI ->
+        # recommendations.toml -> Rust loader path.
         assert toin2.get_recommendation(sig) is None

@@ -6,7 +6,7 @@ request. None of Letta/Mem0/Cognee/Supermemory ship a token-uncapped
 injection path on the hot wire.
 
 ``MemoryInjectionBudget`` is the single configurable cap applied to
-every injection site so all 5 sites are uniformly bounded — set the
+every injection site so all 5 sites are uniformly bounded -- set the
 budget once, apply at every handler, dashboards see the same shape.
 """
 
@@ -30,7 +30,7 @@ def test_budget_is_frozen() -> None:
 
 
 def test_budget_defaults() -> None:
-    """Default budget is conservative — 1024 tokens, 10 entries, 0.3
+    """Default budget is conservative -- 1024 tokens, 10 entries, 0.3
     similarity floor. Operators can override via config; the default
     is hard-set so a misconfiguration can't accidentally unbound
     injection."""
@@ -46,11 +46,11 @@ def test_budget_value_equal() -> None:
     assert a == b
 
 
-# ── apply_to_text — bounding the formatted context block ─────────────
+# ── apply_to_text -- bounding the formatted context block ─────────────
 
 
 def test_apply_to_text_returns_input_when_under_budget() -> None:
-    """Short context passes through unchanged — no spurious mutation."""
+    """Short context passes through unchanged -- no spurious mutation."""
     b = MemoryInjectionBudget(max_tokens=1024)
     text = "## Relevant Memories\n1. small fact\n"
     out = b.apply_to_text(text)
@@ -58,11 +58,11 @@ def test_apply_to_text_returns_input_when_under_budget() -> None:
 
 
 def test_apply_to_text_truncates_when_over_budget() -> None:
-    """Large context is bounded — truncated at the budget. The
+    """Large context is bounded -- truncated at the budget. The
     truncation here is on the OUTPUT (the formatted injection block),
     NOT on the INPUT (which keeps full fidelity per MemoryQuery
     contract)."""
-    # 4 tokens/char heuristic in our cap — make the input clearly
+    # 4 tokens/char heuristic in our cap -- make the input clearly
     # over even the most generous budget.
     b = MemoryInjectionBudget(max_tokens=128)  # ~512 chars at 4 char/token
     huge = "x" * 100000
@@ -78,21 +78,21 @@ def test_apply_to_text_preserves_full_lines() -> None:
     b = MemoryInjectionBudget(max_tokens=64)  # very tight
     text = "## Relevant Memories\n" + "".join(f"{i}. fact {i}\n" for i in range(100))
     out = b.apply_to_text(text)
-    # No partial last line — every retained line ends in newline or is
+    # No partial last line -- every retained line ends in newline or is
     # the final line.
     if out and not out.endswith("\n"):
         # The last char is the closing of the final line; it must not
-        # be in the middle of "fact " — easy heuristic: must not end
+        # be in the middle of "fact " -- easy heuristic: must not end
         # mid-word with a hanging digit-then-period.
         assert ". fact" not in out[-15:] or out.rstrip().endswith(("fact 0", "fact 1", "fact 2"))
 
 
 def test_apply_to_text_handles_empty_input() -> None:
-    """Empty input → empty output."""
+    """Empty input -> empty output."""
     assert MemoryInjectionBudget().apply_to_text("") == ""
 
 
-# ── apply_to_entries — bounding the list before formatting ───────────
+# ── apply_to_entries -- bounding the list before formatting ───────────
 
 
 def test_apply_to_entries_caps_entry_count() -> None:
@@ -105,7 +105,7 @@ def test_apply_to_entries_caps_entry_count() -> None:
 
 
 def test_apply_to_entries_preserves_order_of_input() -> None:
-    """Budget doesn't re-rank — the backend's order is preserved. (The
+    """Budget doesn't re-rank -- the backend's order is preserved. (The
     backend should already have ranked by score; budget just caps.)"""
     b = MemoryInjectionBudget(max_entries=2)
     entries = [

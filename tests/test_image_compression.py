@@ -11,7 +11,7 @@ import io
 
 import pytest
 
-# Tile optimizer is pure math — always available
+# Tile optimizer is pure math -- always available
 from headroom.image.tile_optimizer import (
     estimate_anthropic_tokens,
     estimate_openai_tokens,
@@ -44,12 +44,12 @@ class TestTokenEstimation:
         assert estimate_openai_tokens(512, 512) == 85 + 170  # 1 tile
 
     def test_openai_high_detail_multiple_tiles(self):
-        # 768x768 → ceil(768/512) * ceil(768/512) = 2*2 = 4 tiles
+        # 768x768 -> ceil(768/512) * ceil(768/512) = 2*2 = 4 tiles
         tokens = estimate_openai_tokens(768, 768)
         assert tokens == 85 + 170 * 4  # 765
 
     def test_openai_scales_large_images(self):
-        # 4000x3000 → scaled to fit 2048 then shortest to 768
+        # 4000x3000 -> scaled to fit 2048 then shortest to 768
         # Tokens should be finite and reasonable
         tokens = estimate_openai_tokens(4000, 3000)
         assert 200 < tokens < 2000
@@ -60,13 +60,13 @@ class TestTokenEstimation:
         assert tokens == (1024 * 768) // 750
 
     def test_anthropic_caps_at_1568(self):
-        # 3000x2000 → scaled to 1568 max edge
+        # 3000x2000 -> scaled to 1568 max edge
         tokens = estimate_anthropic_tokens(3000, 2000)
-        # After scaling: 1568 * 1045 → tokens = (1568*1045)//750
+        # After scaling: 1568 * 1045 -> tokens = (1568*1045)//750
         assert tokens < 2200  # Capped
 
     def test_anthropic_caps_at_1_15mp(self):
-        # 1568x1568 = 2.46MP > 1.15MP → further scaled
+        # 1568x1568 = 2.46MP > 1.15MP -> further scaled
         tokens = estimate_anthropic_tokens(1568, 1568)
         assert tokens <= 1534  # 1.15M / 750
 
@@ -78,7 +78,7 @@ class TestTokenEstimation:
 
 class TestTileOptimization:
     def test_full_hd_saves_tokens(self):
-        """1920x1080 → should reduce tile count."""
+        """1920x1080 -> should reduce tile count."""
         opt_w, opt_h = find_optimal_openai_dimensions(1920, 1080)
         before = estimate_openai_tokens(1920, 1080)
         after = estimate_openai_tokens(opt_w, opt_h)
@@ -91,7 +91,7 @@ class TestTileOptimization:
         assert (opt_w, opt_h) == (512, 512)
 
     def test_just_over_boundary(self):
-        """770x770 → should snap to 512x512."""
+        """770x770 -> should snap to 512x512."""
         opt_w, opt_h = find_optimal_openai_dimensions(770, 770)
         before = estimate_openai_tokens(770, 770)
         after = estimate_openai_tokens(opt_w, opt_h)
@@ -99,12 +99,12 @@ class TestTileOptimization:
         assert after == 255  # 1 tile
 
     def test_anthropic_caps_oversized(self):
-        """3000x2000 → capped to 1568 max edge."""
+        """3000x2000 -> capped to 1568 max edge."""
         opt_w, opt_h = find_optimal_anthropic_dimensions(3000, 2000)
         assert max(opt_w, opt_h) <= 1568
 
     def test_anthropic_no_change_if_small(self):
-        """800x600 → no change needed."""
+        """800x600 -> no change needed."""
         opt_w, opt_h = find_optimal_anthropic_dimensions(800, 600)
         assert (opt_w, opt_h) == (800, 600)
 
@@ -178,12 +178,12 @@ class TestMessageOptimization:
         """Anthropic oversized image: provider would resize anyway, so no token savings.
 
         Anthropic's formula is (w*h)/750 after their internal resize. Pre-resizing
-        to their limits doesn't change the token count — it only saves upload bandwidth.
+        to their limits doesn't change the token count -- it only saves upload bandwidth.
         The optimizer correctly returns no results (no token savings to report).
         """
         msgs = _make_anthropic_image_message(3000, 2000)
         optimized, results = optimize_images_in_messages(msgs, "anthropic")
-        # No token savings — Anthropic would resize internally anyway
+        # No token savings -- Anthropic would resize internally anyway
         assert len(results) == 0
 
     def test_no_image_no_change(self):
@@ -383,7 +383,7 @@ class TestOcrRouting:
         from headroom.image import ImageCompressor
 
         compressor = ImageCompressor(use_siglip=False)
-        # Very noisy image — OCR should have low confidence
+        # Very noisy image -- OCR should have low confidence
         import numpy as np
         from PIL import Image
 
@@ -392,8 +392,8 @@ class TestOcrRouting:
         buf = io.BytesIO()
         img.save(buf, format="PNG")
         text = compressor._ocr_extract(buf.getvalue(), min_confidence=0.95)
-        # Noisy image: either None (no text) or low confidence → None
-        # Either outcome is correct — we don't want to OCR noise
+        # Noisy image: either None (no text) or low confidence -> None
+        # Either outcome is correct -- we don't want to OCR noise
         assert text is None or len(text) < 10
 
     def test_transcode_replaces_image_with_text(self):

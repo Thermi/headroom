@@ -649,7 +649,7 @@ class TestRebuildGeminiContents:
     def _round_trip(self, proxy, contents):
         """Simulate the full compression round-trip for a given contents list.
 
-        Mimics what the handler does: convert → strip system msg → convert back → rebuild.
+        Mimics what the handler does: convert -> strip system msg -> convert back -> rebuild.
         """
         messages, preserved_indices = proxy._gemini_contents_to_messages(contents)
         preserved_contents = {idx: contents[idx] for idx in preserved_indices}
@@ -694,8 +694,8 @@ class TestRebuildGeminiContents:
         """functionCall and functionResponse entries must survive and appear at correct positions."""
         contents = [
             TEXT_ONLY_CONTENT,  # idx 0: text
-            FUNCTION_CALL_CONTENT,  # idx 1: functionCall only — no text → preserved
-            FUNCTION_RESPONSE_CONTENT,  # idx 2: functionResponse only — no text → preserved
+            FUNCTION_CALL_CONTENT,  # idx 1: functionCall only -- no text -> preserved
+            FUNCTION_RESPONSE_CONTENT,  # idx 2: functionResponse only -- no text -> preserved
             MODEL_TEXT_CONTENT,  # idx 3: text
         ]
         result = self._round_trip(proxy, contents)
@@ -714,7 +714,7 @@ class TestRebuildGeminiContents:
     def test_function_call_at_start(self, proxy):
         """Preserved entry at idx=0 must not overwrite idx=0 of optimized_contents."""
         contents = [
-            FUNCTION_CALL_CONTENT,  # idx 0: no text → preserved
+            FUNCTION_CALL_CONTENT,  # idx 0: no text -> preserved
             TEXT_ONLY_CONTENT,  # idx 1: text
         ]
         result = self._round_trip(proxy, contents)
@@ -727,7 +727,7 @@ class TestRebuildGeminiContents:
         """Entry with both text and functionCall keeps the original (with functionCall intact)."""
         contents = [
             TEXT_ONLY_CONTENT,
-            FUNCTION_CALL_WITH_TEXT_CONTENT,  # idx 1: has both text and functionCall → preserved
+            FUNCTION_CALL_WITH_TEXT_CONTENT,  # idx 1: has both text and functionCall -> preserved
             MODEL_TEXT_CONTENT,
         ]
         result = self._round_trip(proxy, contents)

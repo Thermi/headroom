@@ -6,7 +6,7 @@ Two regressions in main as of 2026-05-14 (issue #327):
   streaming) never inspects ``usage.prompt_tokens_details.cached_tokens`` from
   the upstream SSE chunks. Cache reads/writes are absent from
   ``cost_tracker.record_tokens``, ``SavingsTracker.record_request``, the
-  ``RequestLog``, *and* the ``PERF`` log line — the latter is missing entirely
+  ``RequestLog``, *and* the ``PERF`` log line -- the latter is missing entirely
   for this path, so ``headroom perf`` shows 0 cache writes for every
   Azure-GPT/Codex backend-routed request.
 
@@ -117,7 +117,7 @@ def _make_bedrock_backend(events: list[StreamEvent]) -> MagicMock:
 
 
 # =============================================================================
-# Bug A — _stream_openai_via_backend (Azure/LiteLLM/AnyLLM OpenAI streaming)
+# Bug A -- _stream_openai_via_backend (Azure/LiteLLM/AnyLLM OpenAI streaming)
 # =============================================================================
 
 
@@ -188,7 +188,7 @@ def test_openai_backend_streaming_emits_perf_with_cache_read_and_inferred_write(
 
 
 def test_openai_backend_streaming_perf_zeros_when_upstream_omits_usage() -> None:
-    """When the upstream omits a usage chunk, cache values must be zero — not absent.
+    """When the upstream omits a usage chunk, cache values must be zero -- not absent.
 
     Without ``stream_options.include_usage=true`` (or when upstream drops the
     final usage chunk) the PERF line still has to emit so ``headroom perf``
@@ -233,7 +233,7 @@ def test_openai_backend_streaming_perf_zeros_when_upstream_omits_usage() -> None
 
 
 # =============================================================================
-# Bug B — _stream_response_bedrock (Bedrock-native Anthropic streaming)
+# Bug B -- _stream_response_bedrock (Bedrock-native Anthropic streaming)
 # =============================================================================
 
 

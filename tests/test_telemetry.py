@@ -579,7 +579,7 @@ class TestGlobalTelemetryCollector:
     @pytest.mark.parametrize("off_value", ["off", "false", "0", "no", "disable", "disabled"])
     def test_headroom_telemetry_off_disables_collector(self, monkeypatch, off_value):
         """HEADROOM_TELEMETRY=off (and other documented opt-out values) disables
-        the collector — closes #390.
+        the collector -- closes #390.
 
         Pre-#390 the collector only honoured HEADROOM_TELEMETRY_DISABLED, which
         is undocumented. Users following the docs set HEADROOM_TELEMETRY=off and
@@ -594,7 +594,7 @@ class TestGlobalTelemetryCollector:
         collector = get_telemetry_collector()
 
         assert collector._config.enabled is False, (
-            f"HEADROOM_TELEMETRY={off_value!r} must disable the collector — "
+            f"HEADROOM_TELEMETRY={off_value!r} must disable the collector -- "
             "this is the documented opt-out path. If this assertion fails the "
             "collector is silently ignoring the user's opt-out and /v1/telemetry "
             "will report enabled=true even when telemetry is supposed to be off."

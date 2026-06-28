@@ -261,7 +261,7 @@ def test_openai_cache_mode_restores_mutated_frozen_prefix() -> None:
 # ─── Issue #327 cross-handler regression ────────────────────────────────
 #
 # The OpenAI handler was never affected by issue #327's content-keyed walker
-# bug — it has only ever used `compute_frozen_count` (positional). This test
+# bug -- it has only ever used `compute_frozen_count` (positional). This test
 # locks that property by spying on the OpenAI traffic path and asserting that
 # the buggy walker functions (`should_defer_compression`, `mark_stable`) are
 # never called from the production handler. If a future refactor accidentally

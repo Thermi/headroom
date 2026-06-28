@@ -179,7 +179,7 @@ class _DummyOpenAIHandler(OpenAIHandlerMixin):
         self.memory_handler = None
         self.traffic_learner = None
         # PR-A6 wires session-sticky `OpenAI-Beta` merging into the
-        # responses HTTP handler — it reads `compute_session_id` to key
+        # responses HTTP handler -- it reads `compute_session_id` to key
         # the SessionBetaTracker. The routing tests don't exercise the
         # tracker semantics themselves, so a fixed-id stub is enough.
         self.session_tracker_store = SimpleNamespace(
@@ -470,7 +470,7 @@ def test_handle_openai_responses_routes_api_key_auth_direct_to_openai(monkeypatc
 
 def test_handle_openai_responses_stream_skips_python_compression(monkeypatch):
     """PR-C5: Python no longer compresses /v1/responses (Rust handles it
-    natively). The streaming forward path must still fire — only the
+    natively). The streaming forward path must still fire -- only the
     Python compression dispatch is retired."""
     request = _build_request(
         {

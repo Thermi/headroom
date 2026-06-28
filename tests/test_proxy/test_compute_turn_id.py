@@ -96,7 +96,7 @@ def test_text_block_in_list_content_is_a_user_turn():
 
 def test_tool_result_only_content_is_not_a_turn_boundary():
     # A message whose only content is a tool_result is a continuation, not a
-    # new turn — so the function must not latch onto it.
+    # new turn -- so the function must not latch onto it.
     messages = [_user_tool_result("t1", "result only")]
     assert compute_turn_id(MODEL, SYSTEM, messages) is None
 
@@ -124,7 +124,7 @@ def test_ignores_empty_string_user_content():
     messages = [_user(""), _user("the real prompt")]
     hit = compute_turn_id(MODEL, SYSTEM, messages)
     assert hit is not None
-    # Hash should match a single-message [real prompt] prefix — i.e. the
+    # Hash should match a single-message [real prompt] prefix -- i.e. the
     # scan stopped at "the real prompt" and included the leading empty msg
     # in the hashed prefix. Either way: not None and reproducible.
     assert hit == compute_turn_id(MODEL, SYSTEM, messages)
@@ -160,7 +160,7 @@ def test_stable_when_cache_control_moves_between_calls():
     # Clients like Claude Code move the cache_control breakpoint to the
     # newest message on each call: the user-text message carries it on
     # call 1 and not on call 2 (where a later tool_result carries it).
-    # The turn_id must be stable across those calls — otherwise the
+    # The turn_id must be stable across those calls -- otherwise the
     # prompt-level aggregator in the desktop app never gets more than one
     # call per "turn" and the prompt record degenerates to the biggest
     # single call.

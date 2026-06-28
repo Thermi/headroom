@@ -189,7 +189,7 @@ def test_register_refuses_non_table_mcp_servers(tmp_path: Path) -> None:
 
 
 # ----------------------------------------------------------------------
-# register_server() — happy paths
+# register_server() -- happy paths
 # ----------------------------------------------------------------------
 
 
@@ -315,7 +315,7 @@ def test_register_force_preserves_user_managed_entry(tmp_path: Path) -> None:
 def test_register_mismatch_when_user_managed_outside_markers(tmp_path: Path) -> None:
     cfg = _config_path(tmp_path)
     cfg.parent.mkdir()
-    # User has manually put [mcp_servers.headroom] with different config — no markers.
+    # User has manually put [mcp_servers.headroom] with different config -- no markers.
     cfg.write_text(
         '[mcp_servers.headroom]\ncommand = "/usr/local/bin/custom-headroom"\nargs = ["serve"]\n'
     )
@@ -378,7 +378,7 @@ def test_unregister_preserves_user_managed_entry(tmp_path: Path) -> None:
 
 
 # ----------------------------------------------------------------------
-# Round-trip: write → re-read produces equivalent ServerSpec
+# Round-trip: write -> re-read produces equivalent ServerSpec
 # ----------------------------------------------------------------------
 
 

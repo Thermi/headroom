@@ -101,7 +101,7 @@ def test_search_compressor_compress_paths_and_ccr() -> None:
 def test_search_compressor_persist_to_python_ccr(monkeypatch: pytest.MonkeyPatch) -> None:
     """Phase 3e.2: CCR persistence is now in `_persist_to_python_ccr`,
     which delegates to the production `CompressionStore`. Failures are
-    logged (not silently swallowed) — this pins both paths."""
+    logged (not silently swallowed) -- this pins both paths."""
     compressor = SearchCompressor()
 
     seen: dict[str, tuple[str, str, str | None]] = {}

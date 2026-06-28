@@ -2,8 +2,8 @@
 
 Compresses vendored golden tool-output fixtures through SmartCrusher's lossy
 path and asserts that the evidence a model needs to answer each case's question
-survives compression. Scoring is pure stdlib (``headroom.evals.metrics``) — no
-ML model, no network, no API keys — so this runs in the standard ``[dev]`` CI
+survives compression. Scoring is pure stdlib (``headroom.evals.metrics``) -- no
+ML model, no network, no API keys -- so this runs in the standard ``[dev]`` CI
 shard as a blocking PR check.
 
 A failure here means a code change made lossy compression silently drop

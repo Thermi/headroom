@@ -23,7 +23,7 @@ Behaviour matrix:
 Direct callers (those that call ``crush()`` / ``crush_array_json()``
 without going through ``apply()``) don't set
 ``self._runtime_compression_policy``, so they keep their pre-F2.2
-write-enabled behaviour. That's a deliberate compatibility decision —
+write-enabled behaviour. That's a deliberate compatibility decision --
 non-proxy callers have no auth context.
 """
 
@@ -48,7 +48,7 @@ def _has_core() -> bool:
     SmartCrusher's __init__ hard-imports ``headroom._core`` (the Rust
     PyO3 wheel). On dev machines or CI lanes that haven't run
     ``scripts/build_rust_extension.sh``, the wheel is absent. Skip the
-    SmartCrusher-touching tests rather than fail loudly — the
+    SmartCrusher-touching tests rather than fail loudly -- the
     ContentRouter tests don't need the wheel and exercise the same
     F2.2 gate code path.
     """
@@ -107,7 +107,7 @@ def _tokenizer() -> Tokenizer:
 
 @_skip_no_core
 def test_smart_crusher_payg_policy_writes_to_toin(fresh_toin):
-    """PAYG: ``toin_read_only=False`` → record_compression IS called."""
+    """PAYG: ``toin_read_only=False`` -> record_compression IS called."""
     from headroom.transforms.smart_crusher import SmartCrusher, SmartCrusherConfig
 
     crusher = SmartCrusher(SmartCrusherConfig())
@@ -119,14 +119,14 @@ def test_smart_crusher_payg_policy_writes_to_toin(fresh_toin):
     result = crusher.apply(messages, _tokenizer(), compression_policy=policy)
 
     if not result.transforms_applied:
-        pytest.skip("payload didn't trigger compression — bump the size")
+        pytest.skip("payload didn't trigger compression -- bump the size")
     post = sum(p.total_compressions for p in fresh_toin._patterns.values())
     assert post > pre, "PAYG should write to TOIN (network effect)"
 
 
 @_skip_no_core
 def test_smart_crusher_oauth_policy_writes_to_toin(fresh_toin):
-    """OAuth: identical to PAYG in F2.2 — writes enabled."""
+    """OAuth: identical to PAYG in F2.2 -- writes enabled."""
     from headroom.transforms.smart_crusher import SmartCrusher, SmartCrusherConfig
 
     crusher = SmartCrusher(SmartCrusherConfig())
@@ -138,16 +138,16 @@ def test_smart_crusher_oauth_policy_writes_to_toin(fresh_toin):
     result = crusher.apply(messages, _tokenizer(), compression_policy=policy)
 
     if not result.transforms_applied:
-        pytest.skip("payload didn't trigger compression — bump the size")
+        pytest.skip("payload didn't trigger compression -- bump the size")
     post = sum(p.total_compressions for p in fresh_toin._patterns.values())
     assert post > pre, "OAuth (matches PAYG today) should write to TOIN"
 
 
 @_skip_no_core
 def test_smart_crusher_subscription_policy_skips_toin_write(fresh_toin):
-    """Subscription: ``toin_read_only=True`` → record_compression is NOT called.
+    """Subscription: ``toin_read_only=True`` -> record_compression is NOT called.
 
-    This is THE behaviour change of F2.2 — keep the learning pool
+    This is THE behaviour change of F2.2 -- keep the learning pool
     consistent for cache-stability-sensitive traffic.
     """
     from headroom.transforms.smart_crusher import SmartCrusher, SmartCrusherConfig
@@ -160,13 +160,13 @@ def test_smart_crusher_subscription_policy_skips_toin_write(fresh_toin):
     assert policy.toin_read_only is True  # baseline sanity
     result = crusher.apply(messages, _tokenizer(), compression_policy=policy)
 
-    # Compression itself should still complete — this gate is on the
+    # Compression itself should still complete -- this gate is on the
     # learning side only, not the compression path.
     if not result.transforms_applied:
-        pytest.skip("payload didn't trigger compression — bump the size")
+        pytest.skip("payload didn't trigger compression -- bump the size")
     post = sum(p.total_compressions for p in fresh_toin._patterns.values())
     assert post == pre, (
-        "Subscription MUST NOT write to TOIN — load-bearing for keeping "
+        "Subscription MUST NOT write to TOIN -- load-bearing for keeping "
         "the learning pool consistent across cache-sensitive traffic"
     )
 
@@ -190,9 +190,9 @@ def test_smart_crusher_no_policy_keeps_legacy_write_behaviour(fresh_toin):
     result = crusher.apply(messages, _tokenizer())
 
     if not result.transforms_applied:
-        pytest.skip("payload didn't trigger compression — bump the size")
+        pytest.skip("payload didn't trigger compression -- bump the size")
     post = sum(p.total_compressions for p in fresh_toin._patterns.values())
-    assert post > pre, "no policy → legacy write-enabled behaviour"
+    assert post > pre, "no policy -> legacy write-enabled behaviour"
 
 
 # ─── ContentRouter: apply() captures the policy ─────────────────────────
@@ -215,7 +215,7 @@ def test_content_router_apply_stores_runtime_policy():
     assert router._runtime_compression_policy is None
 
     policy = policy_for_mode(AuthMode.SUBSCRIPTION)
-    # Empty-message apply is fine — the field assignment happens
+    # Empty-message apply is fine -- the field assignment happens
     # before the message walk, so we don't need a payload that
     # actually compresses.
     router.apply([], _tokenizer(), compression_policy=policy)
@@ -229,7 +229,7 @@ def test_content_router_subscription_skips_toin_record(fresh_toin):
     policy.toin_read_only is True.
 
     We exercise the gate directly rather than building a fixture that
-    routes to a non-SmartCrusher compressor — both are equivalent
+    routes to a non-SmartCrusher compressor -- both are equivalent
     coverage for the gate, and the direct call avoids the routing
     flake from ``test_smart_crusher_toin_attachment.py``'s comments.
     """
@@ -257,7 +257,7 @@ def test_content_router_subscription_skips_toin_record(fresh_toin):
 
 
 def test_content_router_payg_records_to_toin(fresh_toin):
-    """PAYG policy → ContentRouter._record_to_toin proceeds to the
+    """PAYG policy -> ContentRouter._record_to_toin proceeds to the
     real TOIN call. Asserts the gate doesn't accidentally fire when
     ``toin_read_only=False``.
     """
@@ -285,5 +285,5 @@ def test_content_router_payg_records_to_toin(fresh_toin):
     # F2.2 gate did NOT fire (which it would with toin_read_only=True
     # regardless of signature).
     assert post >= pre, (
-        "PAYG must not be blocked by the F2.2 gate — write should happen or fall through naturally"
+        "PAYG must not be blocked by the F2.2 gate -- write should happen or fall through naturally"
     )

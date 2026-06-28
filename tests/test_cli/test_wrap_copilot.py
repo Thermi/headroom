@@ -489,7 +489,7 @@ def test_wrap_copilot_subscription_pins_validated_token_for_proxy(
     env = captured["env"]
     assert isinstance(env, dict)
     # The validated token is handed to the proxy as an explicit launch
-    # argument — not via the child env, not via the parent's os.environ.
+    # argument -- not via the child env, not via the parent's os.environ.
     assert captured["copilot_api_token"] == "gho-validated"
     assert captured["copilot_refresh_oauth_token"] == "gho-refresh"
     assert captured["copilot_api_token_expires_at"] == 1234567890.0
@@ -730,7 +730,7 @@ def test_unwrap_copilot_leaves_user_instruction_file_untouched(
 
 
 # ---------------------------------------------------------------------------
-# Regression suite for #610 — GitHub Copilot endpoint routing per auth mode.
+# Regression suite for #610 -- GitHub Copilot endpoint routing per auth mode.
 #
 # 0.23.0 (commit f4dff9b) re-pointed the *shared* OAuth branch away from the
 # generic https://api.githubcopilot.com to the account-specific endpoints.api
@@ -738,7 +738,7 @@ def test_unwrap_copilot_leaves_user_instruction_file_untouched(
 # ignore the GITHUB_COPILOT_API_URL override whenever a token resolves. For
 # individual-plan users that broke newer models (gpt-5.4) on the responses API
 # that had worked on 0.22.4. The pre-existing oauth test passed only because it
-# left _fetch_copilot_user_info unmocked — the network call fails in CI, so
+# left _fetch_copilot_user_info unmocked -- the network call fails in CI, so
 # resolve_copilot_api_url() fell back to the generic host and the real-world
 # success path was never exercised. These tests mock a *successful* user-info
 # response (the real world) so the routing for every auth mode is locked.
@@ -776,7 +776,7 @@ def test_wrap_copilot_oauth_keeps_generic_endpoint_when_account_advertised(
     """#610: non-subscription OAuth must route to the generic Copilot endpoint
     even when /copilot_internal/user advertises an account-specific host. The
     account host (api.individual.githubcopilot.com) does not serve newer models
-    such as gpt-5.4 on the responses API — exactly what regressed after 0.22.4.
+    such as gpt-5.4 on the responses API -- exactly what regressed after 0.22.4.
     """
     _wrap_cli, main = wrap_modules
     _clear_copilot_env(monkeypatch)
@@ -841,7 +841,7 @@ def test_wrap_copilot_byok_never_resolves_copilot_endpoint(
 ) -> None:
     """BYOK (provider key, no OAuth) routes to the model provider through the
     proxy and must never resolve the Copilot hosted endpoint. It was unaffected
-    by #610 — this pins that independence so a future change can't entangle it.
+    by #610 -- this pins that independence so a future change can't entangle it.
     """
     _wrap_cli, main = wrap_modules
     _clear_copilot_env(monkeypatch)
@@ -966,7 +966,7 @@ def test_wrap_copilot_subscription_honors_api_url_override(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Enterprise / data-residency accounts that require a dedicated host pin it
-    via GITHUB_COPILOT_API_URL — the override must flow through --subscription."""
+    via GITHUB_COPILOT_API_URL -- the override must flow through --subscription."""
     _wrap_cli, main = wrap_modules
     _clear_copilot_env(monkeypatch)
     monkeypatch.setenv("GITHUB_COPILOT_API_URL", "https://api.enterprise.example.com")

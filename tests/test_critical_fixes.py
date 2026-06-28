@@ -92,8 +92,8 @@ class TestTOINDoubleCountFix:
 
     BUG: When _seen_instance_hashes hits cap (100), new instance_ids are NOT stored
     but user_count IS incremented. Next call with same instance_id:
-    - `if self._instance_id not in pattern._seen_instance_hashes` → True (not stored!)
-    - user_count incremented AGAIN → Double counting!
+    - `if self._instance_id not in pattern._seen_instance_hashes` -> True (not stored!)
+    - user_count incremented AGAIN -> Double counting!
 
     FIX: Use a separate set to track ALL seen instances (no cap for lookup),
     OR check if we already tracked overflow for this instance.

@@ -217,7 +217,7 @@ def test_extract_system_prompt_cwd_in_non_user_message_returns_empty() -> None:
 
 
 # ---------------------------------------------------------------------------
-# BackendRouter path-layout tests (no real backend I/O — we stub the class).
+# BackendRouter path-layout tests (no real backend I/O -- we stub the class).
 # ---------------------------------------------------------------------------
 
 
@@ -271,7 +271,7 @@ def test_router_project_mode_two_cwds_two_paths(
 def test_router_project_mode_unresolved_fails_closed_by_default(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Default `unresolved_project_fallback='empty'` → fail-closed signal, NOT GLOBAL pool.
+    """Default `unresolved_project_fallback='empty'` -> fail-closed signal, NOT GLOBAL pool.
 
     Updated 2026-05-26 from the prior GLOBAL-fallback assertion. The
     silent GLOBAL pooling was the root cause of the TAM-550

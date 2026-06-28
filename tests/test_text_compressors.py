@@ -353,7 +353,7 @@ class TestSmartCrusherTextIntegration:
         Asserts the legacy lossy + JSON-shape behavior: output is a
         JSON-parseable array. The PR4 lossless default substitutes a
         CSV+schema STRING for tabular arrays, which doesn't round-trip
-        as a JSON array — that's tested separately in
+        as a JSON array -- that's tested separately in
         `test_smart_crusher_lossless_default.py`.
         """
         import json

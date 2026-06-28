@@ -87,7 +87,7 @@ def _output(call_id: str, text: str) -> str:
 
 @pytest.fixture
 def codex_dir(tmp_path):
-    content = "line\n" * 600  # 3000B — over the maturation floor
+    content = "line\n" * 600  # 3000B -- over the maturation floor
     lines = [
         _call("c1", "cat src/foo.py"),
         _output("c1", content),

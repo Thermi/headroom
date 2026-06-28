@@ -5,7 +5,7 @@ through its CompressionUnit + ContentRouter path. These tests keep the
 lower-level PyO3 live-zone binding covered on WebSocket-shaped envelopes
 so Rust migration work cannot silently break the exposed bridge.
 
-The tests exercise the compression *transformation logic* in isolation —
+The tests exercise the compression *transformation logic* in isolation --
 they replicate the body-shape handling the WS handler does (envelope
 detect, compress inner, re-wrap) without spinning up a full WebSocket
 session. Full session-lifecycle coverage already exists in
@@ -28,7 +28,7 @@ def _ensure_binding():
 
         return compress_openai_responses_live_zone
     except ImportError:
-        pytest.skip("headroom._core not built — run scripts/build_rust_extension.sh")
+        pytest.skip("headroom._core not built -- run scripts/build_rust_extension.sh")
 
 
 def _ws_compress_first_frame(
@@ -89,7 +89,7 @@ class TestWrappedEnvelopeShape:
     and re-wrap to forward."""
 
     def test_passthrough_when_inner_has_no_input_array(self):
-        # No `input` array → dispatcher's NoMessagesArray path → passthrough.
+        # No `input` array -> dispatcher's NoMessagesArray path -> passthrough.
         first_msg = json.dumps(
             {
                 "type": "response.create",
@@ -111,7 +111,7 @@ class TestWrappedEnvelopeShape:
             }
         )
         out, modified = _ws_compress_first_frame(first_msg)
-        # Single small user message → no compression applies.
+        # Single small user message -> no compression applies.
         assert modified is False
         assert json.loads(out) == json.loads(first_msg)
 
@@ -232,9 +232,9 @@ class TestNoExceptionLeak:
         ],
     )
     def test_no_exception_for_garbage_shapes(self, first_msg: str):
-        # Should never raise — return passthrough on anything malformed.
+        # Should never raise -- return passthrough on anything malformed.
         out, modified = _ws_compress_first_frame(first_msg)
         # Regardless of result, no exception leaked. modified might be
-        # False here (garbage input → no compression).
+        # False here (garbage input -> no compression).
         assert isinstance(out, str)
         assert isinstance(modified, bool)

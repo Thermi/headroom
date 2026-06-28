@@ -2,7 +2,7 @@
 
 ``parse_messages(compressed_messages=...)`` splits the existing ``reread``
 signal: repeats whose first serve was replaced by a CCR retrieval marker in
-the transformed output count into ``reread_compressed_tokens`` — re-reads
+the transformed output count into ``reread_compressed_tokens`` -- re-reads
 attributable to Headroom rather than agent behavior. Lossless reshaping
 (no marker) and intact first serves are deliberately not attributed.
 """
@@ -80,7 +80,7 @@ class TestRereadAttribution:
 
     def test_marker_with_original_still_present_not_attributed(self, tokenizer):
         # Marker appended but full original retained (e.g. partial compression
-        # of a different span in the same message) — model saw everything.
+        # of a different span in the same message) -- model saw everything.
         content = _uniform_rows()
         messages = _conversation(content, content)
         compressed = [dict(m) for m in messages]
@@ -108,7 +108,7 @@ class TestRereadAttribution:
 
     def test_polling_repeats_not_attributed(self, tokenizer):
         # Adjacent repeats (gap <= REREAD_ADJACENT_GAP) are polling, not
-        # rereads — attribution never runs for groups with no counted waste.
+        # rereads -- attribution never runs for groups with no counted waste.
         content = _uniform_rows()
         messages = [
             {"role": "tool", "content": content},
@@ -140,7 +140,7 @@ class TestWasteSignalsContract:
         assert d["reread_compressed"] == 60
 
     def test_total_excludes_reread_compressed(self):
-        # reread_compressed is a subset of reread — adding it to total()
+        # reread_compressed is a subset of reread -- adding it to total()
         # would double count.
         ws = WasteSignals(reread_tokens=100, reread_compressed_tokens=60)
         assert ws.total() == 100
@@ -150,7 +150,7 @@ class TestPipelineAttribution:
     def test_pipeline_passes_compressed_messages(self, tokenizer):
         # End-to-end through TransformPipeline.apply: a large duplicated tool
         # result far from its first serve produces reread waste, and
-        # reread_compressed is consistent (either 0 or the full group —
+        # reread_compressed is consistent (either 0 or the full group --
         # never more than reread).
         content = _uniform_rows(400)
         filler = [{"role": "user", "content": f"working on step {i}"} for i in range(5)]

@@ -2,7 +2,7 @@
 
 tiktoken downloads its BPE vocab via ``requests.get`` with no timeout, so a
 stalled/firewalled connection blocks indefinitely. The proxy calls this lazily
-inside a request worker, so the only bound was the 30s compression timeout —
+inside a request worker, so the only bound was the 30s compression timeout --
 yielding "every request times out, 0 compression". The bounded loader caps the
 wait and falls back to estimation instead.
 """

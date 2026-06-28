@@ -1,6 +1,6 @@
 """Unit tests for :class:`WebSocketSessionRegistry`.
 
-These tests exercise the in-memory registry in isolation — no network,
+These tests exercise the in-memory registry in isolation -- no network,
 no WS server. They pin down register/deregister semantics, ``snapshot``
 shape, and the task-attachment accounting that feeds the
 ``active_relay_tasks`` gauge.
@@ -53,7 +53,7 @@ def test_register_twice_same_session_does_not_double_count():
     handle = _make_handle()
 
     reg.register(handle)
-    reg.register(handle)  # idempotent — overwrite, do not double-increment
+    reg.register(handle)  # idempotent -- overwrite, do not double-increment
     assert reg.active_count() == 1
 
     reg.deregister("sess-1", cause="client_disconnect")
@@ -101,7 +101,7 @@ async def test_attach_tasks_merges_and_tracks_active_count():
     assert reg.active_relay_task_count() == 2
 
     # Deregister cancels the in-registry accounting; tasks themselves
-    # are the caller's responsibility to cancel — the registry is a
+    # are the caller's responsibility to cancel -- the registry is a
     # bookkeeper, not an owner.
     reg.deregister("sess-1", cause="client_disconnect")
     assert reg.active_relay_task_count() == 0
@@ -147,7 +147,7 @@ def test_deregister_releases_task_references():
     assert len(handle.relay_tasks) == 2
 
     reg.deregister("sess-1", cause="upstream_disconnect")
-    # After deregister, the handle's tasks list is empty — the registry
+    # After deregister, the handle's tasks list is empty -- the registry
     # does not retain references.
     assert handle.relay_tasks == []
     assert reg.active_relay_task_count() == 0

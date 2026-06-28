@@ -595,7 +595,7 @@ class TestIntegrationWithRealHeadroom:
         # Should return valid messages
         assert len(optimized) >= 1
         assert all(
-            isinstance(m, (SystemMessage, HumanMessage, AIMessage, ToolMessage)) for m in optimized
+            isinstance(m, SystemMessage | HumanMessage | AIMessage | ToolMessage) for m in optimized
         )
 
         # Metrics should be populated
@@ -645,7 +645,7 @@ class TestAinvokeStreamingTrue:
         mock.streaming = True
 
         class FakeAsyncStream:
-            """Simulates openai.AsyncStream — has no model_dump attribute."""
+            """Simulates openai.AsyncStream -- has no model_dump attribute."""
 
             async def __aiter__(self):
                 return self
@@ -751,7 +751,7 @@ class TestAinvokeStreamingTrue:
     ):
         """_agenerate() returns a ChatResult (not AsyncStream) when streaming=True.
 
-        This is the core fix for #1285 — without the fix, the mock's _agenerate
+        This is the core fix for #1285 -- without the fix, the mock's _agenerate
         returns a FakeAsyncStream and the test would fail the isinstance check.
         """
         from headroom.integrations import HeadroomChatModel
@@ -807,7 +807,7 @@ class TestAinvokeStreamingTrue:
 
             await model._agenerate(sample_messages)
 
-            # After the call, streaming must still be True — never mutated
+            # After the call, streaming must still be True -- never mutated
             assert streaming_mock_model.streaming is True
 
     async def test_original_streaming_unchanged_during_agenerate(
@@ -891,7 +891,7 @@ class TestAinvokeStreamingTrue:
             with pytest.raises(RuntimeError, match="upstream error"):
                 await model._agenerate(sample_messages)
 
-            # Original model's streaming is unchanged — never mutated
+            # Original model's streaming is unchanged -- never mutated
             assert streaming_mock_model.streaming is True
 
     async def test_concurrent_ainvoke_no_race_condition(
@@ -946,7 +946,7 @@ class TestAinvokeStreamingTrue:
                 model._agenerate(sample_messages),
             )
 
-            # Original streaming was never mutated — still True
+            # Original streaming was never mutated -- still True
             assert streaming_mock_model.streaming is True
 
             # Both calls returned ChatResult (not AsyncStream)
@@ -960,7 +960,7 @@ class TestAinvokeStreamingTrue:
         from headroom.integrations import HeadroomChatModel
         from headroom.providers import OpenAIProvider
 
-        # Mock without streaming attribute — MagicMock auto-generates
+        # Mock without streaming attribute -- MagicMock auto-generates
         # attributes, so we must explicitly delete streaming to simulate
         # a model that genuinely lacks it.
         mock = MagicMock()
@@ -1309,7 +1309,7 @@ class TestRealLangChainIntegration:
         # Should return valid LangChain messages
         assert len(optimized) >= 1
         assert all(
-            isinstance(m, (SystemMessage, HumanMessage, AIMessage, ToolMessage)) for m in optimized
+            isinstance(m, SystemMessage | HumanMessage | AIMessage | ToolMessage) for m in optimized
         )
         assert "tokens_before" in metrics
         assert "tokens_after" in metrics

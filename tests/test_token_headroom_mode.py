@@ -66,7 +66,7 @@ class TestMultiTurnCompression:
             _make_tool_result_msg("t1", _large_code_content(100)),
         ]
         frozen = cache.compute_frozen_count(messages)
-        # user (stable) + tool_use (stable) + tool_result (miss) → 2
+        # user (stable) + tool_use (stable) + tool_result (miss) -> 2
         assert frozen == 2
 
     def test_second_turn_cache_hits(self):
@@ -88,7 +88,7 @@ class TestMultiTurnCompression:
         ]
         frozen = cache.compute_frozen_count(messages)
         # First 3 stable; trailing user message ("now edit it") is the
-        # live zone by construction — it has not been sent upstream
+        # live zone by construction -- it has not been sent upstream
         # before, so it cannot be in any provider prefix cache. Cap at
         # len - 1 prevents the over-freeze pattern that produced 0 %
         # compression for prose-format clients (issue observed
@@ -122,7 +122,7 @@ class TestMultiTurnCompression:
         frozen = cache.compute_frozen_count(messages)
         assert frozen == 1  # only first user msg
 
-        # Simulate pipeline compressing A and B (not C — in protection window)
+        # Simulate pipeline compressing A and B (not C -- in protection window)
         cache.store_compressed(CompressionCache.content_hash(code_a), "ca", tokens_saved=100)
         cache.store_compressed(CompressionCache.content_hash(code_b), "cb", tokens_saved=100)
 
@@ -314,14 +314,14 @@ class TestUpdateFromResult:
 
 
 class TestProseFormatLiveZoneInvariant:
-    """Cline / OpenClaude / Aider — prose-format clients send tool calls
+    """Cline / OpenClaude / Aider -- prose-format clients send tool calls
     embedded in plain assistant text and tool results pasted into plain
     user messages. There are no `tool_use`, `tool_result`, or
     ``role: "tool"`` blocks anywhere in the conversation.
 
     Pre-fix: ``compute_frozen_count`` walked all messages and found no
     "unstable" boundary, returning ``len(messages)``. The pipeline then
-    froze every message — including the brand-new user turn — leaving
+    froze every message -- including the brand-new user turn -- leaving
     the live zone empty. ContentRouter saw ``saved 0`` on every request.
     Bug observed 2026-05-07 with Cline+DeepSeek over /v1/chat/completions
     in token mode.
@@ -365,9 +365,9 @@ class TestProseFormatLiveZoneInvariant:
         cache = CompressionCache()
         messages = [
             _make_user_msg("turn 1 content"),
-            _make_user_msg("turn 2 — the live zone"),
+            _make_user_msg("turn 2 -- the live zone"),
         ]
-        # First message structurally stable; trailing is live → 1 frozen.
+        # First message structurally stable; trailing is live -> 1 frozen.
         assert cache.compute_frozen_count(messages) == 1
 
     def test_anthropic_format_last_tool_result_is_still_live(self):
@@ -398,7 +398,7 @@ class TestProseFormatLiveZoneInvariant:
             _make_user_msg("run cmd"),
             _make_openai_tool_msg("tc1", content),
         ]
-        # Walk: user (stable, 1), tool (cached, 2). Cap → 1.
+        # Walk: user (stable, 1), tool (cached, 2). Cap -> 1.
         assert cache.compute_frozen_count(messages) == 1
 
 

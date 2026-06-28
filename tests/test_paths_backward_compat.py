@@ -59,7 +59,7 @@ def test_legacy_only_user_savings_unchanged(
     legacy_value = str(tmp_path / "oldstyle" / "savings.json")
     clean_env.setenv(paths.HEADROOM_SAVINGS_PATH_ENV, legacy_value)
 
-    # Byte-for-byte equality (after Path-roundtrip) — no silent rewriting.
+    # Byte-for-byte equality (after Path-roundtrip) -- no silent rewriting.
     result = paths.savings_path()
     assert result == Path(legacy_value)
     assert str(result) == legacy_value
@@ -122,7 +122,7 @@ def test_both_set_legacy_wins_over_canonical(
     # Savings legacy wins.
     assert paths.savings_path() == legacy
     # The other workspace helpers (no legacy var set) relocate under the
-    # canonical root — proves orthogonality: one override does not bleed
+    # canonical root -- proves orthogonality: one override does not bleed
     # into another.
     assert paths.memory_db_path() == new_ws / "memory.db"
     assert paths.log_dir() == new_ws / "logs"

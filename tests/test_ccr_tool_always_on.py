@@ -1,9 +1,9 @@
-"""PR-B7 — `headroom_retrieve` tool always-on once a session has done CCR.
+"""PR-B7 -- `headroom_retrieve` tool always-on once a session has done CCR.
 
 These tests pin three properties:
 
 1. After a session has performed CCR even once, every subsequent
-   request in that session injects the tool — even when the current
+   request in that session injects the tool -- even when the current
    request has no fresh compression markers.
 2. A session that has NEVER done CCR does not get the tool injected.
 3. The tool definition bytes are byte-stable across turns (snapshot
@@ -58,7 +58,7 @@ def test_tool_registered_on_every_request_after_first_ccr():
     """Once a session has done CCR, the tool stays registered every turn."""
     session_id = "sess-abc-123"
 
-    # Turn 1: this turn produced compressed content → first-time inject.
+    # Turn 1: this turn produced compressed content -> first-time inject.
     tools_1, injected_1 = apply_session_sticky_ccr_tool(
         provider="anthropic",
         session_id=session_id,
@@ -69,7 +69,7 @@ def test_tool_registered_on_every_request_after_first_ccr():
     assert injected_1 is True
     assert _has_ccr_tool(tools_1)
 
-    # Turn 2: NO fresh compression this turn — but session has done CCR.
+    # Turn 2: NO fresh compression this turn -- but session has done CCR.
     # Tool MUST still be injected (PR-B7 sticky-on).
     tools_2, injected_2 = apply_session_sticky_ccr_tool(
         provider="anthropic",
@@ -81,7 +81,7 @@ def test_tool_registered_on_every_request_after_first_ccr():
     assert injected_2 is True, "sticky replay must inject even with no fresh CCR"
     assert _has_ccr_tool(tools_2)
 
-    # Turn 3: still no fresh compression — sticky-on still fires.
+    # Turn 3: still no fresh compression -- sticky-on still fires.
     tools_3, injected_3 = apply_session_sticky_ccr_tool(
         provider="anthropic",
         session_id=session_id,
@@ -109,7 +109,7 @@ def test_tool_not_registered_if_session_never_did_ccr():
     # Tracker must NOT have recorded this session.
     assert get_session_ccr_tracker().has_done_ccr("anthropic", session_id) is False
 
-    # Do it again — same outcome, no state leakage.
+    # Do it again -- same outcome, no state leakage.
     tools, injected = apply_session_sticky_ccr_tool(
         provider="anthropic",
         session_id=session_id,
@@ -206,7 +206,7 @@ def test_existing_ccr_tool_in_client_list_skips_injection():
 
 def test_no_session_id_falls_back_to_per_turn_decision():
     """WS / pre-session paths with no session_id behave per-turn."""
-    # No fresh CCR + no session_id → no inject.
+    # No fresh CCR + no session_id -> no inject.
     tools, injected = apply_session_sticky_ccr_tool(
         provider="anthropic",
         session_id=None,
@@ -216,7 +216,7 @@ def test_no_session_id_falls_back_to_per_turn_decision():
     )
     assert injected is False
 
-    # Fresh CCR + no session_id → inject (per-turn).
+    # Fresh CCR + no session_id -> inject (per-turn).
     tools, injected = apply_session_sticky_ccr_tool(
         provider="anthropic",
         session_id=None,
@@ -232,7 +232,7 @@ def test_no_session_id_falls_back_to_per_turn_decision():
 
 
 # Snapshot of the canonical Anthropic CCR tool definition. Any change
-# here MUST be deliberate — bumping the schema mid-session busts every
+# here MUST be deliberate -- bumping the schema mid-session busts every
 # active session's prompt cache (the tool list bytes are part of the
 # cache key).
 _ANTHROPIC_CCR_TOOL_SNAPSHOT_BYTES = (
@@ -320,7 +320,7 @@ def test_sticky_replay_returns_byte_equal_tool_each_turn():
 
 
 def test_session_ccr_tracker_monotonic_has_done_ccr():
-    """``has_done_ccr`` is monotonic — never flips back to False."""
+    """``has_done_ccr`` is monotonic -- never flips back to False."""
     tracker = SessionCcrTracker(max_sessions=10)
     assert tracker.has_done_ccr("anthropic", "s1") is False
 
@@ -328,7 +328,7 @@ def test_session_ccr_tracker_monotonic_has_done_ccr():
     tracker.record_ccr_done("anthropic", "s1", golden)
     assert tracker.has_done_ccr("anthropic", "s1") is True
 
-    # Re-record with a different golden_bytes — original bytes win
+    # Re-record with a different golden_bytes -- original bytes win
     # (first-write wins) and flag stays True.
     new_golden = b'{"name":"different","input_schema":{}}'
     tracker.record_ccr_done("anthropic", "s1", new_golden)
@@ -364,12 +364,12 @@ def test_session_ccr_tracker_reset_clears_state():
 def test_ccrtoolinjector_session_has_done_ccr_kwarg():
     """``CCRToolInjector.inject_tool_definition`` accepts session_has_done_ccr."""
     injector = CCRToolInjector(provider="anthropic", inject_tool=True)
-    # No fresh markers, no sticky flag → no inject (legacy behaviour).
+    # No fresh markers, no sticky flag -> no inject (legacy behaviour).
     tools, was = injector.inject_tool_definition(None)
     assert was is False
     assert tools == []
 
-    # No fresh markers, sticky flag set → inject (PR-B7 path).
+    # No fresh markers, sticky flag set -> inject (PR-B7 path).
     tools, was = injector.inject_tool_definition(None, session_has_done_ccr=True)
     assert was is True
     assert _has_ccr_tool(tools)

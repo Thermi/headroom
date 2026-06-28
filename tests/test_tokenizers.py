@@ -656,7 +656,7 @@ class TestLargeToolBlobEstimation:
         tok.count_messages(messages)
 
         assert sizes, "count_text should be exercised"
-        # the 4 MB blob must never be counted whole — only its bounded sample
+        # the 4 MB blob must never be counted whole -- only its bounded sample
         assert max(sizes) <= tok.SAMPLE_CHARS + tok.SAMPLE_CHUNK
 
     def test_count_serialized_is_model_accurate_and_keeps_small_exact(self):

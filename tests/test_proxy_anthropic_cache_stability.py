@@ -1405,7 +1405,7 @@ def _drive_request(
     messages: list,
     captured: dict,
 ) -> httpx.Response:
-    """Common test driver — wire fakes and submit a /v1/messages request."""
+    """Common test driver -- wire fakes and submit a /v1/messages request."""
     proxy = client.app.state.proxy
 
     fake_tracker = _FakePrefixTracker(frozen_count=prefix_tracker_frozen)
@@ -1418,7 +1418,7 @@ def _drive_request(
     def _fake_apply(**kwargs):  # noqa: ANN003
         captured["frozen_message_count"] = kwargs.get("frozen_message_count")
         captured["pipeline_messages"] = list(kwargs["messages"])
-        # Record the byte-shape of the frozen prefix (deep snapshot via repr —
+        # Record the byte-shape of the frozen prefix (deep snapshot via repr --
         # tests below assert byte-stability with input).
         captured["frozen_prefix_repr"] = repr(
             list(kwargs["messages"])[: kwargs.get("frozen_message_count", 0)]
@@ -1596,7 +1596,7 @@ def test_issue_327_repeated_content_new_position_is_not_frozen() -> None:
         )
 
     assert response.status_code == 200
-    # Pipeline got everything from index 8 onward — including the trailing
+    # Pipeline got everything from index 8 onward -- including the trailing
     # repeat-content tool_result at index 18. Post-fix, frozen_message_count
     # is exactly 8 regardless of any hash matches in _stable_hashes.
     assert captured["frozen_message_count"] == 8
@@ -1624,7 +1624,7 @@ def test_issue_327_pipeline_preserves_frozen_prefix_byte_for_byte() -> None:
     # byte-equal to the input.
     frozen_prefix = captured["pipeline_messages"][: captured["frozen_message_count"]]
     assert frozen_prefix == msgs[: captured["frozen_message_count"]], (
-        "Frozen prefix mutated between client request and pipeline call — "
+        "Frozen prefix mutated between client request and pipeline call -- "
         "this would bust Anthropic's prefix cache."
     )
 
@@ -1635,14 +1635,14 @@ def test_issue_327_multi_turn_session_compresses_each_turns_tail() -> None:
 
     Pre-fix, after a few turns of accumulation, the walker would advance
     `frozen_message_count` to `len(messages)` and the pipeline would get an
-    empty suffix → transforms_applied=[] on every turn (the SvenMeyer
+    empty suffix -> transforms_applied=[] on every turn (the SvenMeyer
     fingerprint).
     """
     frozen_per_turn: list = []
     suffix_size_per_turn: list = []
 
     with _make_optimize_proxy_client(mode="token") as client:
-        # Same comp_cache shared across all turns — `_stable_hashes` accumulates.
+        # Same comp_cache shared across all turns -- `_stable_hashes` accumulates.
         fake_cache = _IssueFakeCompCache()
 
         for turn in range(10):
@@ -1804,7 +1804,7 @@ def test_issue_327_streaming_and_non_streaming_compute_same_frozen_count() -> No
         # Streaming dispatch uses _stream_response (not _retry_request). Stub
         # it to a no-op streaming response so we can inspect what
         # pipeline.apply received without being responsible for the SSE
-        # plumbing — the optimization runs before _stream_response is called.
+        # plumbing -- the optimization runs before _stream_response is called.
         from fastapi.responses import StreamingResponse
 
         async def _fake_stream_response(*args, **kwargs):  # noqa: ANN001, ANN002, ANN003
@@ -1825,7 +1825,7 @@ def test_issue_327_streaming_and_non_streaming_compute_same_frozen_count() -> No
                 "messages": msgs,
             },
         )
-        # Status code is incidental — what matters is that pipeline.apply ran
+        # Status code is incidental -- what matters is that pipeline.apply ran
         # and captured_b was populated.
 
     assert "frozen_message_count" in captured_a, "Non-streaming path didn't reach pipeline.apply()"

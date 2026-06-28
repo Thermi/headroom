@@ -54,7 +54,7 @@ class TestStripCodexHeadroomBlocks:
     def test_returns_content_unchanged_when_no_markers(self) -> None:
         original = '[profiles.default]\nmodel = "gpt-4o"\n'
         cleaned = wrap_mod._strip_codex_headroom_blocks(original)
-        # Trailing whitespace normalization only — semantic content preserved.
+        # Trailing whitespace normalization only -- semantic content preserved.
         assert 'model = "gpt-4o"' in cleaned
         assert "[profiles.default]" in cleaned
 
@@ -247,7 +247,7 @@ class TestCodexMemoryMcpConfig:
 
 
 class TestInjectAndRestoreRoundTrip:
-    """End-to-end wrap → unwrap cycle operating directly on a temp $HOME."""
+    """End-to-end wrap -> unwrap cycle operating directly on a temp $HOME."""
 
     def test_wrap_unwrap_restores_empty_state(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
@@ -260,7 +260,7 @@ class TestInjectAndRestoreRoundTrip:
         assert 'model_provider = "headroom"' in config_file.read_text(encoding="utf-8")
 
         status, _ = wrap_mod._restore_codex_provider_config()
-        # No prior config existed → the injected file is fully removed.
+        # No prior config existed -> the injected file is fully removed.
         assert status == "removed"
         assert not config_file.exists()
         assert not (tmp_path / ".codex" / "config.toml.headroom-backup").exists()
@@ -320,8 +320,8 @@ class TestInjectAndRestoreRoundTrip:
         wrap_mod._inject_codex_provider_config(8787)
         wrap_mod._inject_codex_provider_config(9999)  # port change
 
-        content = config_file.read_text(encoding="utf-8")
-        # Exactly two Headroom blocks — a top-level-key block and the
+        content = config_file.read_text()
+        # Exactly two Headroom blocks -- a top-level-key block and the
         # provider-table block.  Re-wrapping must not duplicate them.
         assert content.count(wrap_mod._CODEX_TOP_LEVEL_MARKER) == 2
         assert content.count(wrap_mod._CODEX_END_MARKER) == 2
@@ -450,7 +450,7 @@ class TestInjectAndRestoreRoundTrip:
     def test_unwrap_handles_malformed_prior_config(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
-        """Unwrap preserves backup content verbatim — TOML validity isn't required."""
+        """Unwrap preserves backup content verbatim -- TOML validity isn't required."""
         _set_test_home(monkeypatch, tmp_path)
         config_dir = tmp_path / ".codex"
         config_dir.mkdir()
@@ -627,7 +627,7 @@ class TestSubscriptionRouting:
     ) -> None:
         """env_key must be absent so Codex doesn't require OPENAI_API_KEY.
 
-        Codex treats env_key as a hard requirement — if the env var is missing
+        Codex treats env_key as a hard requirement -- if the env var is missing
         it throws "Missing environment variable" at startup.  Subscription
         (ChatGPT Plus) users don't have OPENAI_API_KEY set, so injecting
         env_key breaks them (issue #393).
@@ -795,9 +795,9 @@ class TestInjectAvoidsDuplicateTopLevelKeys:
     """Wrap must not produce a TOML-validity-breaking duplicate-key error.
 
     Codex's ``config.toml`` is parsed strictly: two top-level
-    ``model_provider = …`` (or two ``openai_base_url = …``) declarations
+    ``model_provider = ...`` (or two ``openai_base_url = ...``) declarations
     cause ``codex`` to refuse to start with
-    ``Error loading config.toml: …: …:1: duplicate key``.  The injector
+    ``Error loading config.toml: ...: ...:1: duplicate key``.  The injector
     used to unconditionally prepend a top-level block, breaking any user
     who had already configured their own provider (e.g. ``ccswitch``).
     """
@@ -823,8 +823,8 @@ class TestInjectAvoidsDuplicateTopLevelKeys:
 
         wrap_mod._inject_codex_provider_config(8787)
 
-        content = config_file.read_text(encoding="utf-8")
-        # The wrapped file must be TOML-parseable — duplicate keys were
+        content = config_file.read_text()
+        # The wrapped file must be TOML-parseable -- duplicate keys were
         # the failure mode the user reported.
         tomllib.loads(content)
         # No duplicate top-level key for either redirectable key.
@@ -836,7 +836,7 @@ class TestInjectAvoidsDuplicateTopLevelKeys:
 
     @pytest.mark.parametrize("blank", ["", "   ", "\n\t\n"])
     def test_redirect_existing_top_level_keys_noop_on_blank(self, blank: str) -> None:
-        # No redirectable keys to rewrite in blank/whitespace content — the
+        # No redirectable keys to rewrite in blank/whitespace content -- the
         # helper returns it unchanged so the caller falls back to prepending
         # the marker-delimited top-level block.
         assert wrap_mod._redirect_existing_top_level_keys(blank, 8787) == blank
@@ -857,7 +857,7 @@ class TestInjectAvoidsDuplicateTopLevelKeys:
 
         content = config_file.read_text(encoding="utf-8")
         # Original value kept in a comment so the user can recover it.
-        # The comment intentionally drops the surrounding quotes — the
+        # The comment intentionally drops the surrounding quotes -- the
         # value is a single TOML string and the comment is human-facing.
         assert "was: ccswitch" in content
         assert "was: http://llm-gateway-proxy/v1" in content
@@ -886,7 +886,7 @@ class TestInjectAvoidsDuplicateTopLevelKeys:
     def test_inject_empty_file_still_uses_marker_block(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
-        """No existing top-level keys → fall back to the marker-delimited block."""
+        """No existing top-level keys -> fall back to the marker-delimited block."""
         _set_test_home(monkeypatch, tmp_path)
         wrap_mod._inject_codex_provider_config(8787)
 
@@ -1583,7 +1583,7 @@ def test_wrap_codex_prepare_only_no_serena_skips_serena(
 def test_unwrap_codex_restores_prior_config_end_to_end(
     runner: CliRunner, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """The bug report, reproduced: wrap → unwrap must round-trip cleanly."""
+    """The bug report, reproduced: wrap -> unwrap must round-trip cleanly."""
     _set_test_home(monkeypatch, tmp_path)
     config_file = tmp_path / ".codex" / "config.toml"
     config_file.parent.mkdir(parents=True)
@@ -1610,7 +1610,7 @@ def test_unwrap_codex_restores_prior_config_end_to_end(
     assert unwrap_result.exit_code == 0, unwrap_result.output
 
     # Config must be byte-for-byte what the user had before wrap, and the
-    # injected block must be gone — no more "Missing OPENAI_API_KEY" when the
+    # injected block must be gone -- no more "Missing OPENAI_API_KEY" when the
     # proxy is stopped.
     assert config_file.read_text(encoding="utf-8") == original
     assert 'model_provider = "headroom"' not in config_file.read_text(encoding="utf-8")

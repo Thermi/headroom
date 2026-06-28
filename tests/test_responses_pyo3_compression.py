@@ -10,7 +10,7 @@ These tests pin:
 1. The binding is exposed and callable.
 2. Round-trip: a body with no eligible content passes through unchanged.
 3. Round-trip: a body with a compressible function-call output gets compressed.
-4. Errors are non-fatal: malformed JSON / missing input array → passthrough.
+4. Errors are non-fatal: malformed JSON / missing input array -> passthrough.
 5. Auth-mode parsing accepts every variant the F1 classifier produces.
 """
 
@@ -28,7 +28,7 @@ def _ensure_binding():
 
         return compress_openai_responses_live_zone
     except ImportError:
-        pytest.skip("headroom._core not built — run scripts/build_rust_extension.sh")
+        pytest.skip("headroom._core not built -- run scripts/build_rust_extension.sh")
 
 
 class TestBindingExposed:
@@ -67,7 +67,7 @@ class TestPassthroughCases:
 
     def test_no_eligible_items_passthrough(self):
         compress = _ensure_binding()
-        # Single user message under the byte threshold — no compression
+        # Single user message under the byte threshold -- no compression
         # applies, but still valid input.
         body = json.dumps(
             {

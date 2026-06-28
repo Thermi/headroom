@@ -228,7 +228,7 @@ class _HandlerHarness(OpenAIHandlerMixin):
 
 def test_codex_input_list_payload_reaches_router_without_skip() -> None:
     """Codex's Responses payload uses `input=[...]` with no `messages` key.
-    The compression gate must accept either field as the items source —
+    The compression gate must accept either field as the items source --
     otherwise the entire payload is silently passed through uncompressed,
     which is the exact production bug surfaced in proxy.log analysis."""
 
@@ -246,7 +246,7 @@ def test_codex_input_list_payload_reaches_router_without_skip() -> None:
                 "output": long_output,
             }
         ],
-        # Note: no `messages` key at all — Codex doesn't send one.
+        # Note: no `messages` key at all -- Codex doesn't send one.
     }
 
     updated, modified, _saved, _transforms, _units_by_cat, _chain, _attempted = (
@@ -259,7 +259,7 @@ def test_codex_input_list_payload_reaches_router_without_skip() -> None:
 
     # The gate must NOT have skipped the payload. If it had, `updated`
     # would be the input payload identity-passed through with
-    # modified=False — but the deepcopy + splice always returns a new
+    # modified=False -- but the deepcopy + splice always returns a new
     # dict object when the path executes.
     assert updated is not payload, "Codex-shape payload was skipped at the input/messages gate"
     # Whether or not Kompress actually compresses 200 repeated words is
@@ -304,9 +304,9 @@ def test_compression_pass_debug_logs_are_suppressed(caplog) -> None:
     """Re-entrant Codex websocket passes share one `request_id` but
     process distinct payloads. The `pass_id` field on every compression
     event must be content-derived so dashboards can attribute each
-    unit_result to its originating pass. Distinct payloads → distinct
+    unit_result to its originating pass. Distinct payloads -> distinct
     pass_ids (per-pass savings sum legitimately across passes); identical
-    payloads → identical pass_ids (idempotent retries should dedup)."""
+    payloads -> identical pass_ids (idempotent retries should dedup)."""
 
     import logging as _logging
 
@@ -343,7 +343,7 @@ def test_compression_pass_debug_logs_are_suppressed(caplog) -> None:
     handler._compress_openai_responses_payload(
         payload_b, model="gpt-5.5", request_id="hr_shared_request"
     )
-    # Same content twice → same pass_id (deterministic + idempotent).
+    # Same content twice -> same pass_id (deterministic + idempotent).
     handler._compress_openai_responses_payload(
         payload_a, model="gpt-5.5", request_id="hr_shared_request"
     )
@@ -351,7 +351,7 @@ def test_compression_pass_debug_logs_are_suppressed(caplog) -> None:
     assert not any("event=codex_compression_" in record.getMessage() for record in caplog.records)
     return
 
-    # Collect pass_ids in call order — payload bodies are no longer
+    # Collect pass_ids in call order -- payload bodies are no longer
     # embedded at INFO so we can't grep for content; we rely on the
     # 3-call sequence [a, b, a] producing a [A, B, A] pass_id sequence.
     pass_id_sequence: list[str] = []
@@ -369,11 +369,11 @@ def test_compression_pass_debug_logs_are_suppressed(caplog) -> None:
     assert len(pass_id_sequence) == 3, (
         f"expected exactly 3 payload_input events for 3 calls, got {len(pass_id_sequence)}"
     )
-    # Two distinct payloads + one repeat → two distinct pass_ids overall.
+    # Two distinct payloads + one repeat -> two distinct pass_ids overall.
     assert len(set(pass_id_sequence)) == 2, (
         f"expected two distinct pass_ids, got {set(pass_id_sequence)}"
     )
-    # Repeated payload_a must be deterministic — index 0 and 2 are the
+    # Repeated payload_a must be deterministic -- index 0 and 2 are the
     # same call shape so they must produce the same pass_id.
     assert pass_id_sequence[0] == pass_id_sequence[2], (
         f"repeated identical payload produced different pass_ids: {pass_id_sequence}"
@@ -382,7 +382,7 @@ def test_compression_pass_debug_logs_are_suppressed(caplog) -> None:
 
 
 def test_codex_payload_without_either_field_is_skipped() -> None:
-    """The gate must still reject malformed payloads — `input` and
+    """The gate must still reject malformed payloads -- `input` and
     `messages` both absent (or non-list) is the genuine skip condition."""
 
     router = ContentRouter(ContentRouterConfig())
@@ -391,7 +391,7 @@ def test_codex_payload_without_either_field_is_skipped() -> None:
     payload: dict[str, Any] = {
         "type": "response.create",
         "model": "gpt-5.5",
-        # No input, no messages — genuinely nothing to compress.
+        # No input, no messages -- genuinely nothing to compress.
     }
 
     updated, modified, saved, transforms, units_by_cat, chain, attempted = (

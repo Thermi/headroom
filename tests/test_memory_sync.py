@@ -276,8 +276,8 @@ class TestBidirectionalSync:
         adapter = ClaudeCodeAdapter(claude_dir)
         result = await sync(backend, adapter, "tcms", state_path=state_path, force=True)
 
-        assert result.imported == 1  # Claude file → DB
-        assert result.exported == 1  # Codex memory → Claude file
+        assert result.imported == 1  # Claude file -> DB
+        assert result.exported == 1  # Codex memory -> Claude file
 
         # Verify DB has both
         mems = await backend.get_user_memories("tcms")
@@ -706,11 +706,11 @@ class TestCrossAgentInterop:
         fm = "---\nname: Linting\ndescription: use ruff\ntype: project\n---"
         (claude_dir / "linting.md").write_text(f"{fm}\n\nAlways use ruff for linting\n")
 
-        # Sync Claude → DB
+        # Sync Claude -> DB
         claude_adapter = ClaudeCodeAdapter(claude_dir)
         await sync(backend, claude_adapter, "tcms", state_path=state_path, force=True)
 
-        # Sync DB → Codex AGENTS.md
+        # Sync DB -> Codex AGENTS.md
         codex_adapter = CodexAdapter(agents_md)
         result = await sync(backend, codex_adapter, "tcms", state_path=state_path, force=True)
 
@@ -719,7 +719,7 @@ class TestCrossAgentInterop:
 
     @pytest.mark.asyncio
     async def test_full_round_trip(self, backend, claude_dir, agents_md, state_path):
-        """Full round trip: Claude → DB → Codex, Codex → DB → Claude."""
+        """Full round trip: Claude -> DB -> Codex, Codex -> DB -> Claude."""
         # Claude has a memory
         fm = "---\nname: Framework\ntype: project\n---"
         (claude_dir / "framework.md").write_text(f"{fm}\n\nUses FastAPI\n")

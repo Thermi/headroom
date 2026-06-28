@@ -197,7 +197,7 @@ class TestRateLimitKey:
         assert rate_key == "sk-ant-oat01-myt:127.0.0.1"
 
     def test_rate_key_no_auth(self):
-        """No auth headers → IP-only rate key."""
+        """No auth headers -> IP-only rate key."""
         headers = {}
         api_key = headers.get("x-api-key", "")
         if not api_key:

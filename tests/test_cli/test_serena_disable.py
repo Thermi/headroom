@@ -67,7 +67,7 @@ def test_disable_preserves_user_managed_serena(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     monkeypatch.setenv("HEADROOM_WORKSPACE_DIR", str(tmp_path / ".headroom"))
-    # Present in the agent config but NOT in Headroom's ledger → user-owned.
+    # Present in the agent config but NOT in Headroom's ledger -> user-owned.
     user_spec = ServerSpec(name="serena", command="/usr/local/bin/custom-serena")
     registrar = _FakeRegistrar("claude", server=user_spec)
 
@@ -99,7 +99,7 @@ def test_disable_noop_when_agent_not_detected(
 
     wrap_cli._disable_serena_mcp(registrar, verbose=True)
 
-    assert registrar.unregistered == []  # not detected → leave everything alone
+    assert registrar.unregistered == []  # not detected -> leave everything alone
 
 
 def test_unwrap_codex_removes_headroom_installed_serena(

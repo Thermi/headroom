@@ -562,7 +562,7 @@ class TestSemanticDetector:
         spans, warning = detector.detect("The current stock price changes every minute.")
 
         assert spans == []
-        # Model present but exemplar matrix missing → the warning names the
+        # Model present but exemplar matrix missing -> the warning names the
         # actual missing piece (matches TestSemanticDetectorGuards below).
         assert warning == "exemplar embeddings not initialized"
 

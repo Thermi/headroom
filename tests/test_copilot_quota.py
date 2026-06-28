@@ -316,7 +316,7 @@ class TestCopilotQuotaPollLoopLeak:
 
         from headroom.subscription.copilot_quota import _CopilotQuotaTracker
 
-        # No token configured → _maybe_poll returns immediately each cycle.
+        # No token configured -> _maybe_poll returns immediately each cycle.
         for var in ("GITHUB_COPILOT_GITHUB_TOKEN", "GITHUB_TOKEN"):
             monkeypatch.delenv(var, raising=False)
 

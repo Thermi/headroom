@@ -45,7 +45,7 @@ def _tokens(text: str) -> int:
 
 SAMPLE_PY = textwrap.dedent(
     '''
-    """Payments module — illustrative fixture for compression tests."""
+    """Payments module -- illustrative fixture for compression tests."""
     import logging
     from dataclasses import dataclass
     from decimal import Decimal
@@ -111,7 +111,7 @@ SAMPLE_PY_MODIFIED = SAMPLE_PY.replace(
     'return subtotal * Decimal("0.85")  # promo bumped from 10% to 15%',
 ).replace(
     'log.warning("unknown promo code %s", code)',
-    'log.error("unknown promo code %s — rejecting", code)\n        raise ValueError(code)',
+    'log.error("unknown promo code %s -- rejecting", code)\n        raise ValueError(code)',
 )
 
 
@@ -142,7 +142,7 @@ def test_ensure_tools_installs_every_tool():
 
 
 def test_ast_grep_slice_saves_tokens(repo: Path):
-    """Function-level slice vs full-file — ast-grep must reduce tokens."""
+    """Function-level slice vs full-file -- ast-grep must reduce tokens."""
     full = (repo / "payments.py").read_text()
     full_tokens = _tokens(full)
 
@@ -306,9 +306,9 @@ def test_compressed_payload_preserves_answer_openai(repo: Path):
     full_usage = full_resp.usage.prompt_tokens
     sliced_usage = sliced_resp.usage.prompt_tokens
 
-    print(f"\n[openai] full_payload={full_tokens}t prompt_tokens={full_usage} → {full_answer!r}")
+    print(f"\n[openai] full_payload={full_tokens}t prompt_tokens={full_usage} -> {full_answer!r}")
     print(
-        f"[openai] sliced_payload={sliced_tokens}t prompt_tokens={sliced_usage} → {sliced_answer!r}"
+        f"[openai] sliced_payload={sliced_tokens}t prompt_tokens={sliced_usage} -> {sliced_answer!r}"
     )
     print(f"[openai] prompt-token savings: {(1 - sliced_usage / full_usage) * 100:.1f}%")
 
@@ -356,8 +356,8 @@ def test_compressed_payload_preserves_answer_anthropic(repo: Path):
 
     full_answer = full_resp.content[0].text.strip()
     sliced_answer = sliced_resp.content[0].text.strip()
-    print(f"\n[anthropic] full prompt_tokens={full_resp.usage.input_tokens} → {full_answer!r}")
-    print(f"[anthropic] sliced prompt_tokens={sliced_resp.usage.input_tokens} → {sliced_answer!r}")
+    print(f"\n[anthropic] full prompt_tokens={full_resp.usage.input_tokens} -> {full_answer!r}")
+    print(f"[anthropic] sliced prompt_tokens={sliced_resp.usage.input_tokens} -> {sliced_answer!r}")
     print(
         f"[anthropic] savings: "
         f"{(1 - sliced_resp.usage.input_tokens / full_resp.usage.input_tokens) * 100:.1f}%"

@@ -4,7 +4,7 @@ The Python module is a hand-mirror of
 ``headroom_core::compression_policy::CompressionPolicy``. These tests
 pin both halves: that the per-mode values are right, and that the
 Python and Rust sides agree on the field map. F2.2 will likely retire
-the hand-mirror via PyO3 — until then, this file is the canary.
+the hand-mirror via PyO3 -- until then, this file is the canary.
 
 F2.2 extends the F2.1 surface with three tuning fields:
 ``volatile_token_threshold``, ``max_lossy_ratio``, ``toin_read_only``.
@@ -46,7 +46,7 @@ class TestCompressionPolicyForMode:
             "PAYG max_lossy_ratio caps lossy paths at 0.45; F2.2-followup will tune"
         )
         assert p.toin_read_only is False, (
-            "PAYG keeps TOIN write-enabled — network effect feeds on PAYG traffic"
+            "PAYG keeps TOIN write-enabled -- network effect feeds on PAYG traffic"
         )
 
     def test_oauth_matches_payg_today(self):
@@ -69,12 +69,12 @@ class TestCompressionPolicyForMode:
         p = policy_for_mode(AuthMode.SUBSCRIPTION)
         assert p.live_zone_only is True, "Subscription is live-zone-only"
         assert p.cache_aligner_enabled is False, (
-            "Subscription MUST skip cache aligner — load-bearing for issues #327 / #388"
+            "Subscription MUST skip cache aligner -- load-bearing for issues #327 / #388"
         )
 
     def test_subscription_tuning_fields_conservative(self):
         # F2.2: per-mode tuning fields. Subscription is the conservative
-        # end — tighter threshold, lower lossy cap, TOIN read-only — so
+        # end -- tighter threshold, lower lossy cap, TOIN read-only -- so
         # cache prefixes stay stable and the learning pool isn't
         # mutated from cache-stability-sensitive traffic.
         p = policy_for_mode(AuthMode.SUBSCRIPTION)
@@ -85,14 +85,14 @@ class TestCompressionPolicyForMode:
             "Subscription max_lossy_ratio caps lossy paths at 0.25 (conservative)"
         )
         assert p.toin_read_only is True, (
-            "Subscription MUST be TOIN read-only — load-bearing for keeping the "
+            "Subscription MUST be TOIN read-only -- load-bearing for keeping the "
             "learning pool consistent across cache-sensitive traffic"
         )
 
     def test_max_lossy_ratio_in_unit_interval(self):
         # Defensive: every per-mode `max_lossy_ratio` MUST be in
         # ``[0.0, 1.0]`` because it expresses a fraction. A tune that
-        # drifts outside the unit interval is a bug — catch it cheaply
+        # drifts outside the unit interval is a bug -- catch it cheaply
         # here rather than at the eventual consumer site.
         for mode in (AuthMode.PAYG, AuthMode.OAUTH, AuthMode.SUBSCRIPTION):
             r = policy_for_mode(mode).max_lossy_ratio
@@ -118,7 +118,7 @@ class TestImmutability:
             p.live_zone_only = True  # type: ignore[misc]
 
     def test_f22_tuning_fields_also_frozen(self):
-        # Each F2.2 field gets its own immutability assertion — a
+        # Each F2.2 field gets its own immutability assertion -- a
         # future refactor that accidentally drops `frozen=True` on the
         # dataclass would silently allow per-request mutation. The
         # F2.1 test only covered ``live_zone_only``; explicit per-
@@ -139,7 +139,7 @@ class TestRustParityFieldMap:
     """
 
     def test_field_set_matches_rust(self):
-        # Hard-coded set — when Rust grows fields, this test fails until
+        # Hard-coded set -- when Rust grows fields, this test fails until
         # Python catches up. F2.2 added three: volatile_token_threshold,
         # max_lossy_ratio, toin_read_only.
         expected_fields = {
@@ -160,7 +160,7 @@ class TestRustParityFieldMap:
 
 
 class TestNetCostFormula:
-    """Net-cost mutation formula (#856) — Rust parity.
+    """Net-cost mutation formula (#856) -- Rust parity.
 
     Scenario values are golden: the Rust unit tests in
     ``crates/headroom-core/src/compression_policy.rs`` assert the
@@ -177,14 +177,14 @@ class TestNetCostFormula:
 
     def test_big_shave_shallow_suffix_is_win(self):
         # 50000*(1.25 + 0.1*2) - 1.0*1.15*60000 = 72500 - 69000 = 3500.
-        # Tight but positive — consistent with the 2.3-read break-even.
+        # Tight but positive -- consistent with the 2.3-read break-even.
         p = policy_for_mode(AuthMode.PAYG)
         gain = p.net_mutation_gain(50_000, 10_000, 3.0, 1.0)
         assert abs(gain - 3_500.0) < 1.0
         assert p.should_mutate_deep(50_000, 10_000, 3.0, 1.0)
 
     def test_no_suffix_edit_profitable_with_reads_remaining(self):
-        # S = 0: warm-case saving is the avoided rereads, dT*r*R —
+        # S = 0: warm-case saving is the avoided rereads, dT*r*R --
         # positive whenever at least one read remains. At R=0 with a
         # warm cache the gain is exactly 0 (already written, never read
         # again): pointless rather than harmful.
@@ -216,7 +216,7 @@ class TestNetCostFormula:
         assert abs(guarded - reference) < 1e-6
 
     def test_negative_int_inputs_clamped(self):
-        # Rust takes u32 — negative Python ints must not flip the sign of
+        # Rust takes u32 -- negative Python ints must not flip the sign of
         # the result; they clamp to 0.
         p = policy_for_mode(AuthMode.PAYG)
         assert p.net_mutation_gain(-2_000, -50_000, 5.0, 1.0) == p.net_mutation_gain(0, 0, 5.0, 1.0)

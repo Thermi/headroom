@@ -1,4 +1,4 @@
-"""Unit tests for headroom.binaries — the lazy fetcher for bundled CLI tools.
+"""Unit tests for headroom.binaries -- the lazy fetcher for bundled CLI tools.
 
 No network access. A fake urlopen serves bytes from an in-memory fixture.
 """
@@ -311,7 +311,7 @@ def test_ensure_tools_survives_readonly_cache_dir(monkeypatch, tmp_path):
     try:
         # Must return a dict, not raise.
         result = binaries.ensure_tools(quiet=True)
-        # Fetched tools couldn't write to cache → None. ast-grep is PyPI-only
+        # Fetched tools couldn't write to cache -> None. ast-grep is PyPI-only
         # so its entry depends on PATH, which is not what this test exercises.
         assert result.get("difft") is None
         assert result.get("scc") is None

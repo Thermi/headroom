@@ -282,7 +282,7 @@ class TestGeminiModels:
 
 
 @pytest.mark.skip(
-    reason="proxy does not currently route Gemini :embedContent / :batchEmbedContents — "
+    reason="proxy does not currently route Gemini :embedContent / :batchEmbedContents -- "
     "feature gap, not a regression. Tracked separately."
 )
 @pytest.mark.skipif(not os.environ.get("GEMINI_API_KEY"), reason="GEMINI_API_KEY not set")
@@ -321,7 +321,7 @@ class TestGeminiEmbedContent:
 
 
 @pytest.mark.skip(
-    reason="proxy does not currently route Gemini :embedContent / :batchEmbedContents — "
+    reason="proxy does not currently route Gemini :embedContent / :batchEmbedContents -- "
     "feature gap, not a regression. Tracked separately."
 )
 @pytest.mark.skipif(not os.environ.get("GEMINI_API_KEY"), reason="GEMINI_API_KEY not set")

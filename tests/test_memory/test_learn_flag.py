@@ -199,7 +199,7 @@ class TestCLIFlagResolution:
 class TestCompressAPIIsolation:
     """Verify that compress() is completely unaffected by memory/learn flags.
 
-    compress() is a pure function — it should never touch memory, traffic
+    compress() is a pure function -- it should never touch memory, traffic
     learning, or any stateful components.
     """
 

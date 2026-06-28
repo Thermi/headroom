@@ -1,11 +1,11 @@
 """Eval: Does the LLM invoke headroom_retrieve when summaries are present?
 
-The REAL test — it's not enough for the LLM to know something is missing.
+The REAL test -- it's not enough for the LLM to know something is missing.
 It must actually call the tool to fetch it.
 
 Compares:
-- WITH summary: LLM sees "2 failed, 1 error" → should call headroom_retrieve
-- WITHOUT summary: LLM sees "[90 items compressed]" → likely does NOT call tool
+- WITH summary: LLM sees "2 failed, 1 error" -> should call headroom_retrieve
+- WITHOUT summary: LLM sees "[90 items compressed]" -> likely does NOT call tool
 
 Requires: ANTHROPIC_API_KEY in environment or .env file.
 
@@ -27,7 +27,7 @@ apply_dotenv = autouse_apply_env(_env_overrides)
 
 pytestmark = pytest.mark.skipif(
     not ANTHROPIC_KEY,
-    reason="ANTHROPIC_API_KEY not set — skipping integration tests",
+    reason="ANTHROPIC_API_KEY not set -- skipping integration tests",
 )
 
 # The headroom_retrieve tool definition (same as what CCR injects)
@@ -128,7 +128,7 @@ class TestToolInvocationWithSummary:
     """The real eval: does the LLM call headroom_retrieve?"""
 
     def test_with_summary_triggers_tool_call(self):
-        """WITH compression summary → LLM should call headroom_retrieve."""
+        """WITH compression summary -> LLM should call headroom_retrieve."""
         test_results = _make_test_results(100)
         kept = test_results[:10]  # All passing
 
@@ -175,9 +175,9 @@ class TestToolInvocationWithSummary:
                 term in query for term in ["fail", "error", "issue", "problem", "broken", "test"]
             )
             assert has_relevant_query, f"Tool was called but query isn't relevant: {query}"
-            print("  RESULT: LLM invoked headroom_retrieve with relevant query ✓")
+            print("  RESULT: LLM invoked headroom_retrieve with relevant query [OK]")
         else:
-            # LLM responded with text — check if it at least mentions the failures
+            # LLM responded with text -- check if it at least mentions the failures
             text = ""
             for block in resp.get("content", []):
                 if block.get("type") == "text":
@@ -191,7 +191,7 @@ class TestToolInvocationWithSummary:
             print(f"  Mentions retrieval: {mentions_retrieval}")
 
     def test_without_summary_baseline(self):
-        """WITHOUT compression summary → LLM likely does NOT call tool."""
+        """WITHOUT compression summary -> LLM likely does NOT call tool."""
         test_results = _make_test_results(100)
         kept = test_results[:10]  # All passing
 
@@ -227,10 +227,10 @@ class TestToolInvocationWithSummary:
                 if block.get("type") == "text":
                     text += block.get("text", "")
             print(f"  LLM text response: {text[:200]}")
-            print("  RESULT: LLM did NOT invoke tool — assumed all tests passed")
+            print("  RESULT: LLM did NOT invoke tool -- assumed all tests passed")
 
     def test_code_summary_triggers_retrieval(self):
-        """Code compression summary → LLM should retrieve specific function."""
+        """Code compression summary -> LLM should retrieve specific function."""
         compressed_code = '''class PaymentProcessor:
     """Processes payments via Stripe."""
 
@@ -279,7 +279,7 @@ class TestToolInvocationWithSummary:
             # Should be asking for the charge function specifically
             has_charge = any(term in query for term in ["charge", "retry", "payment", "stripe"])
             print(f"  Targets charge/retry: {has_charge}")
-            print("  RESULT: LLM invoked tool to get the charge() implementation ✓")
+            print("  RESULT: LLM invoked tool to get the charge() implementation [OK]")
         else:
             text = ""
             for block in resp.get("content", []):

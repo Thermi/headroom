@@ -193,7 +193,7 @@ class TestSharedStatsFile:
 
 
 # ---------------------------------------------------------------------------
-# HeadroomMCPServer — _compress_content (sync, CPU-bound)
+# HeadroomMCPServer -- _compress_content (sync, CPU-bound)
 # ---------------------------------------------------------------------------
 
 
@@ -248,7 +248,7 @@ class TestCompressContent:
 
 
 # ---------------------------------------------------------------------------
-# HeadroomMCPServer — _handle_compress (async handler)
+# HeadroomMCPServer -- _handle_compress (async handler)
 # ---------------------------------------------------------------------------
 
 
@@ -285,7 +285,7 @@ class TestHandleCompress:
 
 
 # ---------------------------------------------------------------------------
-# HeadroomMCPServer — _handle_retrieve
+# HeadroomMCPServer -- _handle_retrieve
 # ---------------------------------------------------------------------------
 
 
@@ -404,7 +404,7 @@ class TestHandleRetrieve:
 
 
 # ---------------------------------------------------------------------------
-# HeadroomMCPServer — _handle_stats
+# HeadroomMCPServer -- _handle_stats
 # ---------------------------------------------------------------------------
 
 
@@ -501,7 +501,7 @@ class TestHandleStats:
 
 
 # ---------------------------------------------------------------------------
-# HeadroomMCPServer — _handle_read
+# HeadroomMCPServer -- _handle_read
 # ---------------------------------------------------------------------------
 
 
@@ -844,7 +844,7 @@ class TestMemoryToolDefinitions:
 
 
 # ---------------------------------------------------------------------------
-# HeadroomMCPServer — memory constructor params
+# HeadroomMCPServer -- memory constructor params
 # ---------------------------------------------------------------------------
 
 
@@ -879,7 +879,7 @@ class TestMemoryMCPServerConstructor:
 
 
 # ---------------------------------------------------------------------------
-# list_tools — conditional memory tool inclusion
+# list_tools -- conditional memory tool inclusion
 # ---------------------------------------------------------------------------
 
 
@@ -920,7 +920,7 @@ class TestListToolsMemoryConditional:
 
 
 # ---------------------------------------------------------------------------
-# call_tool — memory tool dispatch
+# call_tool -- memory tool dispatch
 # ---------------------------------------------------------------------------
 
 

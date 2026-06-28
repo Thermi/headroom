@@ -3,8 +3,8 @@
 Guards against:
 - Bug: corrupt (invalid JSON/bytes) golden tool definitions previously raised
   RuntimeError, permanently breaking the session until proxy restart.
-- Fix: log at ERROR and recover — skip the corrupt memory tool entry, or
-  regenerate a fresh CCR definition — rather than propagating RuntimeError.
+- Fix: log at ERROR and recover -- skip the corrupt memory tool entry, or
+  regenerate a fresh CCR definition -- rather than propagating RuntimeError.
 
 Covers both injection sites:
   1. apply_session_sticky_memory_tools (memory tool golden bytes)
@@ -95,7 +95,7 @@ def _seed_ccr_done(
 
 
 # ---------------------------------------------------------------------------
-# Fix 1a: apply_session_sticky_memory_tools — corrupt memory golden bytes
+# Fix 1a: apply_session_sticky_memory_tools -- corrupt memory golden bytes
 # ---------------------------------------------------------------------------
 
 
@@ -187,7 +187,7 @@ class TestCorruptMemoryGoldenBytes:
 
 
 # ---------------------------------------------------------------------------
-# Fix 1b: apply_session_sticky_ccr_tool — corrupt CCR golden bytes
+# Fix 1b: apply_session_sticky_ccr_tool -- corrupt CCR golden bytes
 # ---------------------------------------------------------------------------
 
 

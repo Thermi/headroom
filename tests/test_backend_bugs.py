@@ -28,7 +28,7 @@ from headroom.backends.litellm import (  # noqa: E402  (must follow importorskip
 
 
 class TestConvertAnthropicTool:
-    """Test Anthropic → OpenAI tool format conversion."""
+    """Test Anthropic -> OpenAI tool format conversion."""
 
     def test_basic_tool_conversion(self):
         anthropic_tool = {
@@ -69,7 +69,7 @@ class TestConvertAnthropicTool:
 
 
 class TestConvertToolChoice:
-    """Test Anthropic → OpenAI tool_choice conversion."""
+    """Test Anthropic -> OpenAI tool_choice conversion."""
 
     def test_auto(self):
         assert _convert_tool_choice({"type": "auto"}) == "auto"
@@ -201,7 +201,7 @@ class TestLiteLLMToolsForwarding:
 
 
 # =============================================================================
-# Message Conversion: tool_use / tool_result (GitHub Issue — Bug 2)
+# Message Conversion: tool_use / tool_result (GitHub Issue -- Bug 2)
 # =============================================================================
 
 
@@ -308,7 +308,7 @@ class TestConvertMessagesToolBlocks:
         assert converted == messages
 
     def test_multiple_tool_results(self):
-        """Multiple tool_result blocks in one user message → multiple role=tool messages."""
+        """Multiple tool_result blocks in one user message -> multiple role=tool messages."""
         backend = self._make_backend()
         messages = [
             {
@@ -327,7 +327,7 @@ class TestConvertMessagesToolBlocks:
         assert converted[1]["tool_call_id"] == "toolu_b"
 
     def test_tool_result_immediately_follows_tool_calls(self):
-        """Bedrock requires role=tool immediately after assistant tool_calls — no intervening messages.
+        """Bedrock requires role=tool immediately after assistant tool_calls -- no intervening messages.
 
         Regression test for GitHub issue #70: a stray user text message was inserted
         between the assistant tool_calls and the tool results, causing Bedrock to reject
@@ -371,7 +371,7 @@ class TestConvertMessagesToolBlocks:
         for i in range(assistant_idx + 1, len(converted)):
             assert converted[i]["role"] == "tool", (
                 f"Message at index {i} has role={converted[i]['role']!r}, "
-                f"expected 'tool' — Bedrock requires tool results immediately "
+                f"expected 'tool' -- Bedrock requires tool results immediately "
                 f"after assistant tool_calls with no intervening messages"
             )
 
@@ -400,7 +400,7 @@ class TestConvertMessagesToolBlocks:
 
 
 # =============================================================================
-# Streaming tool_calls (GitHub Issue — Bug 1)
+# Streaming tool_calls (GitHub Issue -- Bug 1)
 # =============================================================================
 
 

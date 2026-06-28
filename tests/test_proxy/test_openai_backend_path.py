@@ -7,11 +7,11 @@ non-streaming backend path of ``handle_openai_chat``.
 All three scenarios mock ``anthropic_backend.send_openai_message`` so we
 don't need a real provider:
 
-1. Backend response with cache_read_input_tokens > 0 → tracker.update_from_response
+1. Backend response with cache_read_input_tokens > 0 -> tracker.update_from_response
    is called with the right cache_read_tokens and cache_write_tokens.
-2. Backend response with headroom_retrieve tool call → ccr_response_handler.handle_response
+2. Backend response with headroom_retrieve tool call -> ccr_response_handler.handle_response
    is awaited with provider="openai", and the final body returned.
-3. CCR intercept exception path → re-raises (NOT swallowed).
+3. CCR intercept exception path -> re-raises (NOT swallowed).
 """
 
 from __future__ import annotations
@@ -58,7 +58,7 @@ class _RecordingTracker:
         self._last_original = list(original_messages or messages)
         self._last_forwarded = list(messages)
 
-    # Minimal surface used by handle_openai_chat — return 0 so we never freeze.
+    # Minimal surface used by handle_openai_chat -- return 0 so we never freeze.
     def get_frozen_message_count(self) -> int:
         return self._frozen
 
@@ -110,14 +110,14 @@ def _make_litellm_response() -> SimpleNamespace:
 def _install_tracker_stub(client: TestClient) -> _RecordingTracker:
     """Force the session_tracker_store to hand out our recording tracker."""
     tracker = _RecordingTracker(provider="openai")
-    # Find the proxy instance behind the app — it's stored as app.state.proxy.
+    # Find the proxy instance behind the app -- it's stored as app.state.proxy.
     proxy = client.app.state.proxy
     proxy.session_tracker_store.get_or_create = MagicMock(return_value=tracker)
     return tracker
 
 
 def test_backend_response_updates_prefix_tracker_with_bedrock_cache_fields():
-    """Bedrock/Anthropic-shape cache fields → tracker sees authoritative read/write counts."""
+    """Bedrock/Anthropic-shape cache fields -> tracker sees authoritative read/write counts."""
     config = _make_config()
     response_body = {
         "id": "chatcmpl-bedrock-1",
@@ -167,7 +167,7 @@ def test_backend_response_updates_prefix_tracker_with_bedrock_cache_fields():
 
 
 def test_backend_response_falls_back_to_openai_cached_tokens_when_bedrock_keys_absent():
-    """Pure OpenAI shape (no top-level Anthropic keys) → fall back to prompt_tokens_details + infer write."""
+    """Pure OpenAI shape (no top-level Anthropic keys) -> fall back to prompt_tokens_details + infer write."""
     config = _make_config()
     response_body = {
         "id": "chatcmpl-openai-1",
@@ -208,7 +208,7 @@ def test_backend_response_falls_back_to_openai_cached_tokens_when_bedrock_keys_a
     assert len(tracker.calls) == 1
     call = tracker.calls[0]
     assert call["cache_read_tokens"] == 200
-    # No cache_creation_input_tokens → inferred = prompt_tokens - cache_read = 500 - 200 = 300
+    # No cache_creation_input_tokens -> inferred = prompt_tokens - cache_read = 500 - 200 = 300
     assert call["cache_write_tokens"] == 300
 
 
@@ -247,7 +247,7 @@ def test_litellm_vertex_backend_path_preserves_max_tokens_and_vendor_fields():
 
 
 def test_backend_response_with_ccr_tool_call_is_intercepted_and_resolved():
-    """OpenAI-shape response carrying headroom_retrieve → CCR handler resolves it."""
+    """OpenAI-shape response carrying headroom_retrieve -> CCR handler resolves it."""
     config = _make_config()
     # First response: tool_call for headroom_retrieve
     tool_call_response = {
@@ -330,7 +330,7 @@ def test_backend_response_with_ccr_tool_call_is_intercepted_and_resolved():
 
 
 def test_backend_ccr_intercept_exception_is_reraised_not_swallowed():
-    """CCR resolution failure on the backend path → 500, NOT silent fallback to original body."""
+    """CCR resolution failure on the backend path -> 500, NOT silent fallback to original body."""
     config = _make_config()
     tool_call_response = {
         "id": "chatcmpl-ccr-fail",
@@ -384,7 +384,7 @@ def test_backend_ccr_intercept_exception_is_reraised_not_swallowed():
 
     # The outer `try/except Exception` on the backend block converts the
     # re-raise into a 500 response. The critical assertion is that the
-    # original tool_call body is NOT returned to the client — which is
+    # original tool_call body is NOT returned to the client -- which is
     # what a silent fallback would do.
     failing_handler.handle_response.assert_awaited_once()
     assert resp.status_code == 500, (
@@ -401,8 +401,8 @@ def test_backend_ccr_intercept_exception_is_reraised_not_swallowed():
 
 
 def test_backend_streaming_passes_prefix_tracker_through():
-    """Streaming backend path should accept and use prefix_tracker — non-regression smoke."""
-    # The wiring contract is structural — just confirm the parameter exists.
+    """Streaming backend path should accept and use prefix_tracker -- non-regression smoke."""
+    # The wiring contract is structural -- just confirm the parameter exists.
     import inspect
 
     from headroom.proxy.handlers.streaming import StreamingMixin

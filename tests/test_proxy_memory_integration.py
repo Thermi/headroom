@@ -525,7 +525,7 @@ class TestMemoryIdAutoTailAndUpdate:
                                 "green, not blue. Please call the memory_update "
                                 "tool to fix the relevant memory in your context. "
                                 "The relevant memories block lists each memory's "
-                                "ID in square brackets — use that ID for "
+                                "ID in square brackets -- use that ID for "
                                 "memory_id."
                             ),
                         }
@@ -541,7 +541,7 @@ class TestMemoryIdAutoTailAndUpdate:
         update_calls = [c for c in recorded if c["tool_name"] == "memory_update"]
         assert update_calls, f"Expected at least one memory_update call. Recorded: {recorded}"
 
-        # And it should reference the exact ID we seeded — i.e. the
+        # And it should reference the exact ID we seeded -- i.e. the
         # model used the [id] from the auto-tail block, not a guess.
         assert any(c["input"].get("memory_id") == memory_id for c in update_calls), (
             f"Expected memory_update(memory_id={memory_id!r}); got inputs: "
@@ -556,7 +556,7 @@ class TestMemoryIdAutoTailAndUpdate:
     ):
         """Same [id] handle, different destructive verb. Verifies the
         auto-tail bracketed ID is usable for memory_delete just as it
-        is for memory_update — i.e. the handle is verb-agnostic."""
+        is for memory_update -- i.e. the handle is verb-agnostic."""
 
         memory_id = _seed_memory(
             db_path=temp_memory_db,
@@ -585,7 +585,7 @@ class TestMemoryIdAutoTailAndUpdate:
                             "role": "user",
                             "content": (
                                 "Please remove the memory about where I used to "
-                                "work (AcmeCorp). Call memory_delete directly — "
+                                "work (AcmeCorp). Call memory_delete directly -- "
                                 "do NOT call memory_search or memory_list first. "
                                 "The memory's ID is shown in square brackets in "
                                 "the relevant memories block at the end of this "
@@ -613,7 +613,7 @@ class TestMemoryIdAutoTailAndUpdate:
         anthropic_api_key,
         temp_memory_db,
     ):
-        """Live verification of the memory_save → dedup-hint mechanism.
+        """Live verification of the memory_save -> dedup-hint mechanism.
 
         Without this hint, ``memory_save`` on a near-duplicate would silently
         accumulate parallel rows, polluting the cache prefix and confusing
@@ -627,7 +627,7 @@ class TestMemoryIdAutoTailAndUpdate:
           - The proxy's ``_execute_save`` returns a ``note`` containing the
             pre-seeded memory's exact ID.
 
-        We DO NOT assert that the model actually consolidates — the hint
+        We DO NOT assert that the model actually consolidates -- the hint
         text intentionally ends with "or ignore if these are distinct
         facts", so the model is free to decline. Whether it consolidates
         depends on its judgement about whether two phrasings are the same
@@ -665,7 +665,7 @@ class TestMemoryIdAutoTailAndUpdate:
                                 "Use memory_save DIRECTLY to store: "
                                 "'User prefers Python for data science.' "
                                 "Do NOT call memory_search or memory_list "
-                                "first — I want to exercise the save path."
+                                "first -- I want to exercise the save path."
                             ),
                         }
                     ],
@@ -682,7 +682,7 @@ class TestMemoryIdAutoTailAndUpdate:
         assert save_calls, f"Expected memory_save call. Recorded: {recorded}"
 
         # The proxy's _execute_save must have returned a dedup hint
-        # surfacing the seeded memory's exact ID — that's the mechanism
+        # surfacing the seeded memory's exact ID -- that's the mechanism
         # under test. The hint is a serialized JSON string with a "note"
         # field; assert the seeded ID is present in it.
         save_result = save_calls[0]["result"]

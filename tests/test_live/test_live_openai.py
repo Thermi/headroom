@@ -28,7 +28,7 @@ FILE_CONTENT = (
 ) + "".join(f"    {i}\t# padding line {i}\n" for i in range(4, 40))
 
 STALE_MARKER = (
-    "[Read content stale: /src/magic.py was modified after this read — "
+    "[Read content stale: /src/magic.py was modified after this read -- "
     "re-read the file for current content. "
     "Retrieve original: hash=abc123def456abc123def456]"
 )

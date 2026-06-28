@@ -1,4 +1,4 @@
-"""Smoke tests for the output-savings CLI and the outcome→ledger wiring."""
+"""Smoke tests for the output-savings CLI and the outcome->ledger wiring."""
 
 from __future__ import annotations
 

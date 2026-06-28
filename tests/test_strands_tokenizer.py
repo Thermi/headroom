@@ -188,7 +188,7 @@ class TestMixedFormats:
             {"role": "assistant", "content": [{"type": "text", "text": "I found the issue."}]},
         ]
         count = t.count_messages(messages)
-        # Should be substantial — the tool result alone is ~700 tokens
+        # Should be substantial -- the tool result alone is ~700 tokens
         assert count > 500, f"Mixed conversation count too low: {count}"
 
 
@@ -228,7 +228,7 @@ class TestStrandsReasoningContent:
             }
         ]
         count = t.count_messages(msg)
-        # Should be substantial — both blocks counted
+        # Should be substantial -- both blocks counted
         assert count > 200, f"Combined reasoning+text too low: {count}"
 
 

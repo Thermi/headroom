@@ -15,7 +15,7 @@ because they never depended on the local outbound-bound dict.
 
 Operator opt-in `HEADROOM_STRIP_INTERNAL_HEADERS=disabled` keeps the
 internal headers in the upstream-bound dict for diagnostic shadow tracing.
-That mode is loud and explicit per realignment build constraint #4 — NOT
+That mode is loud and explicit per realignment build constraint #4 -- NOT
 a silent fallback.
 """
 
@@ -44,7 +44,7 @@ from headroom.proxy.server import ProxyConfig, create_app
 
 
 def test_strip_returns_new_dict_does_not_mutate_caller() -> None:
-    """`_strip_internal_headers` is pure — caller's dict is untouched."""
+    """`_strip_internal_headers` is pure -- caller's dict is untouched."""
     original = {
         "authorization": "Bearer x",
         "x-headroom-bypass": "true",

@@ -5,7 +5,7 @@ are forwarded to the client in StreamingResponse, even in SSE streaming mode.
 
 This was a bug where non-streaming responses correctly forwarded all headers
 via dict(response.headers), but streaming responses used StreamingResponse
-without passing any upstream headers — silently dropping ratelimit info.
+without passing any upstream headers -- silently dropping ratelimit info.
 """
 
 import json

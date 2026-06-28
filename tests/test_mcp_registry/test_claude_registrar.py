@@ -71,7 +71,7 @@ def test_detect_false_when_neither_present(tmp_path: Path) -> None:
 
 
 # ----------------------------------------------------------------------
-# get_server() — file-based reads
+# get_server() -- file-based reads
 # ----------------------------------------------------------------------
 
 
@@ -152,7 +152,7 @@ def test_get_server_reads_claude_config_dir(
 
 
 # ----------------------------------------------------------------------
-# register_server() — happy paths
+# register_server() -- happy paths
 # ----------------------------------------------------------------------
 
 
@@ -267,7 +267,7 @@ def test_register_writes_to_claude_config_dir(
 
 
 # ----------------------------------------------------------------------
-# register_server() — already / mismatch / force
+# register_server() -- already / mismatch / force
 # ----------------------------------------------------------------------
 
 

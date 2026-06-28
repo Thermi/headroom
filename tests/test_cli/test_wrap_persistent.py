@@ -640,8 +640,8 @@ def test_ensure_proxy_defers_version_restart_when_http_wrapper_attached(monkeypa
     """A stale-version proxy is NOT restarted while a marker-tracked HTTP
     wrapper is attached, even though the WebSocket session count is zero."""
     health = {
-        "version": "0.0.1",  # stale → version restart wanted
-        # No WebSocket relay sessions — the gap that let the old code kill it.
+        "version": "0.0.1",  # stale -> version restart wanted
+        # No WebSocket relay sessions -- the gap that let the old code kill it.
         "runtime": {"websocket_sessions": {"active_sessions": 0, "active_relay_tasks": 0}},
         "config": {"pid": "12345", "memory": False, "learn": False, "code_graph": False},
     }
@@ -676,7 +676,7 @@ def test_ensure_proxy_defers_flag_restart_when_other_wrapper_attached(monkeypatc
     """Requesting --memory must not restart the proxy out from under another
     attached wrapper; reuse the running proxy as-is instead."""
     health = {
-        "version": wrap_cli._HEADROOM_VERSION,  # same version → no version restart
+        "version": wrap_cli._HEADROOM_VERSION,  # same version -> no version restart
         "runtime": {"websocket_sessions": {"active_sessions": 0, "active_relay_tasks": 0}},
         # Running proxy lacks `memory`; this session asks for it.
         "config": {"pid": "12345", "memory": False, "learn": False, "code_graph": False},
@@ -709,7 +709,7 @@ def test_ensure_proxy_defers_flag_restart_when_other_wrapper_attached(monkeypatc
 
 def test_ensure_proxy_restarts_for_flags_when_no_other_wrapper(monkeypatch) -> None:
     """Control: with no other wrapper attached, a missing-flag restart still
-    happens — the guard must not block the single-client upgrade path."""
+    happens -- the guard must not block the single-client upgrade path."""
     calls: list[object] = []
     health = {
         "version": wrap_cli._HEADROOM_VERSION,

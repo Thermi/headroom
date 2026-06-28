@@ -2,7 +2,7 @@
 """Reproducer for tree-sitter Parser unsendable panic (issue #562).
 
 Demonstrates that tree-sitter ≥ 0.23 marks Parser as PyO3
-#[pyclass(unsendable)] — it hard-panics if accessed from a different
+#[pyclass(unsendable)] -- it hard-panics if accessed from a different
 thread than its creator.
 
 The OLD pattern (shared dict + lock) triggers the panic.
@@ -19,11 +19,11 @@ CODE = b"def hello():\n    return 42\n"
 
 
 def test_old_pattern_shared_dict():
-    """OLD pattern: shared parser dict with a lock — PANICS.
+    """OLD pattern: shared parser dict with a lock -- PANICS.
 
     The bug is triggered by tree_sitter_language_pack.get_parser(), which
     returns the Rust/PyO3 #[pyclass(unsendable)] parser (module `_native`).
-    NOT tree_sitter.Parser — that is a C extension with no thread affinity,
+    NOT tree_sitter.Parser -- that is a C extension with no thread affinity,
     so sharing it across threads works fine and never reproduces the panic.
     """
     print("=== OLD pattern: shared dict + lock ===")
@@ -42,7 +42,7 @@ def test_old_pattern_shared_dict():
     parser = get_shared_parser("python")
     print(f"  Created parser on {threading.current_thread().name}")
 
-    # Access it from a pool thread — this triggers the panic
+    # Access it from a pool thread -- this triggers the panic
     def use_parser():
         thread = threading.current_thread().name
         try:
@@ -62,7 +62,7 @@ def test_old_pattern_shared_dict():
 
 
 def test_new_pattern_thread_local():
-    """NEW pattern: thread-local parsers — works correctly."""
+    """NEW pattern: thread-local parsers -- works correctly."""
     print("\n=== NEW pattern: thread-local storage ===")
     _local = threading.local()
 

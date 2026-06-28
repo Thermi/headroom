@@ -50,11 +50,11 @@ def _env(**overrides: str | None) -> Iterator[None]:
 
 
 def test_timeout_refuses_without_client_override_regardless_of_frame_size() -> None:
-    """asyncio.TimeoutError → refuse, even for a tiny non-Codex frame.
+    """asyncio.TimeoutError -> refuse, even for a tiny non-Codex frame.
 
     Compression timeout fires after ``COMPRESSION_TIMEOUT_SECONDS``, which
     means the pipeline already started work on the frame. A small frame
-    that nevertheless timed out is a strong "something is wrong" signal —
+    that nevertheless timed out is a strong "something is wrong" signal --
     safer to surface to the client than to forward.
     """
     with _env(**{WS_COMPRESSION_FAIL_OPEN_ENV: None, WS_COMPRESSION_OVERSIZE_BYTES_ENV: None}):
@@ -102,7 +102,7 @@ def test_small_transient_error_falls_through_to_passthrough() -> None:
 
 
 def test_oversize_frame_any_error_refuses() -> None:
-    """Non-timeout error on a large frame: refuse — upstream would reject."""
+    """Non-timeout error on a large frame: refuse -- upstream would reject."""
     big = WS_COMPRESSION_OVERSIZE_BYTES_DEFAULT + 1024
     with _env(**{WS_COMPRESSION_FAIL_OPEN_ENV: None, WS_COMPRESSION_OVERSIZE_BYTES_ENV: None}):
         action = decide_compression_failure_action(
@@ -134,7 +134,7 @@ def test_custom_threshold_via_env() -> None:
             WS_COMPRESSION_OVERSIZE_BYTES_ENV: "1024",
         }
     ):
-        # Frame above the custom 1 KiB threshold → refuse
+        # Frame above the custom 1 KiB threshold -> refuse
         action = decide_compression_failure_action(RuntimeError(), frame_bytes=2048)
     assert action.refuse is True
     assert "threshold=1024" in action.reason
@@ -145,7 +145,7 @@ def test_custom_threshold_via_env() -> None:
             WS_COMPRESSION_OVERSIZE_BYTES_ENV: "1024",
         }
     ):
-        # Frame at/below the custom threshold → passthrough
+        # Frame at/below the custom threshold -> passthrough
         action_small = decide_compression_failure_action(RuntimeError(), frame_bytes=512)
     assert action_small.refuse is False
     assert action_small.reason == "small_frame_transient"

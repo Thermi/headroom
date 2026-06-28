@@ -167,7 +167,7 @@ class TestJSONStructureHandler:
             short_value_threshold=20,
             max_array_items_full=3,
         )
-        # Single array item (index 0) with 5 short values — all must
+        # Single array item (index 0) with 5 short values -- all must
         # stay eligible for preservation.
         content = '[{"a": "valuea", "b": "valueb", "c": "valuec", "d": "valued", "e": "valuee"}]'
         result = handler.get_mask(content)
@@ -192,7 +192,7 @@ class TestJSONStructureHandler:
             start = content.index(marker)
             assert result.mask.mask[start + 1] is True, f"{marker} should be preserved"
 
-        # Item 2 is past the threshold — value chars compressed
+        # Item 2 is past the threshold -- value chars compressed
         start = content.index('"itemtwo"')
         inner = range(start + 1, start + len('"itemtwo"') - 1)
         assert not any(result.mask.mask[i] for i in inner), (
@@ -233,7 +233,7 @@ class TestJSONStructureHandler:
             short_value_threshold=20,
             preserve_high_entropy=False,
         )
-        exact = "x" * 20  # exactly at threshold — must be preserved
+        exact = "x" * 20  # exactly at threshold -- must be preserved
         content = f'{{"key": "{exact}"}}'
         result = handler.get_mask(content)
 

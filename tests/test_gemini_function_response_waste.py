@@ -2,7 +2,7 @@
 
 Gemini ``functionResponse`` parts are preserved verbatim on the wire (never
 compressed), but their payloads previously never reached ``parse_messages``,
-so tool output — where most waste lives — contributed nothing to waste
+so tool output -- where most waste lives -- contributed nothing to waste
 detection on the Gemini paths.
 
 The fix is telemetry-only:

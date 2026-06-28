@@ -2,15 +2,15 @@
 
 Three rails, each of which only ever makes compression LESS aggressive:
 
-1. Error-output protection — failed tool calls / error outputs pass
+1. Error-output protection -- failed tool calls / error outputs pass
    through ``ContentRouter`` verbatim (string path and content-block path,
    including Anthropic ``is_error: true``), capped by
    ``error_protection_max_chars`` so big error-laden logs still reach
    ``LogCompressor`` (which preserves error lines).
-2. Pipeline circuit breaker — after N consecutive pipeline failures,
+2. Pipeline circuit breaker -- after N consecutive pipeline failures,
    ``TransformPipeline.apply`` passes messages through untouched for a
    cooldown window instead of re-running failing transforms.
-3. Library inflation guard — ``headroom.compress()`` reverts to the
+3. Library inflation guard -- ``headroom.compress()`` reverts to the
    original messages when "optimization" inflated tokens, mirroring the
    proxy handlers.
 """
@@ -57,7 +57,7 @@ _TRACEBACK = (
     "before the scheduler starts accepting jobs\n"
 )
 
-# Error text with no error-indicator keywords — only the explicit
+# Error text with no error-indicator keywords -- only the explicit
 # Anthropic ``is_error`` flag marks it as a failure.
 _NEUTRAL_TOOL_OUTPUT = (
     "The operation finished without producing the expected artifact. "
@@ -66,7 +66,7 @@ _NEUTRAL_TOOL_OUTPUT = (
 )
 
 
-# Benign outputs that merely MENTION errors — exactly one distinct
+# Benign outputs that merely MENTION errors -- exactly one distinct
 # indicator keyword ("error"). A lax substring gate would exempt these
 # from compression (savings regression); the strong gate must not.
 _BENIGN_GREP_OUTPUT = (
@@ -272,7 +272,7 @@ class TestPipelineCircuitBreaker:
         for _ in range(2):
             with pytest.raises(RuntimeError):
                 pipeline.apply(_MESSAGES, model="gpt-4o", model_limit=1024)
-        # Third call succeeds — resets the consecutive-failure count.
+        # Third call succeeds -- resets the consecutive-failure count.
         pipeline.apply(_MESSAGES, model="gpt-4o", model_limit=1024)
         # Two more failures still don't reach the threshold of 3.
         flaky.fail_times = flaky.calls + 2
@@ -312,7 +312,7 @@ class TestPipelineCircuitBreaker:
         for _ in range(5):
             with pytest.raises(RuntimeError):
                 pipeline.apply(_MESSAGES, model="gpt-4o", model_limit=1024)
-        # Breaker never opens — failures keep propagating.
+        # Breaker never opens -- failures keep propagating.
         with pytest.raises(RuntimeError):
             pipeline.apply(_MESSAGES, model="gpt-4o", model_limit=1024)
 

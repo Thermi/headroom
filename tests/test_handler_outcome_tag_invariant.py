@@ -1,7 +1,7 @@
 """Contract test: every handler that emits a RequestOutcome must thread tags.
 
 Prior to PR #480, 12 RequestOutcome construction sites across four
-handler files emitted outcomes without passing ``tags=`` — so any
+handler files emitted outcomes without passing ``tags=`` -- so any
 request hitting those handlers reached the dashboard / RequestLog feed
 with an empty tag dict, invisible to per-harness / per-tag filtering.
 Affected paths included:
@@ -54,7 +54,7 @@ def _collect_outcome_call_sites() -> list[tuple[Path, str, int, set[str]]]:
                 method_name = class_node.name
                 # Only audit methods that look like request entry points
                 # or batch-passthrough helpers. ``_record_request_outcome``
-                # itself is a helper, not a handler — skip it.
+                # itself is a helper, not a handler -- skip it.
                 if not (method_name.startswith("handle_") or method_name.endswith("_passthrough")):
                     continue
                 for sub_node in ast.walk(class_node):
@@ -90,7 +90,7 @@ def test_outcome_call_sites_pass_tags_kwarg() -> None:
     and thread ``tags=tags`` into the RequestOutcome construction.
     """
     sites = _collect_outcome_call_sites()
-    assert sites, "AST walk found zero RequestOutcome sites — handler files moved?"
+    assert sites, "AST walk found zero RequestOutcome sites -- handler files moved?"
     missing = [(f, m, ln) for f, m, ln, kws in sites if "tags" not in kws]
     if missing:
         formatted = "\n".join(f"  {f.name}:{ln}  {m}" for f, m, ln in missing)

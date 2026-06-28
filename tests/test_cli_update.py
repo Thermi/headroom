@@ -116,7 +116,7 @@ def test_update_check_reports_command_without_running(monkeypatch):
     monkeypatch.setattr(up.subprocess, "run", _no_run)
     res = CliRunner().invoke(main, ["update", "--check"])
     assert res.exit_code == 0
-    assert "Update available: 0.26.0 → 0.27.0" in res.output
+    assert "Update available: 0.26.0 -> 0.27.0" in res.output
     assert "pip" in res.output and "install" in res.output
 
 

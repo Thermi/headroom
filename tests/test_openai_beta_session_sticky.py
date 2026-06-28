@@ -8,7 +8,7 @@ Anthropic's `anthropic-beta`. The proxy auto-injects
 auto-injected token is appended deterministically.
 
 The same `SessionBetaTracker` (provider-aware, keyed by
-``(provider, session_id)``) backs both providers — one tracker, two
+``(provider, session_id)``) backs both providers -- one tracker, two
 namespaces.
 """
 
@@ -30,7 +30,7 @@ from headroom.proxy.helpers import (
 
 
 def test_merge_helper_pure_function() -> None:
-    """Same inputs → same output, no global state."""
+    """Same inputs -> same output, no global state."""
     a = merge_openai_beta("a,b", ["c"])
     b = merge_openai_beta("a,b", ["c"])
     assert a == b == "a,b,c"
@@ -88,7 +88,7 @@ def test_test_memory_injection_appends_deterministic_order() -> None:
 
 
 # ---------------------------------------------------------------------------
-# `SessionBetaTracker` — provider="openai"
+# `SessionBetaTracker` -- provider="openai"
 # ---------------------------------------------------------------------------
 
 
@@ -204,7 +204,7 @@ def test_provider_namespaces_are_independent() -> None:
 
 
 def test_ws_required_token_appended_deterministically() -> None:
-    """Mirrors the WS handler logic — record client value, then merge required."""
+    """Mirrors the WS handler logic -- record client value, then merge required."""
     tracker = SessionBetaTracker(max_sessions=10)
     sticky = tracker.record_and_get_sticky_betas(
         provider="openai",

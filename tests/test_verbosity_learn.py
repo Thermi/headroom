@@ -1,4 +1,4 @@
-"""Tests for headroom.learn.verbosity — behavioral signal extraction."""
+"""Tests for headroom.learn.verbosity -- behavioral signal extraction."""
 
 from __future__ import annotations
 

@@ -1,10 +1,10 @@
 """End-to-end compression verification with realistic multi-turn payloads.
 
-Headroom only compresses content the model has already seen — assistant
+Headroom only compresses content the model has already seen -- assistant
 turns, tool results, and Responses-API output items. Fresh user prompts
 are *intentionally* skipped (the model needs them verbatim, and they're
 in the live-zone tail anyway). A conversation that contains nothing but
-a single user prompt will produce 0 tokens saved by design — that is
+a single user prompt will produce 0 tokens saved by design -- that is
 not a bug; it's the live-zone-only invariant.
 
 This script exercises every (provider × endpoint × streaming) combination
@@ -48,7 +48,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 
 def load_env_into_environ() -> None:
     """Read REPO_ROOT/.env and merge into os.environ. Keys are never
-    returned to the caller — see module docstring."""
+    returned to the caller -- see module docstring."""
     p = REPO_ROOT / ".env"
     if not p.exists():
         return
@@ -280,7 +280,7 @@ def main() -> int:
 
         # Cases carry only structural info: name, path, provider tag,
         # body, stream. Auth headers are built inside `_post` from
-        # os.environ — see module docstring.
+        # os.environ -- see module docstring.
         cases: list[tuple[str, str, str, dict, bool]] = [
             (
                 "anthropic_messages_nonstream",
@@ -362,11 +362,11 @@ def main() -> int:
             f"\n[e2e] aggregate tokens saved across cases (~last 2000 log lines): {total_saved:,}"
         )
         if total_saved == 0:
-            failures.append(f"no compression evidence — check {canonical_log}")
+            failures.append(f"no compression evidence -- check {canonical_log}")
 
         joined = "\n".join(log_lines)
         if "compression failed" in joined:
-            failures.append("proxy log contains 'compression failed' — see canonical log")
+            failures.append("proxy log contains 'compression failed' -- see canonical log")
 
     finally:
         print("\n[e2e] terminating proxy")

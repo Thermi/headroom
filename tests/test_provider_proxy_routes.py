@@ -1040,7 +1040,7 @@ def test_v1_models_get_single_dynamic_under_chatgpt_auth() -> None:
 
 def test_v1_models_still_forwards_under_non_chatgpt_auth() -> None:
     """Non-ChatGPT auth (regular API key, Gemini, etc.) must still
-    forward to the upstream provider — only the ChatGPT-OAuth path
+    forward to the upstream provider -- only the ChatGPT-OAuth path
     short-circuits to the synthetic response."""
     calls: list[tuple[str, str, str]] = []
 
@@ -1055,7 +1055,7 @@ def test_v1_models_still_forwards_under_non_chatgpt_auth() -> None:
                 headers={"authorization": "Bearer sk-real-api-key"},
             )
     assert response.status_code == 200
-    # Forwarded — not synthesized — because no chatgpt-account-id header.
+    # Forwarded -- not synthesized -- because no chatgpt-account-id header.
     assert calls, "Non-ChatGPT-auth /v1/models must forward, not synthesize"
 
 

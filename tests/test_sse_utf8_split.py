@@ -28,12 +28,12 @@ def _emit_event(name: str, data: str) -> bytes:
 def test_emoji_split_across_chunks_preserved() -> None:
     """Fire emoji `🔥` split mid-byte: 4 bytes total, split 2/2."""
     # `ensure_ascii=False` keeps the emoji as raw UTF-8 bytes on the
-    # wire — that's the case where chunk-boundary splits actually
+    # wire -- that's the case where chunk-boundary splits actually
     # corrupt content with the old `errors="ignore"` decoder.
     payload = json.dumps({"type": "text_delta", "text": "fire 🔥 here"}, ensure_ascii=False)
     full = _emit_event("content_block_delta", payload)
     # Split somewhere inside the 4-byte emoji. The emoji `🔥` is
-    # `\xf0\x9f\x94\xa5` — find that sequence and split mid-bytes.
+    # `\xf0\x9f\x94\xa5` -- find that sequence and split mid-bytes.
     emoji_bytes = "🔥".encode()
     assert emoji_bytes == b"\xf0\x9f\x94\xa5"
     idx = full.find(emoji_bytes)
@@ -45,7 +45,7 @@ def test_emoji_split_across_chunks_preserved() -> None:
     buf = bytearray()
     buf.extend(chunk_a)
     # First chunk should not produce any complete events because the
-    # event terminator `\n\n` is in chunk_b — but more importantly,
+    # event terminator `\n\n` is in chunk_b -- but more importantly,
     # the helper must not corrupt the partial emoji bytes.
     events = parse_sse_events_from_byte_buffer(buf)
     assert events == []
@@ -98,7 +98,7 @@ def test_crlf_terminated_event_is_parsed() -> None:
 def test_complete_event_with_invalid_utf8_raises_loud() -> None:
     """Invalid UTF-8 in a *complete* event surfaces loudly (not silent corruption)."""
     # Build a complete event whose data field has invalid UTF-8 bytes
-    # NOT split across a chunk boundary — this is a true upstream bug
+    # NOT split across a chunk boundary -- this is a true upstream bug
     # we want operators to see, not silently fix-up.
     bad = b'event: content_block_delta\ndata: {"text":"\xff\xfe"}\n\n'
     buf = bytearray()

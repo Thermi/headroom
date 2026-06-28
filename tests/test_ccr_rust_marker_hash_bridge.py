@@ -6,7 +6,7 @@ The Rust side embeds ``MD5(original)[:24]`` in the emitted
 PR #395 fixed the SmartCrusher path by passing ``explicit_hash``
 (see ``test_ccr_row_drop_store_bridge.py``); the three
 ``_persist_to_python_ccr`` shims on the Rust-accelerated transforms
-were never migrated, so every marker they emitted dangled —
+were never migrated, so every marker they emitted dangled --
 retrieval returned "Entry not found or expired" inside any TTL.
 
 These tests pin the cross-language contract at the shim layer: the
@@ -57,7 +57,7 @@ def _assert_round_trip(original: str) -> None:
     sha_key = hashlib.sha256(original.encode()).hexdigest()[:24]
     assert store.retrieve(sha_key) is None, (
         "entry stored under the SHA-256 default key instead of the "
-        "marker's MD5 key — explicit_hash was not passed through"
+        "marker's MD5 key -- explicit_hash was not passed through"
     )
 
 

@@ -99,7 +99,7 @@ class TestDetectStack:
         assert detect_stack(stats) == "wrap_claude"
 
     def test_invalid_env_falls_through_to_proxy(self, monkeypatch):
-        # Garbage env var → normalize_stack rejects → falls back to default
+        # Garbage env var -> normalize_stack rejects -> falls back to default
         monkeypatch.setenv("HEADROOM_STACK", "bad slug with spaces!")
         assert detect_stack() == "proxy"
 

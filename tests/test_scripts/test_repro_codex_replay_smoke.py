@@ -4,7 +4,7 @@ Spins up a minimal FastAPI + websockets mock proxy that answers ``/livez``,
 ``/v1/messages``, and ``/v1/responses`` (WS), then invokes the harness'
 ``main()`` in-process and verifies it exits 0 with the expected summary shape.
 
-The mock does *not* implement Codex semantics — it just accepts the WS
+The mock does *not* implement Codex semantics -- it just accepts the WS
 handshake, consumes the first frame, and closes. That's enough to exercise
 the harness end-to-end in < 10s.
 """
@@ -94,7 +94,7 @@ def _build_app() -> FastAPI:
         await websocket.accept()
         try:
             # Accept one frame and then close. Harness treats this as
-            # "handshake worked" — no need to emulate Codex events.
+            # "handshake worked" -- no need to emulate Codex events.
             with contextlib.suppress(WebSocketDisconnect):
                 await asyncio.wait_for(websocket.receive_text(), timeout=2.0)
         except asyncio.TimeoutError:
@@ -201,7 +201,7 @@ def test_harness_runs_against_mock_proxy_and_exits_zero(mock_proxy: str) -> None
         "RESULT: OK",
     ):
         assert needle in combined, f"missing '{needle}' in output:\n{combined}"
-    # JSON payload shape — --json appends one indent=2 JSON object at the end.
+    # JSON payload shape -- --json appends one indent=2 JSON object at the end.
     import json as _json
 
     # Find the last top-level JSON object in stdout. With indent=2 the closing
@@ -212,7 +212,7 @@ def test_harness_runs_against_mock_proxy_and_exits_zero(mock_proxy: str) -> None
     # The matching opening brace must be preceded by a newline and start a line.
     # Scan backwards for a line that is exactly "{".
     lines = out[: end_brace + 2].splitlines()
-    # Find the last line equal to "{" — that's the start of the JSON object.
+    # Find the last line equal to "{" -- that's the start of the JSON object.
     start_line_idx = None
     for i in range(len(lines) - 1, -1, -1):
         if lines[i] == "{":
@@ -227,7 +227,7 @@ def test_harness_runs_against_mock_proxy_and_exits_zero(mock_proxy: str) -> None
     assert payload["storm"]["ws_clients"] == 2
     assert payload["storm"]["anthropic_clients"] == 2
     assert payload["livez"]["count"] > 0
-    # The mock accepts /v1/messages with 200 — at least one should succeed.
+    # The mock accepts /v1/messages with 200 -- at least one should succeed.
     assert payload["anthropic_http"]["ok_2xx"] >= 1
     # Every WS client should have opened (handshake works against the mock).
     assert payload["codex_ws"]["opened"] == 2

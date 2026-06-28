@@ -2,14 +2,14 @@
 
 The /v1/responses path never ran ``parse_messages``: compression goes through
 CompressionUnits (not TransformPipeline), and the minimal ``messages`` list it
-synthesises drops list-typed ``input`` entirely — so tool output never reached
+synthesises drops list-typed ``input`` entirely -- so tool output never reached
 waste detection and the dashboard "What Headroom Removed" stayed empty for
 Codex traffic.
 
 The fix is telemetry-only:
 
 1. ``_responses_input_to_waste_messages`` converts a Responses payload into
-   OpenAI-style messages — tool output items (``function_call_output`` etc.)
+   OpenAI-style messages -- tool output items (``function_call_output`` etc.)
    become ``role="tool"`` messages, ``message`` items keep their role and
    joined part text.
 2. ``handle_openai_responses`` parses that list (behind the same >100

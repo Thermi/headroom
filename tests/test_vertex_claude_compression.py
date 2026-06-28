@@ -9,7 +9,7 @@ compression:
 - the native `:rawPredict` route running the compression handler (not the
   verbatim passthrough) for the `anthropic` publisher.
 
-No real GCP/Vertex is contacted — handlers and the backend class are stubbed.
+No real GCP/Vertex is contacted -- handlers and the backend class are stubbed.
 """
 
 from __future__ import annotations
@@ -109,7 +109,7 @@ def test_litellm_bedrock_not_aliased() -> None:
 
 
 # --------------------------------------------------------------------------
-# Native :rawPredict route → compression handler with region-derived host
+# Native :rawPredict route -> compression handler with region-derived host
 # --------------------------------------------------------------------------
 def _default_vertex_app() -> Any:
     # No vertex_api_url override -> default us-central1 host -> route derives

@@ -271,7 +271,7 @@ def test_memory_disabled_is_no_op(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_invalid_injection_mode_raises() -> None:
-    """Unknown values for the env var must fail loudly — no silent fallback."""
+    """Unknown values for the env var must fail loudly -- no silent fallback."""
     import os
 
     from headroom.proxy.helpers import get_memory_injection_mode
@@ -418,7 +418,7 @@ def test_memory_context_appears_in_responses_api_input_tail() -> None:
             assert isinstance(sent, dict)
             input_field = sent.get("input")
             assert sent.get("instructions") == "You are a Codex assistant."
-            # Either string or list shape after injection — check for MEMCTX in
+            # Either string or list shape after injection -- check for MEMCTX in
             # whichever shape came through.
             if isinstance(input_field, list):
                 last_user = next(

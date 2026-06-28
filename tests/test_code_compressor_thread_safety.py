@@ -78,7 +78,7 @@ class TestParserThreadLocal:
         _get_parser("python")
         assert is_tree_sitter_loaded() is True
 
-        # Load a parser on a worker, then unload on main — worker unaffected
+        # Load a parser on a worker, then unload on main -- worker unaffected
         worker_loaded_after = [None]
 
         def worker():

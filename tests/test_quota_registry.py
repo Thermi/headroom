@@ -186,7 +186,7 @@ def test_passive_tracker_start_stop_are_noops():
     registry.register(t)
     asyncio.run(registry.start_all())
     asyncio.run(registry.stop_all())
-    # No assertions needed — we verify no exception is raised
+    # No assertions needed -- we verify no exception is raised
 
 
 # ---------------------------------------------------------------------------

@@ -72,9 +72,9 @@ def test_bug_fix_security_keywords_dropped_token():
 def test_content_has_error_indicators_lax_substring_semantics():
     from headroom.transforms.error_detection import content_has_error_indicators
 
-    # Python ERROR_INDICATOR_KEYWORDS includes "traceback" — must still fire
+    # Python ERROR_INDICATOR_KEYWORDS includes "traceback" -- must still fire
     assert content_has_error_indicators("Traceback (most recent call last):")
-    # Substring (no word-boundary) match preserved — "errored" matches "error"
+    # Substring (no word-boundary) match preserved -- "errored" matches "error"
     assert content_has_error_indicators("the request errored out")
     # Genuine non-match
     assert not content_has_error_indicators("everything is fine")

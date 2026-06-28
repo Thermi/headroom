@@ -99,7 +99,7 @@ def _scenarios() -> list[tuple[str, str, str, float]]:
     between Python `onnxruntime` and Rust `ort`."""
     out: list[tuple[str, str, str, float]] = []
 
-    # 1. Non-JSON content → passthrough. The crusher returns the input
+    # 1. Non-JSON content -> passthrough. The crusher returns the input
     # unchanged; trivially byte-equal.
     out.append(("non_json_passthrough", "this is not json at all", "", 1.0))
 
@@ -113,7 +113,7 @@ def _scenarios() -> list[tuple[str, str, str, float]]:
         )
     )
 
-    # 3. Short array (below min_items_to_analyze=5) → passthrough.
+    # 3. Short array (below min_items_to_analyze=5) -> passthrough.
     out.append(
         (
             "short_array_passthrough",
@@ -124,7 +124,7 @@ def _scenarios() -> list[tuple[str, str, str, float]]:
     )
 
     # 4. Dict array with 30 items, varied integer status field.
-    # Exercises crush_array's adaptive_k → smart_sample / top_n path.
+    # Exercises crush_array's adaptive_k -> smart_sample / top_n path.
     items_30_dict = [
         {"id": i, "status": "ok" if i % 5 != 0 else "error", "msg": f"line {i}"} for i in range(30)
     ]
@@ -155,14 +155,14 @@ def _scenarios() -> list[tuple[str, str, str, float]]:
     # 10. Bias < 1 (keep fewer) on the 30-dict case.
     out.append(("dict_array_30_bias_low", json.dumps(items_30_dict), "", 0.7))
 
-    # 11. Unicode payload — exercises the `ensure_ascii=False` path in
+    # 11. Unicode payload -- exercises the `ensure_ascii=False` path in
     # Python's safe_json_dumps. Rust's python_safe_json_dumps must emit
     # raw UTF-8 bytes here, not `\uXXXX` escapes.
     unicode_items = [{"id": i, "msg": f"hello 中文 русский {i}", "tag": "тест"} for i in range(20)]
     out.append(("unicode_dict_array", json.dumps(unicode_items), "", 1.0))
 
     # 12. Larger dict array (100 items) with a strong sequential `id`
-    # field — exercises top_n strategy via field stats.
+    # field -- exercises top_n strategy via field stats.
     big_seq = [
         {"id": i, "level": "info" if i % 7 != 0 else "warn", "message": f"seq {i}"}
         for i in range(100)
@@ -173,14 +173,14 @@ def _scenarios() -> list[tuple[str, str, str, float]]:
     ts = [{"ts": 1000 + i, "metric": float(i * 1.5), "host": f"host-{i % 3}"} for i in range(50)]
     out.append(("time_series_50", json.dumps(ts), "", 1.0))
 
-    # 14. Many duplicate items — exercises dedup_identical_items.
+    # 14. Many duplicate items -- exercises dedup_identical_items.
     dups = [{"event": "heartbeat", "ok": True} for _ in range(40)]
     out.append(("duplicate_dicts_40", json.dumps(dups), "", 1.0))
 
-    # 15. Empty array — boundary case, must round-trip cleanly.
+    # 15. Empty array -- boundary case, must round-trip cleanly.
     out.append(("empty_array", json.dumps([]), "", 1.0))
 
-    # 16. Array of nulls and bools — non-crushable mixed type.
+    # 16. Array of nulls and bools -- non-crushable mixed type.
     out.append(
         (
             "nulls_and_bools",
@@ -204,7 +204,7 @@ def main() -> int:
         path = _record(label, content, query, bias)
         written.append(path)
         print(f"  + {path.relative_to(_REPO_ROOT)}")
-    print(f"wrote {len(written)} fixture(s) → {_FIXTURES_DIR.relative_to(_REPO_ROOT)}")
+    print(f"wrote {len(written)} fixture(s) -> {_FIXTURES_DIR.relative_to(_REPO_ROOT)}")
     return 0
 
 

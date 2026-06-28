@@ -2,7 +2,7 @@
 OpenAI-via-backend streaming path.
 
 These tests pin the per-chunk parsing contract so streaming memory
-stays O(1) regardless of stream length — the prior implementation
+stays O(1) regardless of stream length -- the prior implementation
 buffered the entire response just to scan the trailing usage frame.
 """
 

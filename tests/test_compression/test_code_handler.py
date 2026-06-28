@@ -296,7 +296,7 @@ class TestTreeSitterContainers:
 
         Regression: parsers were cached in a process-global dict and
         shared across threads. tree-sitter Parser objects are pyo3
-        unsendable — touching one from a non-creator thread panics (or
+        unsendable -- touching one from a non-creator thread panics (or
         raises, dropping the handler to the regex fallback). Parsing
         from a thread pool must succeed on the tree-sitter path in
         every thread.
@@ -345,11 +345,11 @@ class TestTreeSitterContainers:
 
     def test_preservation_ratio_sane_for_class_code(self, handler):
         """A class with substantial method bodies should NOT preserve
-        everything — the whole point of the handler."""
+        everything -- the whole point of the handler."""
         body = "\n".join(f"        line_{i} = {i}" for i in range(20))
         code = f"class Big:\n    def method(self):\n{body}\n        return 0\n"
         result = handler.get_mask(code, language="python")
         assert result.preservation_ratio < 0.5, (
-            f"class code preserved {result.preservation_ratio:.0%} — "
+            f"class code preserved {result.preservation_ratio:.0%} -- "
             "container bodies are leaking into the structural mask"
         )

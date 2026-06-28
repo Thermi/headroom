@@ -1,4 +1,4 @@
-"""Live LangChain integration tests — no mocks, real API keys from .env.
+"""Live LangChain integration tests -- no mocks, real API keys from .env.
 
 Run with:
   pytest tests/test_integrations/langchain/test_langchain_live.py -v -s

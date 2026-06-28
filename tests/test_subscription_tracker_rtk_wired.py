@@ -1,4 +1,4 @@
-"""Tests for PR-G2 — RTK ``tokens_saved`` data-plane wiring.
+"""Tests for PR-G2 -- RTK ``tokens_saved`` data-plane wiring.
 
 Phase G of the Headroom realignment retires the dead ``tokens_saved_rtk``
 field by sourcing it from RTK's own stats endpoint (``rtk gain --format
@@ -20,7 +20,7 @@ These tests pin the wiring:
 3. ``_last_rtk_tokens_saved`` advances monotonically; deltas are not
    replayed across calls when the session counter does not move.
 4. First poll reads 0 when the helper reports a fresh session baseline
-   (the C1 regression fix — previously this poll emitted the entire RTK
+   (the C1 regression fix -- previously this poll emitted the entire RTK
    lifetime as a phantom delta).
 
 Realignment build constraints honored:
@@ -29,7 +29,7 @@ Realignment build constraints honored:
   structured-logged and yields ``tokens_saved_rtk = 0`` (test 4).
 - Configurable: ``HEADROOM_RTK_WIRING=disabled`` opts the polling out and
   produces a clean zero, exercised by ``test_disabled_env_returns_zero``.
-- Structured logs: each failure path emits a ``event=…`` line; the
+- Structured logs: each failure path emits a ``event=...`` line; the
   ``caplog`` assertions below pin the log payload so the "no silent
   fallback" constraint is verified.
 - Proxy mode: ``rtk_wiring="disabled"`` in ``SubscriptionTracker.__init__``
@@ -103,7 +103,7 @@ def _stub_rtk_stats(
 
 
 # ---------------------------------------------------------------------------
-# Test 1 — delta computed correctly across two consecutive polls
+# Test 1 -- delta computed correctly across two consecutive polls
 # ---------------------------------------------------------------------------
 
 
@@ -129,14 +129,14 @@ def test_tokens_saved_rtk_populated_from_session_field(
         ],
     )
 
-    # First call — session counter is 100 (50 000 lifetime history was
+    # First call -- session counter is 100 (50 000 lifetime history was
     # rebaselined by the helper at proxy startup, so we DON'T see it).
     tracker.update_contribution()
     contribution_after_first = tracker._state.contribution.tokens_saved_rtk
     assert contribution_after_first == 100
     assert tracker._last_rtk_tokens_saved == 100
 
-    # Second call — delta is 175 - 100 = 75; cumulative contribution = 175.
+    # Second call -- delta is 175 - 100 = 75; cumulative contribution = 175.
     tracker.update_contribution()
     assert tracker._state.contribution.tokens_saved_rtk == 175
     assert tracker._last_rtk_tokens_saved == 175
@@ -176,7 +176,7 @@ def test_first_poll_zero_when_session_baseline_fresh(
 def test_delta_computed_correctly_across_polls(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Three consecutive polls — each adds only the new RTK delta."""
+    """Three consecutive polls -- each adds only the new RTK delta."""
 
     tracker = _build_tracker(monkeypatch)
     monkeypatch.delenv(tracker_module._RTK_WIRING_ENV, raising=False)
@@ -204,12 +204,12 @@ def test_delta_computed_correctly_across_polls(
 
 
 # ---------------------------------------------------------------------------
-# Test 2 — ``tokens_saved_rtk = 0`` when stats endpoint returns None
+# Test 2 -- ``tokens_saved_rtk = 0`` when stats endpoint returns None
 # ---------------------------------------------------------------------------
 
 
 def test_rtk_stats_none_yields_zero_delta(monkeypatch: pytest.MonkeyPatch) -> None:
-    """No RTK selected / installed — contribution stays at zero, no throw."""
+    """No RTK selected / installed -- contribution stays at zero, no throw."""
 
     tracker = _build_tracker(monkeypatch)
     monkeypatch.delenv(tracker_module._RTK_WIRING_ENV, raising=False)
@@ -223,7 +223,7 @@ def test_rtk_stats_none_yields_zero_delta(monkeypatch: pytest.MonkeyPatch) -> No
 
 
 # ---------------------------------------------------------------------------
-# Test 3 — monotonic advancement; no replay on flat poll
+# Test 3 -- monotonic advancement; no replay on flat poll
 # ---------------------------------------------------------------------------
 
 
@@ -257,7 +257,7 @@ def test_last_rtk_advances_monotonically(monkeypatch: pytest.MonkeyPatch) -> Non
 def test_counter_regression_rebaselines_without_negative_delta(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Helper rebaselines the session counter — re-baseline, do not subtract."""
+    """Helper rebaselines the session counter -- re-baseline, do not subtract."""
 
     tracker = _build_tracker(monkeypatch)
     monkeypatch.delenv(tracker_module._RTK_WIRING_ENV, raising=False)
@@ -288,7 +288,7 @@ def test_counter_regression_rebaselines_without_negative_delta(
 
 
 # ---------------------------------------------------------------------------
-# Test 4 — transient exception in the stats endpoint
+# Test 4 -- transient exception in the stats endpoint
 # ---------------------------------------------------------------------------
 
 
@@ -323,7 +323,7 @@ def test_rtk_stats_exception_zero_delta_no_throw_with_log(
 
 
 # ---------------------------------------------------------------------------
-# Test 5 — explicit env-var opt-out
+# Test 5 -- explicit env-var opt-out
 # ---------------------------------------------------------------------------
 
 
@@ -347,7 +347,7 @@ def test_disabled_env_returns_zero(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Test 6 — explicit override from caller (back-compat for callers that
+# Test 6 -- explicit override from caller (back-compat for callers that
 # already know the RTK delta out-of-band).
 # ---------------------------------------------------------------------------
 
@@ -369,7 +369,7 @@ def test_explicit_rtk_override_skips_poll(monkeypatch: pytest.MonkeyPatch) -> No
 
 
 # ---------------------------------------------------------------------------
-# Test 7 — cli_filtering decoupled from rtk
+# Test 7 -- cli_filtering decoupled from rtk
 # ---------------------------------------------------------------------------
 
 
@@ -391,7 +391,7 @@ def test_cli_filtering_no_longer_mirrors_rtk(monkeypatch: pytest.MonkeyPatch) ->
 
 
 # ---------------------------------------------------------------------------
-# Test 8 (H1) — invalid HEADROOM_RTK_WIRING fails loudly at startup
+# Test 8 (H1) -- invalid HEADROOM_RTK_WIRING fails loudly at startup
 # ---------------------------------------------------------------------------
 
 
@@ -417,7 +417,7 @@ def test_garbage_wiring_env_logs_loudly_at_runtime(
 ) -> None:
     """If env is flipped to garbage AFTER startup, runtime path emits ERROR.
 
-    This is the defence-in-depth tier — startup-validation is the primary
+    This is the defence-in-depth tier -- startup-validation is the primary
     barrier (test above) but a env-var rotation could still flip the value
     mid-run.
     """
@@ -438,7 +438,7 @@ def test_garbage_wiring_env_logs_loudly_at_runtime(
 
 
 # ---------------------------------------------------------------------------
-# Test 9 (C2) — restart-seeding behavior: no phantom delta on second process
+# Test 9 (C2) -- restart-seeding behavior: no phantom delta on second process
 # ---------------------------------------------------------------------------
 
 
@@ -464,7 +464,7 @@ def test_restart_does_not_emit_phantom_delta(
 
     persist_path = tmp_path / "state.json"
 
-    # Phase 1 — tracker A runs and persists state with non-zero counters.
+    # Phase 1 -- tracker A runs and persists state with non-zero counters.
     _stub_rtk_stats(
         monkeypatch,
         [_session_payload(tokens_saved=100, lifetime=50_100)],
@@ -474,8 +474,8 @@ def test_restart_does_not_emit_phantom_delta(
     assert tracker_a._state.contribution.tokens_saved_rtk == 100
     tracker_a._persist_state()
 
-    # Phase 2 — simulate process restart. New tracker loads state from
-    # disk. Helper rebaselines (session counter starts fresh at 5 — only
+    # Phase 2 -- simulate process restart. New tracker loads state from
+    # disk. Helper rebaselines (session counter starts fresh at 5 -- only
     # one RTK invocation since restart).
     _stub_rtk_stats(
         monkeypatch,
@@ -484,7 +484,7 @@ def test_restart_does_not_emit_phantom_delta(
     tracker_b = SubscriptionTracker(persist_path=persist_path, enabled=True)
     # Loaded from disk.
     assert tracker_b._state.contribution.tokens_saved_rtk == 100
-    # Tracker B's _last_rtk_tokens_saved starts at 0 (correct — the
+    # Tracker B's _last_rtk_tokens_saved starts at 0 (correct -- the
     # session baseline was just re-pinned in the helper).
     assert tracker_b._last_rtk_tokens_saved == 0
 
@@ -494,7 +494,7 @@ def test_restart_does_not_emit_phantom_delta(
 
 
 # ---------------------------------------------------------------------------
-# Test 10 (M2 + M3) — legacy state file migration
+# Test 10 (M2 + M3) -- legacy state file migration
 # ---------------------------------------------------------------------------
 
 
@@ -547,7 +547,7 @@ def test_legacy_state_migrates_rtk_from_cli_filtering(
 
 
 # ---------------------------------------------------------------------------
-# Test 11 (H2) — helper logs structured warning on subprocess failure
+# Test 11 (H2) -- helper logs structured warning on subprocess failure
 # ---------------------------------------------------------------------------
 
 
@@ -561,7 +561,7 @@ def test_rtk_subprocess_failure_logs_structured_warning(
 
     Implementation note: earlier attempts used pytest's ``caplog`` fixture
     (both scoped to ``logger="headroom.proxy"`` and root-level capture).
-    Both passed locally but failed in CI — likely a logger-propagation /
+    Both passed locally but failed in CI -- likely a logger-propagation /
     handler-config difference in the CI test harness. The robust approach
     is to mock ``_helpers.logger.warning`` directly: when the production
     code calls ``logger.warning(...)`` the mock intercepts regardless of
@@ -574,7 +574,7 @@ def test_rtk_subprocess_failure_logs_structured_warning(
     from headroom.proxy import helpers as _helpers
 
     # Point get_rtk_path at a definitely-nonexistent absolute path so the
-    # real ``subprocess.run`` raises FileNotFoundError → except branch
+    # real ``subprocess.run`` raises FileNotFoundError -> except branch
     # fires the structured warning.
     monkeypatch.setattr(_rtk, "get_rtk_path", lambda: "/nonexistent/headroom-test-rtk")
 
@@ -595,7 +595,7 @@ def test_rtk_subprocess_failure_logs_structured_warning(
 
 
 # ---------------------------------------------------------------------------
-# Test 12 (C3) — multi-worker poll deduplication via file lock
+# Test 12 (C3) -- multi-worker poll deduplication via file lock
 # ---------------------------------------------------------------------------
 
 
@@ -619,9 +619,9 @@ def test_multi_worker_only_one_polls(monkeypatch: pytest.MonkeyPatch, tmp_path: 
         [_session_payload(tokens_saved=100)],
     )
 
-    # Worker A — first to attempt acquisition wins.
+    # Worker A -- first to attempt acquisition wins.
     tracker_a = SubscriptionTracker(persist_path=persist_path, enabled=True)
-    # Worker B — same lock path; flock will fail.
+    # Worker B -- same lock path; flock will fail.
     tracker_b = SubscriptionTracker(persist_path=persist_path, enabled=True)
 
     tracker_a.update_contribution()
@@ -642,7 +642,7 @@ def test_multi_worker_only_one_polls(monkeypatch: pytest.MonkeyPatch, tmp_path: 
 
 
 # ---------------------------------------------------------------------------
-# Test 13 — SubscriptionTracker(rtk_wiring="disabled") skips poll (unit)
+# Test 13 -- SubscriptionTracker(rtk_wiring="disabled") skips poll (unit)
 # ---------------------------------------------------------------------------
 
 
@@ -666,7 +666,7 @@ def test_rtk_wiring_ctor_disabled_skips_poll(monkeypatch: pytest.MonkeyPatch) ->
 
 
 # ---------------------------------------------------------------------------
-# Test 14 — rtk_wiring=None falls back to HEADROOM_RTK_WIRING env (unit)
+# Test 14 -- rtk_wiring=None falls back to HEADROOM_RTK_WIRING env (unit)
 # ---------------------------------------------------------------------------
 
 
@@ -689,7 +689,7 @@ def test_rtk_wiring_ctor_none_falls_back_to_env(monkeypatch: pytest.MonkeyPatch)
 
 
 # ---------------------------------------------------------------------------
-# Test 15 — rtk_wiring="enabled" overrides HEADROOM_RTK_WIRING=disabled (unit)
+# Test 15 -- rtk_wiring="enabled" overrides HEADROOM_RTK_WIRING=disabled (unit)
 # ---------------------------------------------------------------------------
 
 
@@ -710,7 +710,7 @@ def test_rtk_wiring_ctor_explicit_enabled_overrides_env(
 
 
 # ---------------------------------------------------------------------------
-# Test 16 — configure_subscription_tracker forwards rtk_wiring (integration)
+# Test 16 -- configure_subscription_tracker forwards rtk_wiring (integration)
 # ---------------------------------------------------------------------------
 
 
@@ -741,7 +741,7 @@ def test_configure_subscription_tracker_passes_rtk_wiring(
 
 
 # ---------------------------------------------------------------------------
-# Test 17 — configure_subscription_tracker default rtk_wiring is None (integration)
+# Test 17 -- configure_subscription_tracker default rtk_wiring is None (integration)
 # ---------------------------------------------------------------------------
 
 
@@ -767,7 +767,7 @@ def test_configure_subscription_tracker_default_rtk_wiring_is_none(
 
 
 # ---------------------------------------------------------------------------
-# Test 18 — HeadroomProxy wires rtk_wiring="disabled" (e2e)
+# Test 18 -- HeadroomProxy wires rtk_wiring="disabled" (e2e)
 # ---------------------------------------------------------------------------
 
 

@@ -3,14 +3,14 @@
 LiteLLM normalizes prompt-cache statistics onto its `Usage` object from
 multiple upstream dialects:
 
-* Anthropic / Bedrock-Claude → top-level attrs `cache_read_input_tokens`
+* Anthropic / Bedrock-Claude -> top-level attrs `cache_read_input_tokens`
   and `cache_creation_input_tokens` (also mirrored into
   `prompt_tokens_details.cached_tokens` / `cache_creation_tokens`).
-* OpenAI prompt-caching → only `prompt_tokens_details.cached_tokens`.
+* OpenAI prompt-caching -> only `prompt_tokens_details.cached_tokens`.
 
 Before the fix, `send_openai_message` flattened only
 `prompt_tokens / completion_tokens / total_tokens` into the response dict
-and silently dropped all cache stats on the floor — breaking
+and silently dropped all cache stats on the floor -- breaking
 `PrefixCacheTracker.update_from_response` for the entire backend-routed
 path (it always saw zero cache hits, so live-zone-only compression never
 engaged).
@@ -34,7 +34,7 @@ class _FakeUsage:
     """Stand-in for `litellm.types.utils.Usage`.
 
     `MagicMock` auto-creates attributes on access, which would defeat the
-    point of the "no cache fields → no keys added" test. A plain object
+    point of the "no cache fields -> no keys added" test. A plain object
     with only the attributes we explicitly set keeps `getattr(..., 0)`
     honest.
     """
@@ -181,7 +181,7 @@ async def test_openai_nested_cache_fields_surface_when_top_level_absent() -> Non
 
 
 # =============================================================================
-# 3. Cold start — no cache fields anywhere → keep usage_block shape stable
+# 3. Cold start -- no cache fields anywhere -> keep usage_block shape stable
 # =============================================================================
 
 
@@ -189,7 +189,7 @@ async def test_no_cache_fields_means_no_cache_keys_in_usage_block() -> None:
     """Cold-start path: no cache attributes at all on the Usage object.
 
     We must NOT inject `cache_read_input_tokens`, `cache_creation_input_tokens`,
-    or `prompt_tokens_details` into `usage_block` — keep the dict shape
+    or `prompt_tokens_details` into `usage_block` -- keep the dict shape
     identical to the pre-fix behaviour so callers that key off presence
     (rather than value) don't accidentally start seeing 0 as "we have
     cache data, the model just didn't cache".

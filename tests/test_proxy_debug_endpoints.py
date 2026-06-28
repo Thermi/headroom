@@ -97,7 +97,7 @@ def app_and_rebinding_client():
 
     The simulated TCP peer is loopback (``request.client.host`` passes
     the legacy IP check), but the inbound ``Host:`` header reads
-    ``attacker.com`` — exactly what the browser sends after the
+    ``attacker.com`` -- exactly what the browser sends after the
     attacker's DNS record flips to ``127.0.0.1``.
     """
     config = ProxyConfig(
@@ -165,7 +165,7 @@ def test_require_loopback_raises_404_for_external_client():
         require_loopback(_FakeRequest())  # type: ignore[arg-type]
 
     assert exc_info.value.status_code == 404
-    # Privacy: 404 explicitly, not 403 — endpoints should be invisible.
+    # Privacy: 404 explicitly, not 403 -- endpoints should be invisible.
     assert exc_info.value.status_code != 403
 
 
@@ -258,7 +258,7 @@ def test_require_loopback_accepts_loopback_host_header():
         client = _FakeClient()
         headers = _FakeHeaders()
 
-    # Should not raise — both gates pass.
+    # Should not raise -- both gates pass.
     require_loopback(_FakeRequest())  # type: ignore[arg-type]
 
 
@@ -398,7 +398,7 @@ def test_debug_tasks_stack_depth_is_gated_behind_query(client):
     entries = with_stack.json()
     # At least one entry should have a computed depth (the TestClient
     # itself runs under a task). Some entries may still be None if
-    # get_stack raised defensively — we only require that opting in
+    # get_stack raised defensively -- we only require that opting in
     # produces at least one integer result.
     integer_depths = [e["stack_depth"] for e in entries if isinstance(e["stack_depth"], int)]
     assert integer_depths, (
@@ -548,7 +548,7 @@ def test_debug_ws_sessions_reports_live_session(app_and_client):
 
 def test_debug_endpoints_do_not_mutate_state(client):
     # Call each endpoint 100 times and confirm the second read equals
-    # the first — no accidental mutation from serialization.
+    # the first -- no accidental mutation from serialization.
     first_tasks = client.get("/debug/tasks").json()
     first_warmup = client.get("/debug/warmup").json()
     first_ws = client.get("/debug/ws-sessions").json()
@@ -596,7 +596,7 @@ def test_debug_endpoints_return_404_for_non_loopback_client(app_and_external_cli
     for path in ("/debug/tasks", "/debug/ws-sessions", "/debug/warmup"):
         response = client.get(path)
         assert response.status_code == 404, path
-        # Must be 404, not 403 — invisible to scanners.
+        # Must be 404, not 403 -- invisible to scanners.
         assert response.status_code != 403
 
 

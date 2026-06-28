@@ -1,4 +1,4 @@
-"""Tests for headroom.proxy.output_savings — the counterfactual estimator."""
+"""Tests for headroom.proxy.output_savings -- the counterfactual estimator."""
 
 from __future__ import annotations
 
@@ -66,7 +66,7 @@ class TestArmAssignment:
     def test_roughly_matches_fraction(self):
         keys = [f"conv-{i}" for i in range(4000)]
         control = sum(1 for k in keys if assign_arm(k, 0.1) == "control")
-        # 10% holdout over 4000 keys — allow generous slack for hash noise.
+        # 10% holdout over 4000 keys -- allow generous slack for hash noise.
         assert 250 < control < 550
 
     def test_conversation_key_stable_across_turns(self):
@@ -173,7 +173,7 @@ class TestBaselineModel:
     def test_lookup_backs_off_to_prefix(self):
         m = BaselineModel()
         m.observe("opus|new_user_ask|s|tools", 500)
-        # Query a sibling stratum (different tools flag) — backs off on prefix.
+        # Query a sibling stratum (different tools flag) -- backs off on prefix.
         mean, _, n = m.lookup("opus|new_user_ask|s|notools")
         assert mean == 500.0
         assert n == 1

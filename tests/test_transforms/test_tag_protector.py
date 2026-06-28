@@ -172,7 +172,7 @@ class TestRestoreTags:
 
     def test_lost_placeholder_discards_wrap(self):
         """Hotfix-A9: when compression strips a placeholder, the wrap
-        is DISCARDED — the compressed text is returned as-is and the
+        is DISCARDED -- the compressed text is returned as-is and the
         original tag bytes are NOT re-injected anywhere. The original
         "append at the trailing edge" fallback produced silently
         malformed XML (orphan opening tag with no closing tag) on
@@ -257,7 +257,7 @@ class TestBugFixesPhase3e4:
         depth = 60
         text = "<lvl>" * depth + "core" + "</lvl>" * depth
         cleaned, protected = protect_tags(text)
-        # Outermost span eats everything → ONE placeholder, no leaks.
+        # Outermost span eats everything -> ONE placeholder, no leaks.
         assert "<lvl>" not in cleaned
         assert "</lvl>" not in cleaned
         assert len(protected) == 1
@@ -279,7 +279,7 @@ class TestBugFixesPhase3e4:
         assert not had_loss
 
     def test_fixed_in_3e4_placeholder_collision_avoided(self):
-        """Bug #5: input contains a literal `{{HEADROOM_TAG_…}}`
+        """Bug #5: input contains a literal `{{HEADROOM_TAG_...}}`
         substring. Python silently used the same prefix and let the
         collision break restoration. Rust salts the prefix when this
         happens."""

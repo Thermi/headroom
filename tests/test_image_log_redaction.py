@@ -1,4 +1,4 @@
-"""Phase G PR-G3 (P4-45) — request-logger image base64 redaction.
+"""Phase G PR-G3 (P4-45) -- request-logger image base64 redaction.
 
 The Headroom proxy logs LLM request/response payloads to a JSONL feed
 when ``log_full_messages=True``. Vision-shape requests (Anthropic
@@ -84,14 +84,14 @@ def test_large_base64_truncated():
     redacted = redact_image_base64(messages)
     payload = redacted[0]["content"][1]["source"]["data"]
     assert IMAGE_BASE64_REPLACEMENT_TEMPLATE.format(n=len(big)) == payload
-    # The non-image fields must survive verbatim — redaction must
+    # The non-image fields must survive verbatim -- redaction must
     # never perturb the structure outside the targeted payload.
     assert redacted[0]["content"][0] == {"type": "text", "text": "describe this image"}
 
 
 def test_short_base64_passes_through():
     """A short base64-looking string (e.g. a 64-byte signature, a tool
-    ``id``) must NOT be redacted — the threshold gates real image
+    ``id``) must NOT be redacted -- the threshold gates real image
     payloads against legitimate small strings."""
     short = _big_base64(64)
     assert len(short) < IMAGE_BASE64_REDACT_THRESHOLD_BYTES
@@ -122,7 +122,7 @@ def test_data_url_redacted():
 
 
 def test_redact_idempotent():
-    """Applying redaction twice yields the same structure — the
+    """Applying redaction twice yields the same structure -- the
     placeholder is short enough to stay below the threshold so the
     second pass is a no-op. The ``data`` key is one of the
     image-bearing field names so a big string inside redacts."""
@@ -178,13 +178,13 @@ def test_response_content_bare_base64_passes_through():
     entry = _make_request_log(response_content=big)
     logger.log(entry)
     recent = logger.get_recent_with_messages(n=1)
-    # Verbatim — no redaction applied.
+    # Verbatim -- no redaction applied.
     assert recent[0]["response_content"] == big
 
 
 def test_response_content_data_image_url_redacted():
-    """When ``response_content`` does start with ``data:image/`` —
-    e.g. a tool wrote an image back via a data URL — redaction
+    """When ``response_content`` does start with ``data:image/`` --
+    e.g. a tool wrote an image back via a data URL -- redaction
     still fires."""
     logger = RequestLogger(log_file=None, log_full_messages=True)
     payload = _big_base64(IMAGE_BASE64_REDACT_THRESHOLD_BYTES * 2)
@@ -216,8 +216,8 @@ def test_image_path_redacts_without_density_check():
     """M2: once inside an image-bearing JSON path (e.g.
     ``source.data``), a sufficiently-long string is redacted
     regardless of its character density. Real images may not be
-    base64 only — they may be webp / avif transcoded with
-    different alphabets — but we still want them redacted to
+    base64 only -- they may be webp / avif transcoded with
+    different alphabets -- but we still want them redacted to
     keep logs bounded."""
     big = "x" * (IMAGE_BASE64_REDACT_THRESHOLD_BYTES * 2)  # NOT base64
     payload = {"source": {"type": "base64", "data": big}}
@@ -254,7 +254,7 @@ def test_redactions_counter_advances():
 
 def test_none_payload_safe():
     """``RequestLogger.log`` must not crash when ``request_messages``
-    or ``response_content`` is None — many requests have neither."""
+    or ``response_content`` is None -- many requests have neither."""
     logger = RequestLogger(log_file=None, log_full_messages=True)
     entry = _make_request_log(request_messages=None, response_content=None)
     logger.log(entry)  # must not raise

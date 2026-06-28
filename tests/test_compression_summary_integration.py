@@ -23,7 +23,7 @@ apply_dotenv = autouse_apply_env(_env_overrides)
 
 pytestmark = pytest.mark.skipif(
     not ANTHROPIC_KEY,
-    reason="ANTHROPIC_API_KEY not set — skipping integration tests",
+    reason="ANTHROPIC_API_KEY not set -- skipping integration tests",
 )
 
 
@@ -125,7 +125,7 @@ class TestSummaryHelpfulness:
         assert has_failure_info, f"LLM didn't detect failures from summary. Response: {text[:300]}"
 
     def test_find_failures_without_summary(self):
-        """Baseline: LLM with NO summary — just '[90 items compressed]'."""
+        """Baseline: LLM with NO summary -- just '[90 items compressed]'."""
         test_results = _make_test_suite_output(100)
 
         kept = test_results[:10]
@@ -154,7 +154,7 @@ class TestSummaryHelpfulness:
         print(f"\n  LLM response (no summary): {text[:200]}")
         print(f"  Detected failure info: {has_failure_info}")
 
-        # We're NOT asserting here — this is the baseline.
+        # We're NOT asserting here -- this is the baseline.
         # We expect this to often MISS failures since the summary is generic.
 
     def test_code_summary_helps_identify_functions(self):

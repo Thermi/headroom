@@ -142,7 +142,7 @@ def _make_fake_websockets_module(upstream: _FakeUpstream):
     module = MagicMock()
 
     # Production now does ``upstream = await websockets.connect(...)`` then
-    # ``async with upstream`` — so connect must return an awaitable.
+    # ``async with upstream`` -- so connect must return an awaitable.
     async def _connect(*args, **kwargs):
         return upstream
 

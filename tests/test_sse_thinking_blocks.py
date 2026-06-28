@@ -135,7 +135,7 @@ def test_signature_delta_preserved() -> None:
     assert response is not None
     block = response["content"][0]
     assert block["signature"] == "sig_abc123_v1"
-    # Last-write-wins semantics — second signature_delta overrides.
+    # Last-write-wins semantics -- second signature_delta overrides.
     events2 = events + [
         {
             "type": "content_block_delta",

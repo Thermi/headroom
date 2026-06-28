@@ -1,4 +1,4 @@
-"""P2 — Codex compression scheduler regression coverage.
+"""P2 -- Codex compression scheduler regression coverage.
 
 The pre-fix code throttled all concurrent Codex WS compression units
 through a process-global ``threading.BoundedSemaphore(10)`` and created
@@ -42,10 +42,10 @@ OPENAI_HANDLER = REPO_ROOT / "headroom" / "proxy" / "handlers" / "openai.py"
 def test_module_global_unit_semaphore_is_removed() -> None:
     """The 10-slot global semaphore that caused 30s frame timeouts must stay gone.
 
-    Read the source file directly — imported module state is not authoritative
+    Read the source file directly -- imported module state is not authoritative
     because Python caches bytecode independently. The regression we are
     guarding against is "someone reintroduces a module-level semaphore on
-    the Codex WS dispatch path" — that is detectable in source.
+    the Codex WS dispatch path" -- that is detectable in source.
     """
     source = OPENAI_HANDLER.read_text()
     assert "_CODEX_WS_UNIT_ROUTER_SEMAPHORE" not in source, (
@@ -61,7 +61,7 @@ def test_module_global_unit_semaphore_is_removed() -> None:
     assert "_codex_ws_unit_worker_count" not in source, (
         "The per-call inner-pool worker-count helper was deleted because the "
         "inner pool was deleted. Reintroducing it suggests the inner pool "
-        "is back too — re-read docs/superpowers/specs/P2-codex-scheduler-fix.md."
+        "is back too -- re-read docs/superpowers/specs/P2-codex-scheduler-fix.md."
     )
     assert "HEADROOM_CODEX_WS_UNIT_WORKERS" not in source, (
         "The HEADROOM_CODEX_WS_UNIT_WORKERS env knob was removed. It only "
@@ -79,7 +79,7 @@ def test_no_per_call_threadpool_inside_compress_routed_units() -> None:
     and made the global semaphore the binding constraint.
 
     The exact phrase ``concurrent.futures.ThreadPoolExecutor`` should not
-    appear anywhere in openai.py — the dispatch uses the proxy's shared
+    appear anywhere in openai.py -- the dispatch uses the proxy's shared
     bounded executor instead.
     """
     source = OPENAI_HANDLER.read_text()
@@ -95,7 +95,7 @@ def test_no_per_call_threadpool_inside_compress_routed_units() -> None:
 # Codex WS traffic was invisible to ``headroom perf`` pre-fix because
 # ``handle_openai_responses_ws`` emitted no PERF line. This is structurally
 # the same bug class as #327's "Cache write: 0" for backend-routed
-# streaming — the request is processed correctly but the operator can't
+# streaming -- the request is processed correctly but the operator can't
 # see it. The new PERF emit closes that visibility gap.
 
 
@@ -103,7 +103,7 @@ class _DirectLogCapture(logging.Handler):
     """Direct handler attached to ``headroom.proxy`` so the proxy's
     propagation flip in ``_setup_file_logging`` does not strip records.
 
-    Same pattern as ``tests/test_backend_streaming_cache_metrics.py`` —
+    Same pattern as ``tests/test_backend_streaming_cache_metrics.py`` --
     see that file for the rationale.
     """
 
@@ -226,7 +226,7 @@ async def test_codex_ws_emits_perf_log_with_cache_keys() -> None:
 def test_concurrent_compression_has_no_semaphore_tail() -> None:
     """Probe the 10-slot semaphore boundary with uniform-size workload.
 
-    Design notes — addresses a CI-vs-dev hardware skew that bit the
+    Design notes -- addresses a CI-vs-dev hardware skew that bit the
     first iteration of this test:
 
     * **12 concurrent sessions** (> the deleted 10-slot semaphore size).
@@ -241,11 +241,11 @@ def test_concurrent_compression_has_no_semaphore_tail() -> None:
       the p99 statistic meaningful. Bounded runtime even on slow CI.
     * **Threshold ratio < 4×.** On uniform-size workload the only
       sources of p99/p50 spread are (a) the deleted semaphore tail
-      (≈27×) or (b) OS-level scheduler noise (≈2–3×). 4× sits
-      comfortably between the two — catches the bug, tolerates
+      (≈27×) or (b) OS-level scheduler noise (≈2-3×). 4× sits
+      comfortably between the two -- catches the bug, tolerates
       hardware. (First iteration tried 5× with mixed sizes, which
       let size-variance push CI ratios to 7.4×.) The ratio is only
-      enforced once p99 clears a scheduler-noise floor — on very fast
+      enforced once p99 clears a scheduler-noise floor -- on very fast
       runners p50 rounds to 0ms and the ratio becomes pure jitter.
 
     Marked ``slow`` so a normal ``pytest`` run can skip it via
@@ -263,12 +263,12 @@ def test_concurrent_compression_has_no_semaphore_tail() -> None:
     proxy = boot_proxy()
     warmup_ms = warmup(proxy)
     assert warmup_ms < 30_000, (
-        f"Warmup took {warmup_ms:.0f}ms — Kompress model failed to load? "
+        f"Warmup took {warmup_ms:.0f}ms -- Kompress model failed to load? "
         "Subsequent timing assertions are meaningless without a warm router."
     )
 
     # 12 sessions × 5 frames = 60 total. Uniform 4 KB plain-text
-    # payload — each frame's compute time should be identical modulo
+    # payload -- each frame's compute time should be identical modulo
     # scheduler noise.
     UNIFORM_FRAME = Frame(bytes_estimate=4096, text_shape="plain_text_like")
     scenarios = [
@@ -309,7 +309,7 @@ def test_concurrent_compression_has_no_semaphore_tail() -> None:
     # The p99/p50 ratio only signals contention when the tail is also
     # *absolutely* large. On a fast/quiet runner p50 rounds toward 0ms, so the
     # ratio collapses to "p99 in ms" and a few milliseconds of ordinary
-    # scheduler jitter reads as a spurious multiple (e.g. p50=0ms, p99=5ms →
+    # scheduler jitter reads as a spurious multiple (e.g. p50=0ms, p99=5ms ->
     # ~5×) that has nothing to do with the semaphore. The deleted semaphore
     # produced a tail of *tens* of milliseconds (and ~27×); a healthy run keeps
     # p99 in the single-digit-ms range regardless of ratio. So only treat a high
@@ -321,9 +321,9 @@ def test_concurrent_compression_has_no_semaphore_tail() -> None:
     SEMAPHORE_TAIL_FLOOR_MS = 75.0
     assert p50 < 1.0 or ratio < 4.0 or p99 < SEMAPHORE_TAIL_FLOOR_MS, (
         f"p99/p50 ratio is {ratio:.1f}× (p50={p50:.0f}ms, p99={p99:.0f}ms). "
-        f"Expected < 4× on uniform-size workload once p50 is measurable and p99 clears "
-        f"the {SEMAPHORE_TAIL_FLOOR_MS:.0f}ms noise floor — a high ratio with a large "
-        f"absolute tail means the semaphore-induced contention tail may be back. "
+        f"Expected < 4× on uniform-size workload once p99 clears the "
+        f"{SEMAPHORE_TAIL_FLOOR_MS:.0f}ms noise floor -- a high ratio with a large "
+        f"absolute tail means the semaphore-induced contention tail is back. "
         f"Pre-fix baseline ratio on this same workload shape was ~27× regardless "
         f"of CPU speed."
     )

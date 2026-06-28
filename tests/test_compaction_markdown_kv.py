@@ -1,4 +1,4 @@
-"""Markdown-KV compaction formatter — opt-in serialization-aware output.
+"""Markdown-KV compaction formatter -- opt-in serialization-aware output.
 
 Covers the plumbing added for issue #858:
 
@@ -114,7 +114,7 @@ def test_without_compaction_ignores_format() -> None:
 
 def test_without_compaction_still_validates_format() -> None:
     # An explicit bogus format is a misconfiguration even when the knob
-    # is ignored on this path — fail loudly, don't silently accept.
+    # is ignored on this path -- fail loudly, don't silently accept.
     with pytest.raises(ValueError, match="bogus"):
         SmartCrusher(with_compaction=False, compaction_format="bogus")
 
@@ -122,7 +122,7 @@ def test_without_compaction_still_validates_format() -> None:
 def test_end_to_end_crush_emits_markdown_kv() -> None:
     # Through the high-level Python SmartCrusher, not the Rust bridge:
     # proves the kwarg changes crush() output, not just the stored
-    # attribute. Same lowered gate as the bridge test — KV's savings on
+    # attribute. Same lowered gate as the bridge test -- KV's savings on
     # minified JSON sit below the 30% default.
     config = PySmartCrusherConfig(lossless_min_savings_ratio=0.01)
     crusher = SmartCrusher(config=config, compaction_format="markdown-kv")
@@ -134,7 +134,7 @@ def test_end_to_end_crush_emits_markdown_kv() -> None:
 
 def test_default_output_unchanged_by_feature() -> None:
     # The default constructor path must stay byte-identical to an
-    # explicit csv-schema opt-in — proves the gate is truly default-off.
+    # explicit csv-schema opt-in -- proves the gate is truly default-off.
     content = _tabular_json()
     default_out = SmartCrusher().crush(content)
     explicit_out = SmartCrusher(compaction_format="csv-schema").crush(content)

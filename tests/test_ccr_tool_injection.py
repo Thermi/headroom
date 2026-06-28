@@ -437,7 +437,7 @@ class TestSmartCrusherCcrMarkers:
 
     SmartCrusher emits 12-hex-char hashes inside ``<<ccr:HASH ...>>`` markers
     (the row-drop summary and the opaque-blob form). The injector must detect
-    those markers and ``parse_tool_call`` must accept the 12-char hashes —
+    those markers and ``parse_tool_call`` must accept the 12-char hashes --
     previously both only recognized the 24-char legacy bracket markers.
     """
 

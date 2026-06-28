@@ -1,6 +1,6 @@
 """Test OpenAI /v1/chat/completions streaming through headroom proxy backends.
 
-Proves that streaming works end-to-end: client → headroom proxy → backend → OpenAI API.
+Proves that streaming works end-to-end: client -> headroom proxy -> backend -> OpenAI API.
 
 Two test modes:
 1. Real API test (requires OPENAI_API_KEY): hits actual OpenAI with gpt-4o-mini
@@ -39,7 +39,7 @@ class TestOpenAIStreamingRealAPI:
 
     @pytest.fixture
     def direct_proxy_client(self):
-        """Proxy with NO backend — direct to OpenAI. This is the baseline."""
+        """Proxy with NO backend -- direct to OpenAI. This is the baseline."""
         config = ProxyConfig(
             optimize=False,
             cache_enabled=False,
@@ -51,7 +51,7 @@ class TestOpenAIStreamingRealAPI:
 
     @pytest.fixture
     def litellm_backend_client(self):
-        """Proxy with litellm-openai backend — routes through LiteLLM."""
+        """Proxy with litellm-openai backend -- routes through LiteLLM."""
         config = ProxyConfig(
             optimize=False,
             cache_enabled=False,
@@ -90,7 +90,7 @@ class TestOpenAIStreamingRealAPI:
     def test_streaming_with_litellm_backend(self, litellm_backend_client, openai_api_key):
         """CRITICAL: streaming through proxy WITH litellm backend must also stream.
 
-        This test fails before the fix — the proxy returns a JSON blob
+        This test fails before the fix -- the proxy returns a JSON blob
         instead of SSE events, causing clients to hang.
         """
         response = litellm_backend_client.post(
@@ -141,12 +141,12 @@ class TestOpenAIStreamingRealAPI:
 
 
 # =============================================================================
-# Mock test (no API key needed — proves the routing bug)
+# Mock test (no API key needed -- proves the routing bug)
 # =============================================================================
 
 
 class TestOpenAIStreamingMock:
-    """Prove the streaming bug with mocks — no API key needed."""
+    """Prove the streaming bug with mocks -- no API key needed."""
 
     def test_streaming_request_returns_sse_not_json(self):
         """When stream:true with a backend, content-type MUST be text/event-stream.

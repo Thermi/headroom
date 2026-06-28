@@ -9,7 +9,7 @@ Three test patterns:
 
   1. System-message context (Snowflake Cortex compatible)
      Large JSON blobs (query results, search results, schema) in the system
-     message → headroom's SmartCrusher compresses them.
+     message -> headroom's SmartCrusher compresses them.
 
   2. OpenAI tool-result format  (if OPENAI_API_KEY is set)
      Standard role:"tool" messages compressed via SmartCrusher.
@@ -17,7 +17,7 @@ Three test patterns:
   3. Anthropic messages format  (if ANTHROPIC_API_KEY is set)
      Claude tool_result blocks compressed.
 
-Usage (Snowflake Cortex only — no extra API keys needed):
+Usage (Snowflake Cortex only -- no extra API keys needed):
     SF_CONN=<your-connection-name> python3 tests/e2e_cortex_savings.py
 
     # SF_HOST is auto-derived from the connection; override if needed:
@@ -289,10 +289,10 @@ def _bar(pct: float, w: int = 24) -> str:
 
 
 def _show(r: R) -> None:
-    sym = "✓" if r.saved > 0 else "·"
+    sym = "[OK]" if r.saved > 0 else "·"
     print(f"\n  {sym}  {r.label}")
     print(
-        f"     Prompt tokens : {r.before_p:>7,}  →  {r.after_p:>7,}  "
+        f"     Prompt tokens : {r.before_p:>7,}  ->  {r.after_p:>7,}  "
         f"│  saved {r.saved:>6,}  ({r.pct:.1f}%)"
     )
     print(f"     {_bar(r.pct)}  ${r.usd_saved:.5f} saved / call")
@@ -308,7 +308,7 @@ def _show(r: R) -> None:
 def main() -> int:
     print()
     print("╔══════════════════════════════════════════════════════════╗")
-    print("║   Cortex Code × Headroom  —  Real REST API savings      ║")
+    print("║   Cortex Code × Headroom  --  Real REST API savings      ║")
     print("║   usage.prompt_tokens measured directly from the LLM    ║")
     print("╚══════════════════════════════════════════════════════════╝")
 
@@ -358,10 +358,10 @@ def main() -> int:
         )
 
         payloads = [
-            ("Cortex  — full context  (tables + dbt + search)", build_system_msgs(full_ctx)),
-            ("Cortex  — INFORMATION_SCHEMA tables  (79 rows)", build_system_msgs(_tables_json())),
-            ("Cortex  — dbt run-results  (40 models)", build_system_msgs(_dbt_json())),
-            ("Cortex  — Cortex Search results  (15 docs)", build_system_msgs(_search_json())),
+            ("Cortex  -- full context  (tables + dbt + search)", build_system_msgs(full_ctx)),
+            ("Cortex  -- INFORMATION_SCHEMA tables  (79 rows)", build_system_msgs(_tables_json())),
+            ("Cortex  -- dbt run-results  (40 models)", build_system_msgs(_dbt_json())),
+            ("Cortex  -- Cortex Search results  (15 docs)", build_system_msgs(_search_json())),
         ]
 
         for label, msgs in payloads:
@@ -376,15 +376,15 @@ def main() -> int:
         _conn.close()
 
     except Exception as e:
-        print(f"\n   ✗ Snowflake Cortex skipped: {e}")
+        print(f"\n   [X] Snowflake Cortex skipped: {e}")
 
     # ── 2. OpenAI (tool-result format) ───────────────────────────────────────
     oai_key = os.environ.get("OPENAI_API_KEY", "")
     if oai_key:
         print("\n\n▶  OpenAI  /v1/chat/completions  (gpt-4o-mini)")
         for label, content in [
-            ("OpenAI  — tables JSON  (79 rows)", _tables_json()),
-            ("OpenAI  — Cortex Search  (15 docs)", _search_json()),
+            ("OpenAI  -- tables JSON  (79 rows)", _tables_json()),
+            ("OpenAI  -- Cortex Search  (15 docs)", _search_json()),
         ]:
             msgs = build_tool_msgs(content)
             approx = len(json.dumps(msgs)) // 4
@@ -398,15 +398,15 @@ def main() -> int:
             print(f"saved {r.saved:,}  ({r.pct:.0f}%)")
             _show(r)
     else:
-        print("\n▶  OpenAI  — skipped  (export OPENAI_API_KEY to enable)")
+        print("\n▶  OpenAI  -- skipped  (export OPENAI_API_KEY to enable)")
 
     # ── 3. Anthropic ─────────────────────────────────────────────────────────
     ant_key = os.environ.get("ANTHROPIC_API_KEY", "")
     if ant_key:
         print("\n\n▶  Anthropic  /v1/messages  (claude-haiku-4-5)")
         for label, content in [
-            ("Anthropic  — tables JSON  (79 rows)", _tables_json()),
-            ("Anthropic  — Cortex Search  (15 docs)", _search_json()),
+            ("Anthropic  -- tables JSON  (79 rows)", _tables_json()),
+            ("Anthropic  -- Cortex Search  (15 docs)", _search_json()),
         ]:
             msgs = build_tool_msgs(content)
             approx = len(json.dumps(msgs)) // 4
@@ -420,7 +420,7 @@ def main() -> int:
             print(f"saved {r.saved:,}  ({r.pct:.0f}%)")
             _show(r)
     else:
-        print("\n▶  Anthropic  — skipped  (export ANTHROPIC_API_KEY to enable)")
+        print("\n▶  Anthropic  -- skipped  (export ANTHROPIC_API_KEY to enable)")
 
     # ── Summary ───────────────────────────────────────────────────────────────
     if not results:
@@ -435,12 +435,12 @@ def main() -> int:
 
     print()
     print("╔══════════════════════════════════════════════════════════╗")
-    print("║  SUMMARY  —  real usage.prompt_tokens from LLM          ║")
+    print("║  SUMMARY  --  real usage.prompt_tokens from LLM          ║")
     print("╠══════════════════════════════════════════════════════════╣")
     print(f"  {'Payload':<40} {'Before':>7}  {'After':>7}  {'Saved':>5}")
     print(f"  {'─' * 40} {'─' * 7}  {'─' * 7}  {'─' * 5}")
     for r in results:
-        m = "✓" if r.saved > 0 else "·"
+        m = "[OK]" if r.saved > 0 else "·"
         print(f"  {m} {r.label[:39]:<39} {r.before_p:>7,}  {r.after_p:>7,}  {r.pct:>4.0f}%")
     print(f"  {'─' * 40} {'─' * 7}  {'─' * 7}  {'─' * 5}")
     print(f"  {'TOTAL':<40} {tb:>7,}  {ta:>7,}  {tp:>4.0f}%")

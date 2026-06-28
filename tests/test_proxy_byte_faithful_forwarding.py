@@ -7,8 +7,8 @@ vs ``,``) and ASCII-escaping non-ASCII text. Every such request collapsed
 Anthropic prompt-cache hit-rate.
 
 PR-A3 makes every forwarder byte-faithful:
-  * unmutated body → forward original ``await request.body()`` verbatim;
-  * mutated body  → re-serialize once via ``serialize_body_canonical``
+  * unmutated body -> forward original ``await request.body()`` verbatim;
+  * mutated body  -> re-serialize once via ``serialize_body_canonical``
     (compact separators, ``ensure_ascii=False``).
 
 The legacy behavior is still reachable via
@@ -69,8 +69,8 @@ def test_serialize_canonical_compact_separators() -> None:
 
 
 def test_serialize_canonical_unicode_passthrough() -> None:
-    """UTF-8 must survive — no ``\\uXXXX`` ASCII escaping."""
-    body = {"emoji": "🔥", "cjk": "日本語", "mixed": "hello → 世界"}
+    """UTF-8 must survive -- no ``\\uXXXX`` ASCII escaping."""
+    body = {"emoji": "🔥", "cjk": "日本語", "mixed": "hello -> 世界"}
     out = serialize_body_canonical(body)
     # Each non-ASCII char appears as raw UTF-8 bytes, never as a \uXXXX literal.
     assert b"\\u" not in out, repr(out)
@@ -184,7 +184,7 @@ def test_prepare_outbound_no_original_bytes_uses_canonical() -> None:
 
 
 def test_legacy_json_kwarg_mode_falls_back() -> None:
-    """legacy_json_kwarg is an explicit operator opt-in — produces the historical bytes.
+    """legacy_json_kwarg is an explicit operator opt-in -- produces the historical bytes.
 
     This is NOT a silent fallback (build constraint #4). It is reachable only
     via env var and exists for emergency rollback validation.
@@ -463,7 +463,7 @@ def _assert_outbound_passthrough_log(
 
 
 def test_passthrough_no_mutation_byte_equal_sha256() -> None:
-    """No transform → upstream SHA-256 equals client-sent SHA-256."""
+    """No transform -> upstream SHA-256 equals client-sent SHA-256."""
     client, transport = _make_no_optimize_app()
 
     # Compact JSON, simulating Claude Code / Codex CLI byte format.
@@ -502,7 +502,7 @@ def test_compression_off_unicode_preserved() -> None:
         "model": "claude-sonnet-4-6",
         "max_tokens": 64,
         "messages": [
-            {"role": "user", "content": "Hello 🔥 — 世界 — emoji is 🚀"},
+            {"role": "user", "content": "Hello 🔥 -- 世界 -- emoji is 🚀"},
         ],
     }
     inbound_bytes = serialize_body_canonical(inbound_dict)
@@ -541,7 +541,7 @@ def test_compression_off_numeric_precision_preserved() -> None:
     )
     assert response.status_code == 200
     upstream = transport.captured_body or b""
-    # Unmutated → byte-faithful: exact bytes preserved.
+    # Unmutated -> byte-faithful: exact bytes preserved.
     assert upstream == inbound_bytes
 
 
@@ -751,7 +751,7 @@ def test_legacy_json_kwarg_mode_yields_drifted_bytes(
     )
     assert response.status_code == 200
     upstream = transport.captured_body or b""
-    # Legacy mode: spaces after separators + ASCII escaping → bytes drift.
+    # Legacy mode: spaces after separators + ASCII escaping -> bytes drift.
     assert upstream != inbound_bytes
     assert b", " in upstream or b": " in upstream
     assert b"\\u" in upstream  # ASCII escaping confirms legacy path.
@@ -1290,12 +1290,12 @@ def test_batch_passthrough_byte_faithful() -> None:
 
 
 # ---------------------------------------------------------------------------
-# WS→HTTP fallback: just exercises the helper resolution
+# WS->HTTP fallback: just exercises the helper resolution
 # ---------------------------------------------------------------------------
 
 
 def test_ws_http_fallback_uses_canonical_serializer() -> None:
-    """WS→HTTP fallback resynthesizes the body, so canonical bytes apply.
+    """WS->HTTP fallback resynthesizes the body, so canonical bytes apply.
 
     We can't easily exercise the full WS path in a TestClient without a
     Codex client; instead we assert the helper choice yields the expected

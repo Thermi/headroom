@@ -81,7 +81,7 @@ def test_volatile_uuid_detected_warned_not_rewritten(tokenizer: Tokenizer) -> No
     with _capture_warnings() as records:
         result = aligner.apply(messages, tokenizer)
 
-    # Bytes preserved — never rewritten.
+    # Bytes preserved -- never rewritten.
     assert result.messages[0]["content"] == system_text
     assert result.messages[1]["content"] == "hello"
 

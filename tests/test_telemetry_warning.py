@@ -258,7 +258,7 @@ class TestWrapCLITelemetryNotice:
 
 
 # ---------------------------------------------------------------------------
-# /stats endpoint – anon_telemetry_shipping flag
+# /stats endpoint - anon_telemetry_shipping flag
 # ---------------------------------------------------------------------------
 
 

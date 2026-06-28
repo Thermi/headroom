@@ -101,7 +101,7 @@ class TestOpenAiChatParallelization:
         request = _fake_request(body)
 
         # The handler will attempt an upstream call and fail (no upstream
-        # mocked) — that's fine; we just want to confirm the pre-upstream
+        # mocked) -- that's fine; we just want to confirm the pre-upstream
         # stages complete without raising an unexpected exception.
         try:
             await proxy.handle_openai_chat(request)

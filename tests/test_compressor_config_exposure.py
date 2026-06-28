@@ -1,14 +1,14 @@
 """Tests for the newly exposed Rust compressor knobs.
 
 Covers:
-- lossless_min_savings_ratio plumbing (Python dataclass → PyO3 → Rust)
+- lossless_min_savings_ratio plumbing (Python dataclass -> PyO3 -> Rust)
   and the 0.15 lockstep default on both sides.
 - CompactConfig heuristics plumbing.
 - SearchCompressor group_by_file output mode (`rg --heading` style).
 - factor_out_constants config acceptance end-to-end.
 - ContentRouter plumbing for both knobs.
 
-Requires the rebuilt `headroom._core` extension — these tests fail loudly
+Requires the rebuilt `headroom._core` extension -- these tests fail loudly
 (not skip) if the installed extension predates the new fields, because a
 silent version skew here is exactly the parity drift the lockstep rule
 exists to prevent.
@@ -91,7 +91,7 @@ class TestSearchGroupedOutput:
 
     def test_standard_format_default(self):
         result = SearchCompressor(SearchCompressorConfig()).compress(self.INPUT)
-        # Classic file:line:content — path on every match line.
+        # Classic file:line:content -- path on every match line.
         assert "src/very/long/path/to/module.py:10:" in result.compressed
 
     def test_grouped_format(self):

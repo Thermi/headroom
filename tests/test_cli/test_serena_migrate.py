@@ -3,7 +3,7 @@
 The dashboard-popup fix (#1003) added ``--open-web-dashboard False`` to the
 Serena spec, but ``register_server`` refuses to overwrite a differing entry
 without ``force``. So an already-wrapped user whose ``serena`` entry predates
-the flag would keep the old spec — and the popup — on every re-wrap.
+the flag would keep the old spec -- and the popup -- on every re-wrap.
 
 ``_setup_serena_mcp`` closes that gap: when the ledger proves Headroom
 installed the entry currently on disk, it force-updates to the current spec.
@@ -73,7 +73,7 @@ class _FakeRegistrar:
 def _isolate_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setenv("HEADROOM_WORKSPACE_DIR", str(tmp_path / ".headroom"))
     # These tests drive ``_setup_serena_mcp`` with a fake registrar, so the real
-    # PATH is irrelevant — but the function bails early when ``uvx`` is absent.
+    # PATH is irrelevant -- but the function bails early when ``uvx`` is absent.
     # CI test shards run on runners without uvx, which would skip every code
     # path under test. Stub uvx discovery so behaviour is PATH-independent.
     real_which = shutil.which
@@ -135,7 +135,7 @@ def test_rewrap_fresh_install_records_dashboard_off_spec(
     entry = registrar.get_server("serena")
     assert entry is not None
     assert ("--open-web-dashboard", "False") == tuple(entry.args[-2:])
-    assert registrar.force_calls == [False]  # no entry → no forced retry needed
+    assert registrar.force_calls == [False]  # no entry -> no forced retry needed
     assert headroom_installed_matching("claude", entry)
 
 
@@ -147,5 +147,5 @@ def test_rewrap_already_current_is_noop(
 
     wrap_cli._setup_serena_mcp(registrar, context="claude-code", verbose=True)
 
-    assert registrar.force_calls == [False]  # ALREADY → no migration, no force
+    assert registrar.force_calls == [False]  # ALREADY -> no migration, no force
     assert "migrated" not in capsys.readouterr().out

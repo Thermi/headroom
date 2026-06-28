@@ -171,7 +171,7 @@ async def main_async() -> int:
                 "OpenAI-Beta": "responses_websockets=2026-02-06",
             },
         ) as ws:
-            # The client-facing 101 response headers — the thing under test.
+            # The client-facing 101 response headers -- the thing under test.
             client_101 = {k.lower(): v for k, v in ws.response.headers.raw_items()}
             print("[codex-hdr-e2e] client 101 headers:")
             for k, v in sorted(client_101.items()):
@@ -215,7 +215,7 @@ async def main_async() -> int:
             else:
                 print(
                     "[codex-hdr-e2e] note: /stats did not surface the codex value "
-                    f"({want!r}); shape may differ — 101 forwarding is the primary check"
+                    f"({want!r}); shape may differ -- 101 forwarding is the primary check"
                 )
         except Exception as exc:  # noqa: BLE001 - best-effort secondary check
             print(f"[codex-hdr-e2e] /stats check skipped: {exc}")

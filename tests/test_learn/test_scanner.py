@@ -76,19 +76,19 @@ class TestGreedyPathDecode:
         assert result == tmp_path / "my-cool-project.nosync"
 
     def test_dot_dir_containing_hyphenated_subdir(self, tmp_path: Path) -> None:
-        """Path like GitHub.nosync/my-project — dot parent + hyphen child."""
+        """Path like GitHub.nosync/my-project -- dot parent + hyphen child."""
         _make_dirs(tmp_path, "GitHub.nosync/my-project")
         result = _greedy_path_decode(tmp_path, ["GitHub.nosync", "my", "project"])
         assert result == tmp_path / "GitHub.nosync" / "my-project"
 
     def test_dot_dir_with_multi_hyphen_subdir(self, tmp_path: Path) -> None:
-        """Path like GitHub.nosync/my-cool-app — dot parent + multi-hyphen child."""
+        """Path like GitHub.nosync/my-cool-app -- dot parent + multi-hyphen child."""
         _make_dirs(tmp_path, "GitHub.nosync/my-cool-app")
         result = _greedy_path_decode(tmp_path, ["GitHub.nosync", "my", "cool", "app"])
         assert result == tmp_path / "GitHub.nosync" / "my-cool-app"
 
     def test_multi_hyphen_dot_dir_containing_subproject(self, tmp_path: Path) -> None:
-        """Path like my-cool-project.nosync/headroom — hardest combination."""
+        """Path like my-cool-project.nosync/headroom -- hardest combination."""
         _make_dirs(tmp_path, "my-cool-project.nosync/headroom")
         result = _greedy_path_decode(tmp_path, ["my", "cool", "project.nosync", "headroom"])
         assert result == tmp_path / "my-cool-project.nosync" / "headroom"
@@ -152,7 +152,7 @@ class TestGreedyPathDecode:
         assert result == tmp_path / "my-cool_project"
 
     def test_underscore_dir_containing_hyphen_subdir(self, tmp_path: Path) -> None:
-        """Path like my_app/sub-module — underscore parent + hyphen child."""
+        """Path like my_app/sub-module -- underscore parent + hyphen child."""
         _make_dirs(tmp_path, "my_app/sub-module")
         result = _greedy_path_decode(tmp_path, ["my", "app", "sub", "module"])
         assert result == tmp_path / "my_app" / "sub-module"
@@ -207,7 +207,7 @@ class TestDecodeProjectPath:
     Note: _decode_project_path's greedy branch only activates for paths whose
     first component is ``Users`` (the common macOS home prefix).  Tests that
     exercise the greedy decoder therefore synthesise an encoded name rooted at
-    ``/Users/<username>/…`` inside a real temporary directory created under
+    ``/Users/<username>/...`` inside a real temporary directory created under
     that prefix.  When the temp directory does not exist under ``/Users`` the
     tests fall back to ``/tmp`` and rely only on the fast simple-replace path.
     """
@@ -223,7 +223,7 @@ class TestDecodeProjectPath:
         """
         project = users_tmp / "GitHub.nosync" / "headroom"
         project.mkdir(parents=True)
-        # Build the encoded name exactly as Claude Code does (/  →  -)
+        # Build the encoded name exactly as Claude Code does (/  ->  -)
         encoded = "-" + str(project)[1:].replace("/", "-")
         result = _decode_project_path(encoded)
         if str(users_tmp).startswith("/Users/"):
@@ -232,7 +232,7 @@ class TestDecodeProjectPath:
             assert result is None or result == project
 
     # ------------------------------------------------------------------
-    # Greedy-decoder tests — require a /Users-rooted path to activate.
+    # Greedy-decoder tests -- require a /Users-rooted path to activate.
     # We try to create a temp dir under the real /Users tree; if that is
     # not writable we skip rather than fail (CI typically runs as a real
     # macOS user whose home IS under /Users).
@@ -240,7 +240,7 @@ class TestDecodeProjectPath:
 
     @pytest.fixture()
     def users_tmp(self, tmp_path: Path) -> Generator[Path, None, None]:
-        """Return a temporary directory whose path starts with /Users/…
+        """Return a temporary directory whose path starts with /Users/...
 
         On macOS the system temp dir is under /private/var, so we create a
         disposable directory directly inside the real user's home instead.
@@ -269,9 +269,9 @@ class TestDecodeProjectPath:
             yield tmp_path
 
     def test_dot_and_hyphen_in_dirname_via_greedy(self, users_tmp: Path) -> None:
-        """GitHub.nosync/my-project — dot parent + hyphenated child (issue #47).
+        """GitHub.nosync/my-project -- dot parent + hyphenated child (issue #47).
 
-        Simple replace-all gives ``…/GitHub.nosync/my/project`` which does not
+        Simple replace-all gives ``.../GitHub.nosync/my/project`` which does not
         exist, so the greedy decoder must reconstruct ``my-project``.
         """
         project = users_tmp / "GitHub.nosync" / "my-project"
@@ -287,7 +287,7 @@ class TestDecodeProjectPath:
             assert result is None or result == project
 
     def test_multi_hyphen_dot_dirname_via_greedy(self, users_tmp: Path) -> None:
-        """my-cool-project.nosync/app — primary regression from issue #47.
+        """my-cool-project.nosync/app -- primary regression from issue #47.
 
         Three tokens joined by hyphens form the parent dir name; the old code
         only tried pairs and therefore could never reconstruct this component.
@@ -317,11 +317,11 @@ class TestDecodeProjectPath:
             assert result is None or result == project
 
     def test_underscore_dirname_via_greedy(self, users_tmp: Path) -> None:
-        """my_project — underscore in directory name (issue #159).
+        """my_project -- underscore in directory name (issue #159).
 
         Claude Code encodes /Users/foo/org/my_project as
         -Users-foo-org-my-project.  Simple replace gives
-        …/org/my/project which does not exist, so the greedy decoder
+        .../org/my/project which does not exist, so the greedy decoder
         must reconstruct my_project from tokens ['my', 'project'].
         """
         project = users_tmp / "org" / "my_project"
@@ -336,7 +336,7 @@ class TestDecodeProjectPath:
             assert result is None or result == project
 
     def test_multi_underscore_dirname_via_greedy(self, users_tmp: Path) -> None:
-        """my_cool_project — multiple underscores (issue #159)."""
+        """my_cool_project -- multiple underscores (issue #159)."""
         project = users_tmp / "my_cool_project"
         project.mkdir(parents=True)
 
@@ -357,8 +357,8 @@ class TestDecodeProjectPath:
             # On Windows: tries C:\\MQ2\\macros, may or may not exist
             assert result is None or str(result).startswith("C:")
         else:
-            # On Unix: drive detection runs but path doesn't exist → falls through
-            # Then Unix paths tried → also don't exist → returns None
+            # On Unix: drive detection runs but path doesn't exist -> falls through
+            # Then Unix paths tried -> also don't exist -> returns None
             assert result is None
 
     def test_windows_users_path(self) -> None:
@@ -535,17 +535,17 @@ class TestDecodeProjectPath:
 
         Claude Code flattens ``/``, ``.``, ``-`` and ``_`` all to ``-`` when
         escaping, so a project under ``/Users/first.last`` (or
-        ``/home/first.last``) is stored as ``-Users-first-last-…``. The decoder
+        ``/home/first.last``) is stored as ``-Users-first-last-...``. The decoder
         used to consume only the first token after ``Users``/``home`` as the
         home directory and walk from ``/Users/first`` (which does not exist), so
         it bailed out and callers fell back to the literal
-        ``/Users/first/last`` — causing ``headroom learn --apply`` to fail with
+        ``/Users/first/last`` -- causing ``headroom learn --apply`` to fail with
         ``PermissionError: '/Users/first'`` for usernames such as
         ``first.last``. This is the Unix counterpart of
         ``test_windows_username_with_dot_stays_single_component``.
 
         Rooted at the real home so it exercises the ``Users``/``home`` branch on
-        both macOS (``/Users/…``) and Linux (``/home/…``); skipped when the home
+        both macOS (``/Users/...``) and Linux (``/home/...``); skipped when the home
         directory is neither rooted there nor writable.
         """
         import shutil

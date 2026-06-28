@@ -172,7 +172,7 @@ class TestAcceptEncodingStripping:
         assert "accept-encoding" not in headers
 
     def test_strip_is_safe_when_accept_encoding_absent(self):
-        """pop() on a missing key must not raise — direct curl calls have no header."""
+        """pop() on a missing key must not raise -- direct curl calls have no header."""
         request_headers = {
             "authorization": "Bearer sk-test",
             "content-type": "application/json",

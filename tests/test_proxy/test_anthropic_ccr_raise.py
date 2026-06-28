@@ -1,4 +1,4 @@
-"""Anthropic CCR exception path must re-raise — NOT silently return the raw tool call.
+"""Anthropic CCR exception path must re-raise -- NOT silently return the raw tool call.
 
 Regression test for the silent-fallback bug where ``handle_anthropic_messages``
 caught CCR ``handle_response`` exceptions with ``logger.warning + continue``
@@ -61,7 +61,7 @@ def _tool_call_response() -> dict:
 
 
 def test_anthropic_ccr_exception_reraises_not_swallowed():
-    """When CCR handle_response raises, the proxy must 500 — not silently return
+    """When CCR handle_response raises, the proxy must 500 -- not silently return
     the raw headroom_retrieve tool-call body to the client."""
     config = _make_config()
     tool_resp = _tool_call_response()
@@ -107,6 +107,6 @@ def test_anthropic_ccr_exception_reraises_not_swallowed():
     # Confirm the raw headroom_retrieve tool_use block was NOT returned.
     for block in body.get("content", []):
         assert block.get("name") != "headroom_retrieve", (
-            "proxy silently forwarded the raw CCR tool call — silent fallback not fixed"
+            "proxy silently forwarded the raw CCR tool call -- silent fallback not fixed"
         )
     assert "error" in body

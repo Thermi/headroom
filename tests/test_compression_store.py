@@ -1321,7 +1321,7 @@ class TestHashCollisionDetection:
             "compression_store key must be SHA-256(original)[:24]. "
             "If this test fails because the hash function was changed, "
             "verify that no caller (incl. /v1/retrieve consumers) "
-            "depends on the specific MD5/SHA-256 value — the cache is "
+            "depends on the specific MD5/SHA-256 value -- the cache is "
             "in-memory so upgrade-time mismatch is fine, but external "
             "systems that hash-and-lookup independently need to match."
         )

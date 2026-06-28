@@ -1,4 +1,4 @@
-"""Tests for ``headroom.proxy.forwarded_headers`` — Phase F PR-F4.
+"""Tests for ``headroom.proxy.forwarded_headers`` -- Phase F PR-F4.
 
 Threat model: a malicious upstream client can forge any
 ``X-Forwarded-*`` header. The proxy must trust them ONLY when the
@@ -42,7 +42,7 @@ def _fake_request(
 ) -> Any:
     """Build a minimal duck-typed ``Request`` stand-in.
 
-    Avoids spinning up a TestClient — we only need ``client.host``,
+    Avoids spinning up a TestClient -- we only need ``client.host``,
     ``headers``, and ``state`` for these helpers.
     """
     raw_headers: list[tuple[bytes, bytes]] = []
@@ -100,13 +100,13 @@ def test_load_cidrs_host_bits_normalized() -> None:
 
 
 def test_load_cidrs_malformed_raises_loud() -> None:
-    """Malformed CIDR must raise — silent skip would mask config typos."""
+    """Malformed CIDR must raise -- silent skip would mask config typos."""
     with pytest.raises(ValueError):
         load_trusted_gateway_cidrs("not-a-cidr")
 
 
 def test_load_cidrs_partial_malformed_raises_loud() -> None:
-    """One bad entry in a multi-CIDR list still raises — we don't degrade."""
+    """One bad entry in a multi-CIDR list still raises -- we don't degrade."""
     with pytest.raises(ValueError):
         load_trusted_gateway_cidrs("10.0.0.0/8,not-a-cidr,fd00::/8")
 
@@ -211,7 +211,7 @@ def test_peer_membership_malformed_peer_is_false() -> None:
 
 
 def test_default_strict_ignores_forwarded(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Env unset → X-Forwarded-* IGNORED even from a 10.x peer."""
+    """Env unset -> X-Forwarded-* IGNORED even from a 10.x peer."""
     monkeypatch.delenv(TRUSTED_GATEWAY_CIDRS_ENV, raising=False)
     req = _fake_request(
         peer_host="10.0.0.5",
@@ -287,7 +287,7 @@ def test_no_forwarded_headers_no_rejection_log(
 def test_empty_headers_with_allowlisted_peer(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Allow-listed peer + no X-Forwarded-* headers → empty dict, no error."""
+    """Allow-listed peer + no X-Forwarded-* headers -> empty dict, no error."""
     monkeypatch.setenv(TRUSTED_GATEWAY_CIDRS_ENV, "10.0.0.0/8")
     req = _fake_request(peer_host="10.0.0.5")
     assert resolve_client_ip(req) == "10.0.0.5"  # falls back to peer IP
@@ -343,7 +343,7 @@ def test_comma_whitespace_tolerance_in_env(
 
 
 def test_x_forwarded_for_takes_leftmost(monkeypatch: pytest.MonkeyPatch) -> None:
-    """``X-Forwarded-For: client, p1, p2`` → leftmost is the origin."""
+    """``X-Forwarded-For: client, p1, p2`` -> leftmost is the origin."""
     monkeypatch.setenv(TRUSTED_GATEWAY_CIDRS_ENV, "10.0.0.0/8")
     req = _fake_request(
         peer_host="10.0.0.5",
@@ -465,7 +465,7 @@ def test_integration_default_strict_ignores_forwarded(
         headers={"X-Forwarded-For": "203.0.113.42", "X-Forwarded-Proto": "https"},
     )
     body = resp.json()
-    # Env unset → strict-secure: peer IP is the answer, X-Forwarded-* ignored.
+    # Env unset -> strict-secure: peer IP is the answer, X-Forwarded-* ignored.
     assert body["client_ip"] == "10.0.0.5"
     assert body["forwarded"] == {"for": "", "proto": "", "host": ""}
 
@@ -473,7 +473,7 @@ def test_integration_default_strict_ignores_forwarded(
 def test_integration_non_ip_peer_fails_gate(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Default TestClient host is the literal ``"testclient"`` — not an IP.
+    """Default TestClient host is the literal ``"testclient"`` -- not an IP.
 
     Even if the operator wrote a 0.0.0.0/0 allow-list (the worst-case
     "trust everyone" config), a non-IP peer literal must still fail

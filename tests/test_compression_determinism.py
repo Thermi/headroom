@@ -3,7 +3,7 @@
 Prefix caching at Anthropic/OpenAI is byte-exact: turn N+2's cache hit
 requires the bytes for turn-N-and-earlier tool results to be identical
 across requests. That holds iff every compressor in the pipeline is
-deterministic — same input bytes in, same output bytes out, with no
+deterministic -- same input bytes in, same output bytes out, with no
 dependence on wall clock, RNG, or process-local state.
 
 This test pins that invariant against a small fixture of representative
@@ -28,7 +28,7 @@ from headroom.transforms.content_router import (
 
 
 class _WhitespaceTokenizer:
-    """Stand-in tokenizer — matches the production token-counter protocol
+    """Stand-in tokenizer -- matches the production token-counter protocol
     used by `compress_unit_with_router`. Deterministic by construction;
     real tokenizers (tiktoken, anthropic) are also deterministic for the
     same input + model."""
@@ -102,7 +102,7 @@ def _compress(content: str, *, router: ContentRouter) -> str:
 def test_compression_pipeline_is_byte_deterministic() -> None:
     """Two independent runs of every fixture must produce identical
     bytes. Fresh `ContentRouter` instances avoid the in-process result
-    cache short-circuiting the second call — we want the *compression*
+    cache short-circuiting the second call -- we want the *compression*
     to be deterministic, not just memoized."""
 
     for name, content in _FIXTURES.items():

@@ -1,4 +1,4 @@
-"""Issue #389: SmartCrusher row-drop CCR hash → Python compression_store bridge.
+"""Issue #389: SmartCrusher row-drop CCR hash -> Python compression_store bridge.
 
 The row-drop and opaque-blob paths in the Rust SmartCrusher emit
 ``<<ccr:HASH ...>>`` markers and stash the original payload in the
@@ -18,7 +18,7 @@ These tests pin the bridge:
    the failing case from the issue's reproducer.
 
 3. Edge: opaque-blob markers (the ``<<ccr:HASH,KIND,SIZE>>`` shape)
-   also bridge — the document walker emits these for long strings.
+   also bridge -- the document walker emits these for long strings.
 
 If these regress, ``/v1/retrieve`` silently 404s for every
 SmartCrusher-emitted marker even though the data is held in the Rust
@@ -38,7 +38,7 @@ def _build_extension() -> None:
         from headroom._core import SmartCrusher  # noqa: F401
     except ImportError:
         pytest.skip(
-            "headroom._core not built — run `bash scripts/build_rust_extension.sh`",
+            "headroom._core not built -- run `bash scripts/build_rust_extension.sh`",
             allow_module_level=True,
         )
 
@@ -46,7 +46,7 @@ def _build_extension() -> None:
 _build_extension()
 
 
-# Skip if fastapi not available — needed for integration tests but not unit.
+# Skip if fastapi not available -- needed for integration tests but not unit.
 try:
     import fastapi  # noqa: F401
 
@@ -75,7 +75,7 @@ def test_lossy_crush_populates_python_compression_store() -> None:
     try:
         crusher = SmartCrusher(PyConfig(), ccr_config=CCRConfig(), with_compaction=False)
 
-        # 60 items is well above adaptive_k → lossy path fires.
+        # 60 items is well above adaptive_k -> lossy path fires.
         original = [{"id": i, "status": "ok", "tag": "alpha"} for i in range(60)]
         original_json = json.dumps(original)
 
@@ -101,7 +101,7 @@ def test_lossy_crush_populates_python_compression_store() -> None:
         )
 
         # The entry's original content is the canonical-JSON
-        # serialization of the original array — same bytes the Rust
+        # serialization of the original array -- same bytes the Rust
         # store has under the same hash.
         rust_canonical = crusher.ccr_get(ccr_hash)
         assert rust_canonical is not None, "Rust store lost the entry"
@@ -132,7 +132,7 @@ def test_smart_crush_content_populates_python_store() -> None:
     try:
         crusher = SmartCrusher(PyConfig(), ccr_config=CCRConfig(), with_compaction=False)
 
-        # Mix of "ok" + occasional "error" → variance the lossy path
+        # Mix of "ok" + occasional "error" -> variance the lossy path
         # can latch onto. A purely-uniform array gets a `skip:unique_
         # entities_no_signal` strategy and never row-drops.
         original = [
@@ -182,7 +182,7 @@ def test_smart_crush_content_populates_python_store() -> None:
 
 
 def test_passthrough_does_not_populate_store() -> None:
-    """Below adaptive_k → no row drop → no Python store write.
+    """Below adaptive_k -> no row drop -> no Python store write.
     Pins that we don't accidentally store on every crush call."""
     from headroom.cache.compression_store import (
         get_compression_store,
@@ -223,7 +223,7 @@ def test_marker_disabled_skips_python_store() -> None:
 
     reset_compression_store()
     try:
-        # Markers disabled → Rust skips both marker emission and store write.
+        # Markers disabled -> Rust skips both marker emission and store write.
         crusher = SmartCrusher(
             PyConfig(),
             ccr_config=CCRConfig(enabled=False),
@@ -239,7 +239,7 @@ def test_marker_disabled_skips_python_store() -> None:
             f"expected no marker when ccr_config.enabled=False, got: {crushed[:200]!r}"
         )
 
-        # And the Python store stays empty — bridge had nothing to mirror.
+        # And the Python store stays empty -- bridge had nothing to mirror.
         store = get_compression_store()
         assert store.get_stats()["entry_count"] == 0
     finally:
@@ -247,7 +247,7 @@ def test_marker_disabled_skips_python_store() -> None:
 
 
 def test_distinct_payloads_get_distinct_python_store_entries() -> None:
-    """Two unrelated payloads → two row drops → two entries under
+    """Two unrelated payloads -> two row drops -> two entries under
     distinct hashes in the Python store; both retrievable independently."""
     from headroom.cache.compression_store import (
         get_compression_store,
@@ -294,7 +294,7 @@ def test_compression_store_explicit_hash_round_trips() -> None:
     reset_compression_store()
     try:
         store = get_compression_store()
-        # SmartCrusher emits 12-char SHA-256 hashes — much shorter than
+        # SmartCrusher emits 12-char SHA-256 hashes -- much shorter than
         # the default MD5[:24].
         explicit = "abc123def456"
         returned = store.store(
@@ -312,7 +312,7 @@ def test_compression_store_explicit_hash_round_trips() -> None:
 
 def test_compression_store_explicit_hash_rejects_non_hex() -> None:
     """Non-hex `explicit_hash` raises ValueError. No silent fallback
-    to MD5 — that would re-introduce the marker/store mismatch."""
+    to MD5 -- that would re-introduce the marker/store mismatch."""
     from headroom.cache.compression_store import (
         get_compression_store,
         reset_compression_store,
@@ -337,7 +337,7 @@ def test_compression_store_explicit_hash_rejects_non_hex() -> None:
         reset_compression_store()
 
 
-# ─── Integration test: /v1/compress → /v1/retrieve via FastAPI ──────────
+# ─── Integration test: /v1/compress -> /v1/retrieve via FastAPI ──────────
 
 
 @pytest.mark.skipif(not _HAS_FASTAPI, reason="fastapi not installed")
@@ -346,7 +346,7 @@ def test_v1_compress_then_v1_retrieve_resolves_marker_hash() -> None:
     1. POST a 200-item tool message to /v1/compress.
     2. Parse the `<<ccr:HASH N_rows_offloaded>>` marker out of the
        compressed messages.
-    3. GET /v1/retrieve/{hash} — must return 200 with the original.
+    3. GET /v1/retrieve/{hash} -- must return 200 with the original.
 
     Before the fix this returns 404 because the Rust crusher's marker
     points at a hash the Python compression_store never received.
@@ -365,13 +365,13 @@ def test_v1_compress_then_v1_retrieve_resolves_marker_hash() -> None:
     )
     app = create_app(config)
 
-    # Build a payload similar to the issue's reproducer — 200 items
+    # Build a payload similar to the issue's reproducer -- 200 items
     # with enough variation to trigger the lossy path. The Rust
     # crusher's adaptive_k will keep ~15 and drop the rest.
     #
     # The blob is unique-per-item and long relative to the key names so
     # the lossless Table/CSV path (which wins by stripping repeated keys
-    # when it saves >= lossless_min_savings_ratio) cannot clear the bar —
+    # when it saves >= lossless_min_savings_ratio) cannot clear the bar --
     # this test exists to exercise the LOSSY row-drop path and its
     # Rust -> Python CCR store bridge.
     items = [
@@ -440,7 +440,7 @@ def test_v1_compress_then_v1_retrieve_resolves_marker_hash() -> None:
             assert retrieve_resp.status_code == 200, (
                 f"/v1/retrieve for marker hash {ccr_hash!r} returned "
                 f"{retrieve_resp.status_code} ({retrieve_resp.text}). "
-                f"The Rust→Python store bridge dropped the entry."
+                f"The Rust->Python store bridge dropped the entry."
             )
             retrieve_body = retrieve_resp.json()
             assert retrieve_body["hash"] == ccr_hash
@@ -449,7 +449,7 @@ def test_v1_compress_then_v1_retrieve_resolves_marker_hash() -> None:
             retrieved_items = json.loads(retrieve_body["original_content"])
             assert isinstance(retrieved_items, list)
             # The original was 200 items. The Rust hash is over the
-            # canonical-JSON form of the parsed input — should round-trip.
+            # canonical-JSON form of the parsed input -- should round-trip.
             assert len(retrieved_items) == 200, (
                 f"expected 200 items in retrieved content, got {len(retrieved_items)}"
             )

@@ -4,7 +4,7 @@ Pins three guarantees:
 
 1. `get_recommendation()` returns `None` and emits a `DeprecationWarning`
    exactly once per process. The request-time hint API is retired.
-2. The aggregation key is `(auth_mode, model_family, structure_hash)` —
+2. The aggregation key is `(auth_mode, model_family, structure_hash)` --
    two patterns with the same `structure_hash` but different `auth_mode`
    or `model_family` are tracked as distinct rows in the TOIN store.
 3. Recording a compression event does NOT alter the bytes SmartCrusher
@@ -181,9 +181,9 @@ def test_storage_round_trip_preserves_aggregation_key(tmp_path: Path):
 def test_record_does_not_alter_compression_decision():
     """SmartCrusher output is byte-identical regardless of TOIN observation state.
 
-    Calls SmartCrusher twice on the same input — once with TOIN empty,
+    Calls SmartCrusher twice on the same input -- once with TOIN empty,
     once after recording a compression that would have changed the
-    pre-B5 hint — and asserts byte equality. This pins the
+    pre-B5 hint -- and asserts byte equality. This pins the
     observation-only contract: TOIN observes; never mutates.
     """
     smart_crusher_module = pytest.importorskip("headroom.transforms.smart_crusher")
@@ -262,7 +262,7 @@ def test_smart_crusher_determinism_parametrized(items: list[dict[str, object]]) 
 
 
 def test_smart_crusher_determinism_property():
-    """Property: any input → byte-stable SmartCrusher output across two calls.
+    """Property: any input -> byte-stable SmartCrusher output across two calls.
 
     Skipped if `hypothesis` is not installed (it is not a hard dep of
     Headroom). The parametrized test above covers the deterministic

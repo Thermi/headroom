@@ -228,7 +228,7 @@ def record_all(root: Path | None = None) -> dict[str, str]:
         statuses["tokenizer"] = f"blocked:{e.__class__.__name__}:{e}"
 
     # --- cache_aligner -----------------------------------------------------
-    # CacheAligner.apply() takes a Tokenizer argument — recording its output
+    # CacheAligner.apply() takes a Tokenizer argument -- recording its output
     # requires building a tokenizer. We do that in the workload driver, but
     # still install the patch here so calls made elsewhere are captured.
     try:
@@ -362,7 +362,7 @@ def _wrap_function(
 
 
 # ---------------------------------------------------------------------------
-# Minimal workload helpers — callable independently of the scripts entry.
+# Minimal workload helpers -- callable independently of the scripts entry.
 # ---------------------------------------------------------------------------
 
 
@@ -550,7 +550,7 @@ Date:   Mon Apr 25 12:00:00 2026
     out.append(f"{pre_diff_content}\n# bugfix:pre-diff-content")
 
     # Routing-gap path coverage (2026-04-25 follow-up). These exercise the
-    # ContentRouter→DiffCompressor pipeline gaps:
+    # ContentRouter->DiffCompressor pipeline gaps:
     #   1. `diff --combined <path>` merge-commit header (parser had hardcoded
     #      `diff --git`, so the whole input fell into pre-diff blob).
     #   2. `diff --cc <path>` (alternate merge-commit form).
@@ -816,7 +816,7 @@ def run_default_workload(root: Path | None = None) -> dict[str, int]:
     except Exception as e:
         LOG.warning("tokenizer workload failed: %s", e)
 
-    # cache_aligner — needs Tokenizer; reuse the one above
+    # cache_aligner -- needs Tokenizer; reuse the one above
     try:
         from headroom.providers.openai import OpenAITokenCounter
         from headroom.tokenizer import Tokenizer
@@ -830,7 +830,7 @@ def run_default_workload(root: Path | None = None) -> dict[str, int]:
     except Exception as e:
         LOG.warning("cache_aligner workload failed: %s", e)
 
-    # ccr — CCRToolInjector is a dataclass whose `inject_tool_definition`
+    # ccr -- CCRToolInjector is a dataclass whose `inject_tool_definition`
     # takes `tools: list[dict] | None` and returns `(tools, was_injected)`.
     # It only mutates state when it has already scanned messages with
     # compression markers, so we force `has_compressed_content` by planting
@@ -857,7 +857,7 @@ def run_default_workload(root: Path | None = None) -> dict[str, int]:
     except Exception as e:
         LOG.warning("ccr workload failed: %s", e)
 
-    # content_detector — drive a wide mix of content types so every dispatch
+    # content_detector -- drive a wide mix of content types so every dispatch
     # branch (json_array, diff, html, search, log, code-by-language,
     # plain-text fallback) is exercised at least once.
     try:

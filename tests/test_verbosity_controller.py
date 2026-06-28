@@ -1,4 +1,4 @@
-"""Tests for headroom.proxy.verbosity_controller — the AIMD state machine."""
+"""Tests for headroom.proxy.verbosity_controller -- the AIMD state machine."""
 
 from __future__ import annotations
 
@@ -52,10 +52,10 @@ class TestMultiplicativeDecrease:
         assert state.level == 1
 
     def test_cooldown_suppresses_reescalation(self):
-        # Back off, then immediately get TOO_MUCH pressure — must not re-terse
+        # Back off, then immediately get TOO_MUCH pressure -- must not re-terse
         # until the cooldown elapses.
         state = ControllerState(level=3)
-        state = CTRL.observe(state, Signal.TOO_LITTLE)  # → level 2, cooldown 5
+        state = CTRL.observe(state, Signal.TOO_LITTLE)  # -> level 2, cooldown 5
         assert state.level == 2
         for _ in range(3):  # would normally step up at 3, but we're cooling down
             state = CTRL.observe(state, Signal.TOO_MUCH)

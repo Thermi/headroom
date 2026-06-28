@@ -1,4 +1,4 @@
-"""Unit tests for GeminiScanner — Google Gemini CLI session parsing.
+"""Unit tests for GeminiScanner -- Google Gemini CLI session parsing.
 
 Tests use synthetic session data in tmp directories, no real Gemini data needed.
 """
@@ -213,8 +213,8 @@ class TestJsonSessionParsing:
         sessions = scanner.scan_project(projects[0])
 
         assert len(sessions[0].tool_calls) == 2
-        assert sessions[0].tool_calls[0].name == "Glob"  # search_files → Glob
-        assert sessions[0].tool_calls[1].name == "Read"  # read_file → Read
+        assert sessions[0].tool_calls[0].name == "Glob"  # search_files -> Glob
+        assert sessions[0].tool_calls[1].name == "Read"  # read_file -> Read
 
     def test_error_detection(self, tmp_path):
         gemini_dir, chats_dir = _setup_gemini_dir(tmp_path)
@@ -376,7 +376,7 @@ class TestJsonSessionParsing:
         projects = scanner.discover_projects()
         sessions = scanner.scan_project(projects[0])
 
-        # No tool calls → session filtered out
+        # No tool calls -> session filtered out
         assert len(sessions) == 0
 
 

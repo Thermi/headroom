@@ -135,5 +135,5 @@ def test_unused_stages_absent_from_summary():
 
     summary = timer.summary()
     assert summary == {"only_one": pytest.approx(summary["only_one"])}
-    # No sentinel placeholders — callers overlay ``null`` themselves.
+    # No sentinel placeholders -- callers overlay ``null`` themselves.
     assert "not_measured" not in summary

@@ -5,7 +5,7 @@ query-echo, cost-tracker counterfactual) need real API keys and used to
 load the project `.env` at module level via `os.environ.setdefault(...)`.
 That ran during pytest collection and *globally* mutated `os.environ`,
 which caused unrelated tests (e.g. `test_proxy_passthrough_integration`)
-to flip from cleanly skipped to running-live-and-failing — their
+to flip from cleanly skipped to running-live-and-failing -- their
 `@pytest.mark.skipif(not os.environ.get(...))` guards saw the leaked
 key and decided not to skip.
 
@@ -26,7 +26,7 @@ Usage from a test module that needs `.env`:
     apply_dotenv = autouse_apply_env(_env)
 
 The `apply_dotenv` autouse fixture sets the values via `monkeypatch.setenv`,
-which auto-restores at function-scope teardown — no cross-module leak.
+which auto-restores at function-scope teardown -- no cross-module leak.
 """
 
 from __future__ import annotations
@@ -40,7 +40,7 @@ import pytest
 def load_env_overrides() -> dict[str, str]:
     """Read the project `.env` file (if present) into a plain dict.
 
-    Returns an empty dict when `.env` is missing — CI runs with real
+    Returns an empty dict when `.env` is missing -- CI runs with real
     secrets in the environment and no `.env`, so the per-test fixture
     becomes a no-op there.
     """
@@ -79,7 +79,7 @@ def importorskip_no_env_leak(module_name: str):
     `dotenv.load_dotenv()` at module import time, which loads the project
     `.env` into the global `os.environ`. When a test module does
     `pytest.importorskip("litellm")` at module-level, that pollution
-    happens during pytest's collection phase — and any *later-collected*
+    happens during pytest's collection phase -- and any *later-collected*
     test module whose `@pytest.mark.skipif(not os.environ.get("FOO_API_KEY"))`
     decorator runs after the leak will see the polluted value and stop
     skipping. The proxy-passthrough integration tests stop being safely
@@ -87,7 +87,7 @@ def importorskip_no_env_leak(module_name: str):
 
     This wrapper snapshots `os.environ`, imports the module, then deletes
     any keys that the import added. The module is fully imported and
-    cached in `sys.modules` — its functionality (price tables, model
+    cached in `sys.modules` -- its functionality (price tables, model
     metadata) is unaffected. Subsequent `import litellm` calls hit the
     cache and don't re-run the `dotenv.load_dotenv` side-effect.
 

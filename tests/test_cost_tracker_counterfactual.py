@@ -67,7 +67,7 @@ def test_savings_monotonic():
 
 
 def test_savings_zero_when_no_tokens_saved():
-    """No tokens saved → savings_usd is 0."""
+    """No tokens saved -> savings_usd is 0."""
     from headroom.proxy.server import CostTracker
 
     ct = CostTracker()
@@ -104,7 +104,7 @@ def test_multi_model_savings():
 
     stats = ct.stats()
 
-    # Haiku is cheaper than Sonnet, so same tokens saved → different $
+    # Haiku is cheaper than Sonnet, so same tokens saved -> different $
     assert stats["total_tokens_saved"] == 100_000
     assert stats["savings_usd"] > 0
 
@@ -135,7 +135,7 @@ def test_budget_enforced_after_recording_costs():
     allowed, remaining = ct.check_budget()
     assert allowed  # nothing spent yet
 
-    # ~$1.50+ of Sonnet input at list price — far over the budget
+    # ~$1.50+ of Sonnet input at list price -- far over the budget
     ct.record_tokens(
         "claude-sonnet-4-20250514",
         tokens_saved=0,
@@ -152,7 +152,7 @@ def test_budget_enforced_after_recording_costs():
 
 def test_budget_input_cost_counted_without_usage_breakdown():
     """When the call site has no API usage breakdown (cache/uncached all 0),
-    tokens_sent must be used as the input count — input cost must not be
+    tokens_sent must be used as the input count -- input cost must not be
     silently dropped from the budget."""
     from headroom.proxy.server import CostTracker
 
@@ -163,5 +163,5 @@ def test_budget_input_cost_counted_without_usage_breakdown():
         tokens_sent=500_000,
     )
 
-    # 500k input tokens at Sonnet list price is ~$1.50 — must be > output-only
+    # 500k input tokens at Sonnet list price is ~$1.50 -- must be > output-only
     assert ct.get_period_cost() > 0.5

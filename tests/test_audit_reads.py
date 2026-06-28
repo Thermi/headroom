@@ -116,7 +116,7 @@ class TestMaturationSim:
         # r2 and r3 target the already-read foo.py; r3 is partial.
         assert r.rereads_any == 2
         assert r.rereads_partial == 1
-        # CONTENT is ~1.2KB — below the 2KB maturation floor — so the
+        # CONTENT is ~1.2KB -- below the 2KB maturation floor -- so the
         # big-read metrics stay empty on this fixture.
         assert r.big_reads == 0
         # The edit follows reads of the same file with touch-gap 1.

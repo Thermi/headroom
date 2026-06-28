@@ -1,4 +1,4 @@
-"""Tests for SharedContext — compressed inter-agent context sharing."""
+"""Tests for SharedContext -- compressed inter-agent context sharing."""
 
 from headroom.shared_context import SharedContext
 

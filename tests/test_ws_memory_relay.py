@@ -41,16 +41,16 @@ class WSMemoryRelayState:
         """Process a single upstream WS event.
 
         Returns a dict with possible keys:
-            relay: list[str]        — events to send to Codex
-            execute_tools: list     — function_call items to execute
-            send_continuation: dict — continuation payload to send upstream
+            relay: list[str]        -- events to send to Codex
+            execute_tools: list     -- function_call items to execute
+            send_continuation: dict -- continuation payload to send upstream
         """
         result: dict[str, Any] = {"relay": [], "execute_tools": [], "send_continuation": None}
 
         try:
             event = json.loads(msg_str)
         except (json.JSONDecodeError, TypeError):
-            # Not JSON — always relay
+            # Not JSON -- always relay
             result["relay"].append(msg_str)
             return result
 
@@ -66,18 +66,18 @@ class WSMemoryRelayState:
                     item.get("type") == "function_call"
                     and item.get("name") in self.memory_tool_names
                 ):
-                    # Memory tool is first output → suppress entire response
+                    # Memory tool is first output -> suppress entire response
                     self.suppress_response = True
                     self.decided = True
                     self.event_buffer.clear()
                 else:
-                    # Non-memory item → flush buffer and pass through
+                    # Non-memory item -> flush buffer and pass through
                     self.decided = True
                     result["relay"].extend(self.event_buffer)
                     self.event_buffer.clear()
 
             elif event_type == "response.completed":
-                # Response completed with no output items — flush all
+                # Response completed with no output items -- flush all
                 self.decided = True
                 result["relay"].extend(self.event_buffer)
                 self.event_buffer.clear()
@@ -426,7 +426,7 @@ class TestWSMemoryRelayMemoryTool:
         assert result["relay"][0] == "not valid json {{{"
 
     def test_multiple_memory_tools_in_one_response(self):
-        """Multiple memory tools in one response — all suppressed."""
+        """Multiple memory tools in one response -- all suppressed."""
         relay = WSMemoryRelayState()
 
         events = [
@@ -484,7 +484,7 @@ class TestWSMemoryRelayStateReset:
         assert len(relay.event_buffer) == 0
 
     def test_alternating_memory_and_normal(self):
-        """Memory response → normal response → both work correctly."""
+        """Memory response -> normal response -> both work correctly."""
         relay = WSMemoryRelayState()
 
         # 1. Memory response (suppressed)

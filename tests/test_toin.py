@@ -2,7 +2,7 @@
 
 PR-B5 retired the request-time hint API. Tests that exercised the old
 `get_recommendation()` / `CompressionHint` shape are skipped at module
-level — the new observation-only contract is covered by
+level -- the new observation-only contract is covered by
 `tests/test_toin_observation_only.py` and `tests/test_toin_publish.py`.
 """
 
@@ -337,37 +337,37 @@ class TestToolIntelligenceNetwork:
     # warning") is covered by tests/test_toin_observation_only.py.
 
     @pytest.mark.skip(
-        reason="PR-B5: get_recommendation retired — see test_toin_observation_only.py"
+        reason="PR-B5: get_recommendation retired -- see test_toin_observation_only.py"
     )
     def test_get_recommendation_no_data(self):
         pass
 
     @pytest.mark.skip(
-        reason="PR-B5: get_recommendation retired — see test_toin_observation_only.py"
+        reason="PR-B5: get_recommendation retired -- see test_toin_observation_only.py"
     )
     def test_get_recommendation_insufficient_samples(self):
         pass
 
     @pytest.mark.skip(
-        reason="PR-B5: get_recommendation retired — see test_toin_observation_only.py"
+        reason="PR-B5: get_recommendation retired -- see test_toin_observation_only.py"
     )
     def test_get_recommendation_aggressive_compression(self):
         pass
 
     @pytest.mark.skip(
-        reason="PR-B5: get_recommendation retired — see test_toin_observation_only.py"
+        reason="PR-B5: get_recommendation retired -- see test_toin_observation_only.py"
     )
     def test_get_recommendation_conservative_compression(self):
         pass
 
     @pytest.mark.skip(
-        reason="PR-B5: get_recommendation retired — see test_toin_observation_only.py"
+        reason="PR-B5: get_recommendation retired -- see test_toin_observation_only.py"
     )
     def test_get_recommendation_skip_compression(self):
         pass
 
     @pytest.mark.skip(
-        reason="PR-B5: get_recommendation retired — see test_toin_observation_only.py"
+        reason="PR-B5: get_recommendation retired -- see test_toin_observation_only.py"
     )
     def test_get_recommendation_disabled(self):
         pass
@@ -435,7 +435,7 @@ class TestToolIntelligenceNetwork:
         config = TOINConfig(max_patterns=3)
         toin = ToolIntelligenceNetwork(config)
 
-        # Items must have structurally different keys — structure_hash
+        # Items must have structurally different keys -- structure_hash
         # is based on field names, not values.
         sig_a = ToolSignature.from_items([{"field_a": 1}])
         sig_b = ToolSignature.from_items([{"field_b": 1}])
@@ -445,8 +445,10 @@ class TestToolIntelligenceNetwork:
         for sig in (sig_a, sig_b, sig_c):
             toin.record_compression(
                 tool_signature=sig,
-                original_count=100, compressed_count=50,
-                original_tokens=1000, compressed_tokens=500,
+                original_count=100,
+                compressed_count=50,
+                original_tokens=1000,
+                compressed_tokens=500,
                 strategy="top_n",
             )
         assert toin.get_stats()["patterns_tracked"] == 3
@@ -454,8 +456,10 @@ class TestToolIntelligenceNetwork:
         # Adding a 4th pattern should evict the oldest (sig_a)
         toin.record_compression(
             tool_signature=sig_d,
-            original_count=100, compressed_count=50,
-            original_tokens=1000, compressed_tokens=500,
+            original_count=100,
+            compressed_count=50,
+            original_tokens=1000,
+            compressed_tokens=500,
             strategy="top_n",
         )
         stats = toin.get_stats()
@@ -475,8 +479,10 @@ class TestToolIntelligenceNetwork:
             sig = ToolSignature.from_items([{f"field_{i}": i}])
             toin.record_compression(
                 tool_signature=sig,
-                original_count=100, compressed_count=50,
-                original_tokens=1000, compressed_tokens=500,
+                original_count=100,
+                compressed_count=50,
+                original_tokens=1000,
+                compressed_tokens=500,
                 strategy="top_n",
             )
         assert toin.get_stats()["patterns_tracked"] == 100
