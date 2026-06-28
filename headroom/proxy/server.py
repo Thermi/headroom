@@ -2506,12 +2506,16 @@ def create_app(config: ProxyConfig | None = None) -> FastAPI:
             "output_cost_per_token": 0.0000011,
             "litellm_provider": "deepseek",
             "mode": "chat",
+            "max_input_tokens": 1_000_000,
+            "max_tokens": 1_000_000,
         }
         _litellm.model_cost["deepseek-v4-pro"] = {
             "input_cost_per_token": 0.000001,
             "output_cost_per_token": 0.000004,
             "litellm_provider": "deepseek",
             "mode": "chat",
+            "max_input_tokens": 1_000_000,
+            "max_tokens": 1_000_000,
         }
 
         # Claude 4.6 models
@@ -2697,7 +2701,13 @@ def create_app(config: ProxyConfig | None = None) -> FastAPI:
                 if proxy._background_compression_enabled:
                     await proxy._background_compressor.start()
 
-                # Elect the single owner worker (first worker wins the lock).
+                # Start periodic cleanup of expired batch contexts
+                from ..ccr.batch_store import get_batch_context_store
+
+                _batch_store = get_batch_context_store()
+                await _batch_store.start_background_cleanup()
+
+                # Only start beacon if we acquire the lock (first worker wins)
                 _beacon_is_owner[0] = _try_acquire_beacon_lock()
 
                 # Only the owner worker runs the reconciler. With uvicorn
@@ -2740,6 +2750,14 @@ def create_app(config: ProxyConfig | None = None) -> FastAPI:
             proxy._background_compression_executor.shutdown(wait=False)
             if proxy.code_graph_watcher:
                 proxy.code_graph_watcher.stop()
+
+            try:
+                from ..ccr.batch_store import get_batch_context_store
+
+                await get_batch_context_store().stop_background_cleanup()
+            except Exception:
+                pass
+
             await proxy.shutdown()
             shutdown_headroom_tracing()
             shutdown_otel_metrics()

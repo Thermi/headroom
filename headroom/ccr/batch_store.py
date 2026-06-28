@@ -242,6 +242,44 @@ class BatchContextStore:
             counts[ctx.provider] = counts.get(ctx.provider, 0) + 1
         return counts
 
+    async def start_background_cleanup(self, interval: int = 300) -> None:
+        """Start a periodic background task to purge expired entries.
+
+        Only one task runs at a time; calling this multiple times is safe.
+        The default interval of 300s (5 min) keeps stale batch contexts
+        from accumulating over the 24h TTL window.
+
+        Args:
+            interval: Seconds between cleanup sweeps.
+        """
+        if self._cleanup_task is not None and not self._cleanup_task.done():
+            return
+
+        async def _sweep_loop() -> None:
+            while True:
+                try:
+                    await asyncio.sleep(interval)
+                    removed = await self.cleanup_expired()
+                    if removed:
+                        logger.debug(
+                            "BatchContextStore: swept %d expired entries", removed
+                        )
+                except asyncio.CancelledError:
+                    break
+                except Exception:
+                    logger.debug("BatchContextStore: sweep error", exc_info=True)
+
+        self._cleanup_task = asyncio.ensure_future(_sweep_loop())
+
+    async def stop_background_cleanup(self) -> None:
+        """Cancel the background cleanup task."""
+        if self._cleanup_task is not None and not self._cleanup_task.done():
+            self._cleanup_task.cancel()
+            try:
+                await self._cleanup_task
+            except asyncio.CancelledError:
+                pass
+
     def get_memory_stats(self) -> ComponentStats:
         """Get memory statistics for the MemoryTracker.
 
