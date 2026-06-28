@@ -6,6 +6,10 @@ import sys
 import warnings
 from typing import Any, Literal, cast
 
+# Apply memory budget before any headroom imports so dataclass defaults
+# (models.py, etc.) see scaled env vars when HEADROOM_MEMORY_MODE is set.
+import headroom.memory.budget  # noqa: E402 — side-effect: sets os.environ
+
 import click
 
 from headroom import paths as _paths
