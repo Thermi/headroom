@@ -42,7 +42,7 @@ def _fake_embed_result(text: str) -> np.ndarray:
 
 
 class TestSerializeArray:
-    """Round-trip fidelity for numpy array ↔ JSON dict."""
+    """Round-trip fidelity for numpy array <-> JSON dict."""
 
     def test_roundtrip_1d(self) -> None:
         arr = np.array([1.0, 2.0, 3.0], dtype=np.float32)
@@ -320,7 +320,7 @@ class TestEmbeddingServerClient:
     @pytest.mark.asyncio
     async def test_timeout_closes_and_raises(self) -> None:
         client = EmbeddingServerClient("/fake.sock")
-        reader = FakeStreamReader([])  # empty → readline blocks forever
+        reader = FakeStreamReader([])  # empty -> readline blocks forever
         writer = FakeStreamWriter()
         client._reader = reader
         client._writer = writer
@@ -341,7 +341,7 @@ class TestEmbeddingServerClient:
     @pytest.mark.asyncio
     async def test_eof_closes_and_raises(self) -> None:
         client = EmbeddingServerClient("/fake.sock")
-        reader = FakeStreamReader([])  # empty → returns b"" (EOF)
+        reader = FakeStreamReader([])  # empty -> returns b"" (EOF)
         writer = FakeStreamWriter()
         client._reader = reader
         client._writer = writer

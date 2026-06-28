@@ -69,6 +69,20 @@ The proxy silently falls back to Python-only mode if `_core.so` isn't built. Alw
 - Record new fixtures: `scripts/record_fixtures.py`
 - Heavy tests marked `@pytest.mark.slow`, `@pytest.mark.real_llm`, `@pytest.mark.live`
 
+## Known warnings on Windows
+
+`PytestUnhandledThreadExceptionWarning` is a benign artefact of
+`subprocess.Popen` output-capture on Windows.  The background reader
+thread decodes captured bytes with the default system encoding
+(`cp1252`).  Any non-ASCII Unicode character in test output can trigger
+a `UnicodeDecodeError` in the reader (e.g. `0x8f` for em dash `—`).
+
+This warning is harmless — it appears **after** the test run has
+already collected and reported the output.  It can be safely ignored.
+The project's `pyproject.toml` already suppresses
+`PytestUnraisableExceptionWarning`; adding the same for this class is
+appropriate.
+
 ## Style and commits
 
 - Google‑style docstrings in Python
