@@ -13,6 +13,7 @@ LLM context also optimizes its own memory files for minimum token consumption.
 from __future__ import annotations
 
 import logging
+import os as _os
 import re
 import subprocess
 import time
@@ -287,8 +288,6 @@ class MemoryBudgetManager:
 # =============================================================================
 # Global memory budget — env-var-driven scaling of all cache / store caps
 # =============================================================================
-
-import os as _os
 
 _MEMORY_MODE = _os.environ.get("HEADROOM_MEMORY_MODE", "default")
 _MEMORY_DIVISOR = {"low": 10, "minimal": 100}.get(_MEMORY_MODE, 1)
