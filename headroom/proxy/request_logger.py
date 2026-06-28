@@ -88,6 +88,7 @@ class RequestLogger:
     """
 
     MAX_LOG_ENTRIES = 10_000
+    MAX_TOTAL_BYTES = 100 * 1024 * 1024  # 100 MB — evict oldest if exceeded
     MAX_BUFFER_SIZE = 512 * 1024  # 512 KB before forced flush
     FLUSH_INTERVAL_SECONDS = 5.0
 
@@ -95,6 +96,7 @@ class RequestLogger:
         self.log_file = Path(log_file) if log_file else None
         self.log_full_messages = log_full_messages
         self._logs: deque[RequestLog] = deque(maxlen=self.MAX_LOG_ENTRIES)
+        self._logs_bytes: int = 0
 
         self._buffer: list[bytes] = []
         self._buffer_size = 0
@@ -165,6 +167,12 @@ class RequestLogger:
                 entry.response_content = redact_image_base64(entry.response_content)
 
         self._logs.append(entry)
+        self._logs_bytes += sys.getsizeof(entry)
+
+        # Evict oldest entries if total byte budget exceeded
+        while self._logs_bytes > self.MAX_TOTAL_BYTES and len(self._logs) > 1:
+            old = self._logs.popleft()
+            self._logs_bytes -= sys.getsizeof(old)
 
         if self.log_file:
             log_dict = asdict(entry)
