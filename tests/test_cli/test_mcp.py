@@ -19,7 +19,6 @@ from headroom.cli.mcp import (
     load_mcp_config,
     save_mcp_config,
 )
-from headroom.mcp_registry.base import ServerSpec
 
 # Check if MCP SDK is available
 try:
@@ -40,11 +39,26 @@ def temp_claude_dir(tmp_path):
 
 @pytest.fixture
 def mock_claude_config_path(temp_claude_dir):
-    """Patch the MCP config path to use temp directory."""
+    """Patch the MCP config path to use temp directory.
+
+    Also mocks the claude CLI as absent so tests exercise the mcp.json
+    fallback path rather than the `claude mcp add` path.
+    """
+    import shutil as _shutil
+
     config_path = temp_claude_dir / "mcp.json"
+    # Capture the original function reference before patching so we don't recurse.
+    _real_which = _shutil.which
+
+    def which_no_claude(cmd):
+        if cmd == "claude":
+            return None
+        return _real_which(cmd)
+
     with patch("headroom.cli.mcp.MCP_CONFIG_PATH", config_path):
         with patch("headroom.cli.mcp.CLAUDE_CONFIG_DIR", temp_claude_dir):
-            yield config_path
+            with patch("headroom.cli.mcp.shutil.which", side_effect=which_no_claude):
+                yield config_path
 
 
 @pytest.fixture
@@ -53,30 +67,6 @@ def mock_mcp_available():
     mock_mcp = MagicMock()
     with patch.dict(sys.modules, {"mcp": mock_mcp}):
         yield mock_mcp
-
-
-class FakeRegistrar:
-    name = "fake"
-    display_name = "Fake Agent"
-
-    def __init__(self, *, configured: bool = True) -> None:
-        self.configured = configured
-        self.removed: list[str] = []
-
-    def detect(self) -> bool:
-        return True
-
-    def get_server(self, server_name: str) -> ServerSpec | None:
-        if self.configured and server_name == "headroom":
-            return ServerSpec(name="headroom", command="headroom", args=("mcp", "serve"))
-        return None
-
-    def unregister_server(self, server_name: str) -> bool:
-        if self.configured and server_name == "headroom":
-            self.configured = False
-            self.removed.append(server_name)
-            return True
-        return False
 
 
 class TestMCPConfigFunctions:
@@ -145,7 +135,7 @@ class TestMCPConfigFunctions:
 # globals (MCP_CONFIG_PATH, shutil.which) and exercised the same surface
 # already covered by:
 #   - tests/test_mcp_registry/test_claude_registrar.py (file/CLI behavior
-#     with proper constructor injection — no patches)
+#     with proper constructor injection -- no patches)
 #   - tests/test_mcp_registry/test_install.py (orchestrator semantics with
 #     fake registrars)
 # Removing the duplicates leaves the CLI as glue: argument parsing +
@@ -156,45 +146,65 @@ class TestMCPConfigFunctions:
 class TestMCPUninstallCommand:
     """Test 'headroom mcp uninstall' command."""
 
-    def test_uninstall_removes_headroom(self, mock_mcp_available):
-        """Uninstall removes headroom through detected registrars."""
-        registrar = FakeRegistrar()
+    def test_uninstall_removes_headroom(self, mock_claude_config_path, mock_mcp_available):
+        """Uninstall removes headroom from the legacy config file."""
+        # Pre-populate the config directly rather than depending on
+        # `mcp install` plumbing -- keeps the test focused on uninstall.
+        mock_claude_config_path.write_text(
+            json.dumps(
+                {
+                    "mcpServers": {
+                        "headroom": {"command": "headroom", "args": ["mcp", "serve"]},
+                    }
+                }
+            )
+        )
 
         runner = CliRunner()
-        with patch("headroom.mcp_registry.get_all_registrars", return_value=[registrar]):
-            result = runner.invoke(main, ["mcp", "uninstall"])
+        result = runner.invoke(main, ["mcp", "uninstall"])
 
         assert result.exit_code == 0
         assert "removed" in result.output.lower()
-        assert registrar.removed == ["headroom"]
 
-    def test_uninstall_checks_only_headroom_servers(self):
-        """Uninstall only asks registrars to remove Headroom-owned servers."""
-        registrar = FakeRegistrar()
+        config = json.loads(mock_claude_config_path.read_text())
+        assert "headroom" not in config["mcpServers"]
+
+    def test_uninstall_preserves_other_servers(self, mock_claude_config_path):
+        """Uninstall preserves other MCP servers."""
+        # Create config with headroom and another server
+        config = {
+            "mcpServers": {
+                "headroom": {"command": "headroom", "args": ["mcp", "serve"]},
+                "github": {"command": "github-mcp", "args": []},
+            }
+        }
+        mock_claude_config_path.write_text(json.dumps(config))
 
         runner = CliRunner()
-        with patch("headroom.mcp_registry.get_all_registrars", return_value=[registrar]):
-            result = runner.invoke(main, ["mcp", "uninstall"])
+        result = runner.invoke(main, ["mcp", "uninstall"])
 
         assert result.exit_code == 0
-        assert registrar.removed == ["headroom"]
+
+        config = json.loads(mock_claude_config_path.read_text())
+        assert "headroom" not in config["mcpServers"]
+        assert "github" in config["mcpServers"]
 
     def test_uninstall_no_config_file(self, mock_claude_config_path):
         """Uninstall with no config file exits cleanly."""
         runner = CliRunner()
-        with patch("headroom.mcp_registry.get_all_registrars", return_value=[]):
-            result = runner.invoke(main, ["mcp", "uninstall"])
+        result = runner.invoke(main, ["mcp", "uninstall"])
 
         assert result.exit_code == 0
         assert "nothing to uninstall" in result.output.lower()
 
     def test_uninstall_not_configured(self, mock_claude_config_path):
         """Uninstall when headroom not in config exits cleanly."""
-        registrar = FakeRegistrar(configured=False)
+        # Create config without headroom
+        config = {"mcpServers": {"other": {"command": "other"}}}
+        mock_claude_config_path.write_text(json.dumps(config))
 
         runner = CliRunner()
-        with patch("headroom.mcp_registry.get_all_registrars", return_value=[registrar]):
-            result = runner.invoke(main, ["mcp", "uninstall"])
+        result = runner.invoke(main, ["mcp", "uninstall"])
 
         assert result.exit_code == 0
         assert "not configured" in result.output.lower()
@@ -206,29 +216,36 @@ class TestMCPStatusCommand:
     def test_status_not_configured(self, mock_claude_config_path):
         """Status shows not configured when no config."""
         runner = CliRunner()
-        registrar = FakeRegistrar(configured=False)
-        with patch("headroom.mcp_registry.get_all_registrars", return_value=[registrar]):
-            result = runner.invoke(main, ["mcp", "status"])
+        result = runner.invoke(main, ["mcp", "status"])
 
         assert result.exit_code == 0
         assert "MCP SDK" in result.output
         # Should show not configured
         assert (
-            "✗" in result.output
+            "[X]" in result.output
             or "Not configured" in result.output.lower()
             or "No config" in result.output
         )
 
     def test_status_configured(self, mock_claude_config_path, mock_mcp_available):
-        """Status reports configured when a registrar has headroom."""
-        registrar = FakeRegistrar(configured=True)
+        """Status reports configured when the legacy config has headroom."""
+        # Pre-populate the legacy mcp.json directly. mcp_status() reads
+        # from MCP_CONFIG_PATH, which the fixture redirects here.
+        mock_claude_config_path.write_text(
+            json.dumps(
+                {
+                    "mcpServers": {
+                        "headroom": {"command": "headroom", "args": ["mcp", "serve"]},
+                    }
+                }
+            )
+        )
 
         runner = CliRunner()
-        with patch("headroom.mcp_registry.get_all_registrars", return_value=[registrar]):
-            result = runner.invoke(main, ["mcp", "status"])
+        result = runner.invoke(main, ["mcp", "status"])
 
         assert result.exit_code == 0
-        assert "✓ Configured" in result.output
+        assert "[OK] Configured" in result.output
 
 
 class TestMCPServeCommand:
@@ -340,30 +357,46 @@ class TestMCPServerInitialization:
 # subprocess.run patches against the old direct CLI invocation. Equivalent
 # coverage now lives in tests/test_mcp_registry/test_claude_registrar.py
 # using constructor injection (`claude_cli="/path/to/fake"`) and bounded
-# subprocess.run mocks at the registrar boundary — no module-level patches.
+# subprocess.run mocks at the registrar boundary -- no module-level patches.
 
 
-class TestMCPUninstallWithRegistrars:
-    """Test mcp_uninstall delegates to registrars."""
+class TestMCPUninstallWithClaudeCLI:
+    """Test mcp_uninstall when the claude CLI is available."""
 
-    def test_uninstall_reports_removed_registrar_server(self):
-        registrar = FakeRegistrar(configured=True)
+    def test_uninstall_calls_claude_mcp_remove(self):
+        """Uninstall calls claude mcp remove when headroom is registered."""
+        calls = []
 
-        runner = CliRunner()
-        with patch("headroom.mcp_registry.get_all_registrars", return_value=[registrar]):
-            result = runner.invoke(main, ["mcp", "uninstall"])
-
-        assert result.exit_code == 0
-        assert "Fake Agent" in result.output
-        assert registrar.removed == ["headroom"]
-
-    def test_uninstall_skips_unconfigured_registrar(self):
-        registrar = FakeRegistrar(configured=False)
+        def capturing_run(cmd, **kwargs):
+            calls.append(list(cmd))
+            return MagicMock(returncode=0, stderr="")
 
         runner = CliRunner()
-        with patch("headroom.mcp_registry.get_all_registrars", return_value=[registrar]):
-            result = runner.invoke(main, ["mcp", "uninstall"])
+        with patch("headroom.cli.mcp.shutil.which", return_value="/usr/bin/claude"):
+            with patch("headroom.cli.mcp.subprocess.run", side_effect=capturing_run):
+                result = runner.invoke(main, ["mcp", "uninstall"])
 
         assert result.exit_code == 0
-        assert "nothing to uninstall" in result.output.lower()
-        assert registrar.removed == []
+        assert "removed" in result.output.lower()
+        subcommands = [c[2] for c in calls]
+        assert "remove" in subcommands
+
+    def test_uninstall_skips_remove_when_not_registered(self):
+        """Uninstall does not call remove when headroom is not registered via claude CLI."""
+        calls = []
+
+        def capturing_run(cmd, **kwargs):
+            calls.append(list(cmd))
+            # mcp get returns non-zero -> not registered
+            if "get" in cmd:
+                return MagicMock(returncode=1, stderr="")
+            return MagicMock(returncode=0, stderr="")
+
+        runner = CliRunner()
+        with patch("headroom.cli.mcp.shutil.which", return_value="/usr/bin/claude"):
+            with patch("headroom.cli.mcp.subprocess.run", side_effect=capturing_run):
+                result = runner.invoke(main, ["mcp", "uninstall"])
+
+        assert result.exit_code == 0
+        subcommands = [c[2] for c in calls]
+        assert "remove" not in subcommands

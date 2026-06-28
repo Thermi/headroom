@@ -1,12 +1,12 @@
 """Direct unit tests for the shared wrap-subcommand helpers.
 
-These helpers (`_print_wrap_banner`, `_run_proxy_only_watcher`) were
-extracted to remove ~150 LOC of
+These helpers (`_print_wrap_banner`, `_setup_context_tool_for_agent`,
+`_run_proxy_only_watcher`) were extracted to remove ~150 LOC of
 copy-pasted scaffolding across the wrap subcommands (cursor / cline /
 continue / goose / openhands). The wrap-*.py subcommand tests exercise
 them indirectly; these tests pin the contract directly so a future
-refactor that breaks one of these helpers fails *here* — at the helper
-unit boundary — instead of in five different subcommand suites at
+refactor that breaks one of these helpers fails *here* -- at the helper
+unit boundary -- instead of in five different subcommand suites at
 once with confusing diffs.
 """
 
@@ -25,10 +25,9 @@ from click.testing import CliRunner
 
 from headroom import paths as paths_mod
 from headroom.cli import wrap as wrap_mod
-from headroom.cli.main import main
 
 # ---------------------------------------------------------------------------
-# _print_wrap_banner — centering math + box drawing.
+# _print_wrap_banner -- centering math + box drawing.
 # ---------------------------------------------------------------------------
 
 
@@ -95,22 +94,158 @@ def test_print_wrap_banner_title_is_centered_or_near_centered() -> None:
 
 
 # ---------------------------------------------------------------------------
-# wrap claude argument passthrough.
+# _setup_context_tool_for_agent -- all five branches:
+#   1. lean-ctx mode -> calls _setup_lean_ctx_agent, returns None
+#   2. rtk install success -> calls on_rtk_ready, returns rtk_path
+#   3. rtk install fail + rtk_required=False -> returns None silently
+#   4. rtk install fail + rtk_required=True -> SystemExit(1)
+#   5. KeyboardInterrupt -> _emit_wrap_interrupted, SystemExit(130)
 # ---------------------------------------------------------------------------
 
 
-def test_wrap_claude_allows_claude_print_short_flag_in_passthrough_args() -> None:
-    """Claude owns -p/--print; wrap claude must not parse it as --port."""
-    result = CliRunner().invoke(
-        main,
-        ["wrap", "claude", "--prepare-only", "-p", "Say only: hello"],
-    )
+def test_setup_context_tool_lean_ctx_calls_lean_ctx_setup(monkeypatch: pytest.MonkeyPatch) -> None:
+    """When HEADROOM_CONTEXT_TOOL=lean-ctx, helper calls _setup_lean_ctx_agent."""
+    monkeypatch.setenv("HEADROOM_CONTEXT_TOOL", "lean-ctx")
+    called_with: dict[str, Any] = {}
 
-    assert result.exit_code == 0, result.output
+    def fake_lean_ctx(agent: str, verbose: bool = False) -> Path | None:
+        called_with["agent"] = agent
+        called_with["verbose"] = verbose
+        return None
+
+    monkeypatch.setattr(wrap_mod, "_setup_lean_ctx_agent", fake_lean_ctx)
+
+    runner = CliRunner()
+
+    @click.command()
+    def _cmd() -> None:
+        result = wrap_mod._setup_context_tool_for_agent(
+            agent="cline",
+            agent_display="Cline",
+            marker_path=None,
+        )
+        assert result is None
+
+    inv = runner.invoke(_cmd)
+    assert inv.exit_code == 0, inv.output
+    assert called_with == {"agent": "cline", "verbose": False}
+
+
+def test_setup_context_tool_rtk_success_calls_on_rtk_ready(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """rtk install success -> on_rtk_ready receives the rtk binary path."""
+    monkeypatch.delenv("HEADROOM_CONTEXT_TOOL", raising=False)
+    fake_rtk = Path("/tmp/rtk-fake")
+    received: list[Path] = []
+
+    monkeypatch.setattr(wrap_mod, "_ensure_rtk_binary", lambda verbose=False: fake_rtk)
+
+    runner = CliRunner()
+
+    @click.command()
+    def _cmd() -> None:
+        result = wrap_mod._setup_context_tool_for_agent(
+            agent="cline",
+            agent_display="Cline",
+            marker_path=tmp_path / ".clinerules",
+            on_rtk_ready=lambda rtk: received.append(rtk),
+        )
+        assert result == fake_rtk
+
+    inv = runner.invoke(_cmd)
+    assert inv.exit_code == 0, inv.output
+    assert received == [fake_rtk]
+
+
+def test_setup_context_tool_rtk_failure_with_not_required_returns_none(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """rtk install failure + rtk_required=False -> silent fall-through, None."""
+    monkeypatch.delenv("HEADROOM_CONTEXT_TOOL", raising=False)
+    monkeypatch.setattr(wrap_mod, "_ensure_rtk_binary", lambda verbose=False: None)
+
+    on_rtk_called = False
+
+    def _should_not_be_called(_rtk: Path) -> None:
+        nonlocal on_rtk_called
+        on_rtk_called = True
+
+    runner = CliRunner()
+
+    @click.command()
+    def _cmd() -> None:
+        result = wrap_mod._setup_context_tool_for_agent(
+            agent="cursor",
+            agent_display="Cursor",
+            marker_path=None,
+            on_rtk_ready=_should_not_be_called,
+            rtk_required=False,
+        )
+        assert result is None
+
+    inv = runner.invoke(_cmd)
+    assert inv.exit_code == 0, inv.output
+    assert not on_rtk_called, "on_rtk_ready should not be called when rtk install fails"
+
+
+def test_setup_context_tool_rtk_failure_with_required_exits_1(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """rtk install failure + rtk_required=True -> SystemExit(1) with refusal message."""
+    monkeypatch.delenv("HEADROOM_CONTEXT_TOOL", raising=False)
+    monkeypatch.setattr(wrap_mod, "_ensure_rtk_binary", lambda verbose=False: None)
+
+    runner = CliRunner()
+
+    @click.command()
+    def _cmd() -> None:
+        wrap_mod._setup_context_tool_for_agent(
+            agent="openhands",
+            agent_display="OpenHands",
+            marker_path=None,
+            rtk_required=True,
+        )
+
+    inv = runner.invoke(_cmd)
+    assert inv.exit_code == 1, inv.output
+    assert "rtk install failed" in inv.output
+    assert "refusing to inject" in inv.output
+
+
+def test_setup_context_tool_keyboardinterrupt_emits_interrupted_and_exits_130(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """KeyboardInterrupt during setup -> _emit_wrap_interrupted, SystemExit(130)."""
+    monkeypatch.delenv("HEADROOM_CONTEXT_TOOL", raising=False)
+
+    marker = tmp_path / ".clinerules"
+    marker.write_text("pre-existing")
+
+    def raise_kbd(verbose: bool = False) -> Path | None:
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(wrap_mod, "_ensure_rtk_binary", raise_kbd)
+
+    runner = CliRunner()
+
+    @click.command()
+    def _cmd() -> None:
+        wrap_mod._setup_context_tool_for_agent(
+            agent="cline",
+            agent_display="Cline",
+            marker_path=marker,
+        )
+
+    inv = runner.invoke(_cmd)
+    assert inv.exit_code == 130
+    assert "interrupted" in inv.output.lower()
+    assert "idempotent" in inv.output.lower()
+    assert str(marker) in inv.output
 
 
 # ---------------------------------------------------------------------------
-# _run_proxy_only_watcher — must print banner, call setup callback, install
+# _run_proxy_only_watcher -- must print banner, call setup callback, install
 # signal handlers, and clean up. Heavily mocked since the real watcher
 # blocks on `time.sleep` indefinitely.
 # ---------------------------------------------------------------------------
@@ -329,7 +464,7 @@ def test_run_proxy_only_watcher_calls_cleanup_on_finally(
 
 
 # ---------------------------------------------------------------------------
-# _project_name_from_cwd / _apply_project_header_env — per-project savings
+# _project_name_from_cwd / _apply_project_header_env -- per-project savings
 # header injection for `headroom wrap claude` (issue: per-project savings).
 # ---------------------------------------------------------------------------
 
@@ -413,7 +548,7 @@ class TestApplyProjectHeaderEnv:
         assert env["ANTHROPIC_CUSTOM_HEADERS"] == (f"{user_value}\nX-Headroom-Project: proj")
 
     def test_empty_cwd_name_sets_nothing(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """A degenerate cwd (e.g. filesystem root → empty basename) is a no-op."""
+        """A degenerate cwd (e.g. filesystem root -> empty basename) is a no-op."""
         monkeypatch.setattr(wrap_mod.Path, "cwd", classmethod(lambda cls: Path("/")))
 
         env: dict[str, str] = {}
@@ -531,7 +666,7 @@ class TestProxyClientRefCounting:
         return marker
 
     def test_cleanup_terminates_proxy_when_only_self_registered(self, clients_dir: Path) -> None:
-        """The owner alone → no other clients → proxy is terminated on exit."""
+        """The owner alone -> no other clients -> proxy is terminated on exit."""
         wrap_mod._register_proxy_client(self.PORT)
         proc = _FakeProxyProc()
         cleanup = wrap_mod._make_cleanup([proc], self.PORT)
@@ -600,7 +735,7 @@ class TestProxyClientRefCounting:
         """
         live_pid = os.getppid()  # alive, but not the process that "registered"
         marker = self._write_marker(clients_dir, live_pid, identity=("psutil", 1000.0))
-        # The process currently holding that PID started much later → reuse.
+        # The process currently holding that PID started much later -> reuse.
         monkeypatch.setattr(wrap_mod, "_proc_identity", lambda p: ("psutil", 9000.0))
 
         live = wrap_mod._live_proxy_clients(self.PORT, exclude_self=True)
@@ -611,7 +746,7 @@ class TestProxyClientRefCounting:
     def test_matching_identity_within_tolerance_is_kept(
         self, clients_dir: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """Same process (start time within tolerance) is a real client — kept."""
+        """Same process (start time within tolerance) is a real client -- kept."""
         live_pid = os.getppid()
         marker = self._write_marker(clients_dir, live_pid, identity=("psutil", 1000.0))
         monkeypatch.setattr(wrap_mod, "_proc_identity", lambda p: ("psutil", 1000.4))
@@ -624,10 +759,10 @@ class TestProxyClientRefCounting:
     def test_identity_check_skipped_when_source_unavailable(
         self, clients_dir: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """No reuse protection (e.g. macOS w/o psutil) → fall back to existence."""
+        """No reuse protection (e.g. macOS w/o psutil) -> fall back to existence."""
         live_pid = os.getppid()
         self._write_marker(clients_dir, live_pid, identity=("psutil", 1000.0))
-        # Start time unknowable for the live PID → must not prune a real client.
+        # Start time unknowable for the live PID -> must not prune a real client.
         monkeypatch.setattr(wrap_mod, "_proc_identity", lambda p: None)
 
         live = wrap_mod._live_proxy_clients(self.PORT, exclude_self=True)

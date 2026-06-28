@@ -71,7 +71,7 @@ class TestErrorClassification:
 
 class TestPathsRelatedAsTypo:
     def test_identical_basename_different_dir_is_typo(self):
-        # Same file in two locations — common path-typo case.
+        # Same file in two locations -- common path-typo case.
         assert _paths_related_as_typo("/a/state.rs", "/b/state.rs")
 
     def test_close_basename_is_typo(self):
@@ -256,7 +256,7 @@ class TestTrafficLearner:
 
     @pytest.mark.asyncio
     async def test_error_recovery_bash(self, learner: TrafficLearner):
-        """Test error→recovery pattern extraction for Bash commands."""
+        """Test error->recovery pattern extraction for Bash commands."""
         # First: a failed command
         await learner.on_tool_result(
             tool_name="Bash",
@@ -279,7 +279,7 @@ class TestTrafficLearner:
 
     @pytest.mark.asyncio
     async def test_error_recovery_read(self, learner: TrafficLearner):
-        """Test error→recovery for Read tool (wrong path → correct path)."""
+        """Test error->recovery for Read tool (wrong path -> correct path)."""
         await learner.on_tool_result(
             tool_name="Read",
             tool_input={"file_path": "/src/old_module.py"},
@@ -344,7 +344,7 @@ class TestTrafficLearner:
         """Test that patterns need min_evidence before saving."""
         learner = TrafficLearner(backend=None, min_evidence=3)
 
-        # Same error→recovery pattern 3 times
+        # Same error->recovery pattern 3 times
         for _ in range(3):
             await learner.on_tool_result(
                 tool_name="Bash",
@@ -738,7 +738,7 @@ class TestLoadPersistedPatterns:
 
 
 # =============================================================================
-# Category → recommendation routing
+# Category -> recommendation routing
 # =============================================================================
 
 
@@ -829,9 +829,9 @@ class TestFlushDebounce:
 
         await learner.stop()
 
-        # start() kicked a flush dirty→false at some point; stop() also calls
+        # start() kicked a flush dirty->false at some point; stop() also calls
         # flush_to_file once (final flush). We want evidence the worker did
-        # NOT call flush on every sleep tick — cap is generous.
+        # NOT call flush on every sleep tick -- cap is generous.
         assert call_count <= 5, f"Expected few flushes, got {call_count}"
         assert call_count >= 1, "Expected at least one flush during the burst"
 
@@ -966,12 +966,12 @@ class TestEvidencePersistence:
                 importance=0.7,
             )
 
-        # Two sightings → save with evidence_count=2.
+        # Two sightings -> save with evidence_count=2.
         await learner._accumulate(mk())
         await learner._accumulate(mk())
         await _wait_for_saved(learner, 1, db)
 
-        # Three more sightings → three bumps.
+        # Three more sightings -> three bumps.
         for _ in range(3):
             await learner._accumulate(mk())
         await learner.stop()
@@ -1099,7 +1099,7 @@ def _make_project(path):
 class TestFlushToFile:
     @pytest.mark.asyncio
     async def test_end_to_end_writes_per_project(self, tmp_path, monkeypatch):
-        """Happy path: anchored patterns → bucketed per project → writer called."""
+        """Happy path: anchored patterns -> bucketed per project -> writer called."""
         db = tmp_path / "memory.db"
         _init_db(db)
         backend = _FakeBackend(db)
@@ -1124,7 +1124,7 @@ class TestFlushToFile:
                     importance=0.6,
                 )
 
-            # Two sightings → save at evidence_count=2 (crosses live-flush gate).
+            # Two sightings -> save at evidence_count=2 (crosses live-flush gate).
             await learner._accumulate(mk())
             await learner._accumulate(mk())
             await _wait_for_saved(learner, 1, db)
@@ -1170,7 +1170,7 @@ class TestFlushToFile:
 
     @pytest.mark.asyncio
     async def test_early_returns_no_plugin(self, monkeypatch):
-        """No plugin detected → flush is a no-op."""
+        """No plugin detected -> flush is a no-op."""
         learner = TrafficLearner(backend=None, agent_type="unknown", min_evidence=1)
         _install_plugin_registry(monkeypatch, None)
         # Seed an accumulator entry so the check isn't vacuously "no patterns".
@@ -1187,7 +1187,7 @@ class TestFlushToFile:
 
     @pytest.mark.asyncio
     async def test_early_return_no_patterns(self, monkeypatch):
-        """Empty accumulator and empty DB → flush returns without calling writer."""
+        """Empty accumulator and empty DB -> flush returns without calling writer."""
         writer = _FakeWriter()
         plugin = _FakePlugin(roots=[_make_project("/x/a")], writer=writer)
         _install_plugin_registry(monkeypatch, plugin)
@@ -1214,7 +1214,7 @@ class TestFlushToFile:
             2,
         )
         await learner.flush_to_file()
-        assert writer.calls == []  # no roots → short-circuits before writer
+        assert writer.calls == []  # no roots -> short-circuits before writer
 
     @pytest.mark.asyncio
     async def test_discover_projects_does_not_block_the_event_loop(self, tmp_path, monkeypatch):
@@ -1265,7 +1265,7 @@ class TestFlushToFile:
         _install_plugin_registry(monkeypatch, plugin)
 
         learner = TrafficLearner(backend=None, agent_type="claude", min_evidence=1)
-        # Content has no absolute path — should be dropped as un-anchored.
+        # Content has no absolute path -- should be dropped as un-anchored.
         learner._pattern_counts["h"] = (
             ExtractedPattern(
                 category=PatternCategory.PREFERENCE,
@@ -1302,7 +1302,7 @@ class TestFlushToFile:
 
 
 # =============================================================================
-# Internal helper edge cases — _resolve_backend_db_path / _collect_all_patterns
+# Internal helper edge cases -- _resolve_backend_db_path / _collect_all_patterns
 # / _hydrate_persisted_state / _bump_persisted_evidence
 # =============================================================================
 
@@ -1385,7 +1385,7 @@ class TestHydrateEdgeCases:
 
     @pytest.mark.asyncio
     async def test_missing_db_file(self, tmp_path):
-        """Backend with a db_path that doesn't exist → hydrate is a no-op."""
+        """Backend with a db_path that doesn't exist -> hydrate is a no-op."""
         backend = _FakeBackend(tmp_path / "not-there.db")
         learner = TrafficLearner(backend=backend, min_evidence=1)
         await learner._hydrate_persisted_state()
@@ -1642,21 +1642,21 @@ class TestRefineErrorRecovery:
             self._mk_read(error_path=error_path, success_path=str(a), evidence=2),
         ]
         refined = _refine_error_recovery(patterns)
-        # Not collapsed — only one distinct success_path.
+        # Not collapsed -- only one distinct success_path.
         assert all(p.metadata.get("collapsed") is not True for p in refined)
         assert len(refined) == 2
 
     def test_recency_ranking_prefers_fresh_over_stale_heavy(self, tmp_path):
         target = tmp_path / "lib.rs"
         target.write_text("x")
-        # Heavy but old: evidence=10, seen 10 days ago → score ~10 * 0.5**2 = 2.5
+        # Heavy but old: evidence=10, seen 10 days ago -> score ~10 * 0.5**2 = 2.5
         heavy_old = self._mk_read(
             error_path=str(tmp_path / "old.rs"),
             success_path=str(target),
             evidence=10,
             last_seen=datetime.now(UTC) - timedelta(days=10),
         )
-        # Light but fresh: evidence=3, seen now → score ~3
+        # Light but fresh: evidence=3, seen now -> score ~3
         light_fresh = self._mk_read(
             error_path=str(tmp_path / "fresh.rs"),
             success_path=str(target),
@@ -1742,7 +1742,7 @@ class TestRefineErrorRecovery:
             last_seen_at=datetime.now(UTC),
         )
         recs = _patterns_to_recommendations([stale])
-        # Section should be skipped entirely — no recommendation produced.
+        # Section should be skipped entirely -- no recommendation produced.
         assert recs == []
 
     def test_oserror_during_revalidation_keeps_row(self, monkeypatch):
@@ -1994,7 +1994,7 @@ class TestLoadPersistedPatternsTimestamps:
         )
         conn.commit()
         conn.close()
-        # Should not raise — the row is simply skipped (no recognizable category).
+        # Should not raise -- the row is simply skipped (no recognizable category).
         patterns = _load_persisted_patterns_from_sqlite(db)
         assert patterns == []
 
@@ -2056,7 +2056,7 @@ class TestHydrateLegacyRow:
         import json as _json
 
         conn = _sql.connect(db)
-        # No `category` key in metadata — must still hydrate.
+        # No `category` key in metadata -- must still hydrate.
         conn.execute(
             "INSERT INTO memories (id, content, metadata) VALUES (?,?,?)",
             (
@@ -2220,7 +2220,7 @@ class TestStripSystemReminders:
         assert TrafficLearner._strip_system_reminders(text) == "abc"
 
     def test_unclosed_reminder_drops_to_eos(self) -> None:
-        # Malformed input — we'd rather drop than persist scaffolding.
+        # Malformed input -- we'd rather drop than persist scaffolding.
         assert TrafficLearner._strip_system_reminders("hello <system-reminder>oops") == "hello "
 
     def test_realworld_colgrep_reminder(self) -> None:
@@ -2387,7 +2387,7 @@ class TestExtractPreferencesRealCorrections:
 
 class TestExtractPreferencesSentenceBoundary:
     """The tighter capture group must reject mid-sentence rambling so we
-    never persist fragments like ``of Grep, Glob. When spawning agents…``."""
+    never persist fragments like ``of Grep, Glob. When spawning agents...``."""
 
     def _learner(self) -> TrafficLearner:
         return TrafficLearner(backend=None, min_evidence=1)
@@ -2395,7 +2395,7 @@ class TestExtractPreferencesSentenceBoundary:
     def test_long_unbroken_paragraph_yields_no_preference(self) -> None:
         learner = self._learner()
         # 100+ chars after the trigger word with no '.', '!', '?', or
-        # '\n' anywhere — the kind of payload that would have matched
+        # '\n' anywhere -- the kind of payload that would have matched
         # the old ``.{10,100}`` regex and produced a mid-word
         # truncation. The new bound forbids it: we need a terminator
         # OR end-of-string within 98 chars of the trigger.
@@ -2409,7 +2409,7 @@ class TestExtractPreferencesSentenceBoundary:
         # Relaxation: a short user utterance without trailing
         # punctuation is a complete thought, not a truncation. End-of-
         # input counts as a boundary as long as the captured length
-        # fits the 8–98 char window.
+        # fits the 8-98 char window.
         learner = self._learner()
         out = learner._extract_preferences("don't use git push, I'll push manually")
         assert len(out) == 1
@@ -2445,7 +2445,9 @@ class TestExtractPreferencesSentenceBoundary:
 class TestTrimBySize:
     """_trim_by_size drops lowest-value patterns when rendered size exceeds limit."""
 
-    def _make_pattern(self, content: str, evidence: int = 1, importance: float = 0.5) -> ExtractedPattern:
+    def _make_pattern(
+        self, content: str, evidence: int = 1, importance: float = 0.5
+    ) -> ExtractedPattern:
         return ExtractedPattern(
             category=PatternCategory.ENVIRONMENT,
             content=content,
@@ -2454,28 +2456,28 @@ class TestTrimBySize:
         )
 
     def test_no_limit_passthrough(self):
-        """No limit set → all patterns pass through."""
+        """No limit set -> all patterns pass through."""
         learner = TrafficLearner(backend=None, min_evidence=1, max_memory_bytes=None)
         patterns = [self._make_pattern("a"), self._make_pattern("b")]
         result = learner._trim_by_size(patterns)
         assert result == patterns
 
     def test_zero_limit_passthrough(self):
-        """Zero limit → all patterns pass through (treated as unlimited)."""
+        """Zero limit -> all patterns pass through (treated as unlimited)."""
         learner = TrafficLearner(backend=None, min_evidence=1, max_memory_bytes=0)
         patterns = [self._make_pattern("a"), self._make_pattern("b")]
         result = learner._trim_by_size(patterns)
         assert result == patterns
 
     def test_under_limit_passthrough(self):
-        """Total size under limit → all patterns pass through."""
+        """Total size under limit -> all patterns pass through."""
         learner = TrafficLearner(backend=None, min_evidence=1, max_memory_bytes=10_000)
         patterns = [self._make_pattern("a"), self._make_pattern("b")]
         result = learner._trim_by_size(patterns)
         assert result == patterns
 
     def test_trim_below_limit(self):
-        """Total size over limit → lowest-value patterns dropped."""
+        """Total size over limit -> lowest-value patterns dropped."""
         learner = TrafficLearner(backend=None, min_evidence=1, max_memory_bytes=50)
         high = self._make_pattern("A" * 30, evidence=10, importance=0.9)
         low = self._make_pattern("B" * 30, evidence=1, importance=0.1)
@@ -2487,18 +2489,20 @@ class TestTrimBySize:
         """Highest-value pattern preserved even when many low-value ones exist."""
         learner = TrafficLearner(backend=None, min_evidence=1, max_memory_bytes=60)
         high = self._make_pattern("HIGH" * 10, evidence=100, importance=0.9)
-        low_patterns = [self._make_pattern(f"low-{i}", evidence=1, importance=0.1) for i in range(50)]
+        low_patterns = [
+            self._make_pattern(f"low-{i}", evidence=1, importance=0.1) for i in range(50)
+        ]
         result = learner._trim_by_size([high] + low_patterns)
         assert result[0].content == high.content
 
     def test_empty_patterns_list(self):
-        """Empty list → empty list."""
+        """Empty list -> empty list."""
         learner = TrafficLearner(backend=None, min_evidence=1, max_memory_bytes=100)
         result = learner._trim_by_size([])
         assert result == []
 
     def test_single_pattern_fits(self):
-        """Single pattern under limit → kept."""
+        """Single pattern under limit -> kept."""
         learner = TrafficLearner(backend=None, min_evidence=1, max_memory_bytes=100)
         p = self._make_pattern("A" * 10)
         result = learner._trim_by_size([p])
@@ -2506,14 +2510,14 @@ class TestTrimBySize:
         assert result[0].content == p.content
 
     def test_single_pattern_exceeds_limit(self):
-        """Single pattern exceeding limit → dropped."""
+        """Single pattern exceeding limit -> dropped."""
         learner = TrafficLearner(backend=None, min_evidence=1, max_memory_bytes=10)
         p = self._make_pattern("A" * 100)
         result = learner._trim_by_size([p])
         assert result == []
 
     def test_trim_by_value_equal_size(self):
-        """Two patterns of equal size → lower-value one dropped."""
+        """Two patterns of equal size -> lower-value one dropped."""
         learner = TrafficLearner(backend=None, min_evidence=1, max_memory_bytes=60)
         high = self._make_pattern("X" * 30, evidence=5, importance=0.9)
         low = self._make_pattern("Y" * 30, evidence=5, importance=0.1)
@@ -2524,6 +2528,7 @@ class TestTrimBySize:
     def test_trim_logs_message(self, caplog):
         """Trimming logs a message with before/after counts."""
         import logging
+
         caplog.set_level(logging.INFO)
         learner = TrafficLearner(backend=None, min_evidence=1, max_memory_bytes=30)
         high = self._make_pattern("A" * 10, evidence=10, importance=0.9)
@@ -2532,4 +2537,3 @@ class TestTrimBySize:
         learner._trim_by_size([high, low, mid])
         assert "trimmed" in caplog.text
         assert "3" in caplog.text
-

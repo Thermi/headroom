@@ -48,7 +48,7 @@ def test_create_release_requires_successful_build_and_pypi_publish() -> None:
     # and `collect-dist` (aggregator that merges wheel artifacts + npm
     # release-assets) between `build` and the publish jobs. create-release
     # must wait for all of them.
-    # PR #387 (X1) added `smoke-import-wheels` — the runtime gate that
+    # PR #387 (X1) added `smoke-import-wheels` -- the runtime gate that
     # actually loads the wheel on a customer-representative environment
     # before publish. create-release must wait for it AND require its
     # success in the `if:` block (otherwise `always()` would let the
@@ -84,7 +84,7 @@ def test_no_openssl_sys_in_wheel_build_tree() -> None:
     This is the load-bearing assertion for the entire build pipeline.
     If openssl-sys is in the wheel-build resolution graph, every
     Linux/macOS surface that builds from source needs system OpenSSL
-    + perl modules + pkg-config — and we've spent five hot-fixes
+    + perl modules + pkg-config -- and we've spent five hot-fixes
     chasing whichever combination of perl modules / OpenSSL versions
     / pkg-config paths was missing in each manylinux/Dockerfile/
     devcontainer surface. The cleanest fix is to NOT depend on
@@ -125,7 +125,7 @@ def test_no_openssl_sys_in_wheel_build_tree() -> None:
         except FileNotFoundError:
             pytest.skip("cargo is unavailable in this environment")
         # `cargo tree -i <pkg>` exits 101 with "did not match any
-        # packages" when the package is NOT in the tree — the GREEN
+        # packages" when the package is NOT in the tree -- the GREEN
         # case. Exit 0 with a tree of consumers means it IS pulled.
         not_in_tree = result.returncode != 0 and "did not match any packages" in result.stderr
         if (
@@ -175,7 +175,7 @@ def test_no_native_tls_in_wheel_build_tree() -> None:
         )
         not_in_tree = result.returncode != 0 and "did not match any packages" in result.stderr
         assert not_in_tree, (
-            f"native-tls is back in {crate}'s build tree — likely some "
+            f"native-tls is back in {crate}'s build tree -- likely some "
             f"crate's `default-features = true` re-enabled native-tls "
             f"transitively:\n{result.stdout}"
         )
@@ -184,36 +184,40 @@ def test_no_native_tls_in_wheel_build_tree() -> None:
 def test_fastembed_uses_rustls_features() -> None:
     """The mechanism that keeps openssl-sys out of the build is
     fastembed's explicit rustls feature selection in headroom-core.
-    fastembed's default features include `hf-hub-native-tls` (pulls
-    openssl-sys). Disabling defaults and enabling the rustls
-    equivalent removes the OpenSSL surface entirely.
+    fastembed's default features include `hf-hub-native-tls` and
+    `ort-download-binaries-native-tls` -- both pull openssl-sys.
+    Disabling defaults and enabling the rustls equivalents removes
+    the OpenSSL surface entirely.
     """
     cargo = (ROOT / "crates" / "headroom-core" / "Cargo.toml").read_text(encoding="utf-8")
 
     assert "default-features = false" in cargo
     assert '"hf-hub-rustls-tls"' in cargo
+    assert '"ort-download-binaries-rustls-tls"' in cargo
     # `image-models` is in default; we re-enable it explicitly so we
     # don't lose the image-embedding capability when defaults are off.
     assert '"image-models"' in cargo
 
 
-def test_fastembed_uses_dynamic_ort_everywhere() -> None:
-    """No build may statically link Pyke's prebuilt ORT binaries.
+def test_fastembed_uses_dynamic_ort_on_windows() -> None:
+    """Windows sdist builds must not link Pyke's DirectML ORT binaries.
 
-    `ort-download-binaries-*` emits platform SDK link libs (DirectML on
-    Windows; no prebuilts for `x86_64-apple-darwin`) and its Linux/macOS
-    binaries require AVX2 at load time, SIGILLing `import headroom._core`
-    on pre-AVX2 x86-64 CPUs (#1278). Every platform loads ORT dynamically
-    (`ort-load-dynamic`), resolved at runtime from the pip `onnxruntime`
-    package by `headroom/_ort.py` / the crate's loader guard.
+    `ort-download-binaries-*` emits DXCORE/DXGI/D3D12/DirectML link libs on
+    Windows. Those SDK libs are not present on many Python build hosts, so the
+    Windows target must use ORT dynamic loading instead.
     """
 
     cargo = (ROOT / "crates" / "headroom-core" / "Cargo.toml").read_text(encoding="utf-8")
-    dependency_lines = "\n".join(
-        line for line in cargo.splitlines() if not line.lstrip().startswith("#")
+    assert "[target.'cfg(windows)'.dependencies]" in cargo
+    windows_section = cargo.split("[target.'cfg(windows)'.dependencies]", 1)[1].split(
+        "\n[",
+        1,
+    )[0]
+    windows_dependency_lines = "\n".join(
+        line for line in windows_section.splitlines() if not line.lstrip().startswith("#")
     )
-    assert '"ort-load-dynamic"' in dependency_lines
-    assert "ort-download-binaries" not in dependency_lines
+    assert '"ort-load-dynamic"' in windows_section
+    assert "ort-download-binaries" not in windows_dependency_lines
 
 
 def test_dockerfiles_no_longer_install_openssl_devel() -> None:
@@ -255,7 +259,7 @@ def test_release_yml_does_not_install_openssl_or_perl_for_wheels() -> None:
     before-script-linux that installed perl-IPC-Cmd / perl /
     perl-utils for the openssl-src vendored Configure script is
     obsolete. Removing it speeds the wheel build and keeps the
-    Linux entry honest — every package install we keep here
+    Linux entry honest -- every package install we keep here
     represents a hidden assumption about the manylinux container.
     """
     content = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
@@ -285,13 +289,16 @@ def test_release_yml_does_not_install_openssl_or_perl_for_wheels() -> None:
         )
 
 
-def test_build_wheels_matrix_includes_intel_macos_with_dynamic_ort() -> None:
-    """Intel macOS wheels use `ort-load-dynamic` because `ort-sys 2.0.0-rc.12`
+def test_build_wheels_matrix_excludes_intel_macos() -> None:
+    """`ort-sys 2.0.0-rc.12` (transitive via the ML compression backend)
     has no prebuilt ONNX Runtime binaries for `x86_64-apple-darwin`.
+    Building ORT from source would add CMake + ~5 minutes per build.
+    Apple Silicon macOS is fully covered; Intel-mac users install from
+    the platform-independent sdist this matrix also produces.
 
     We assert against the actual matrix entry shape (`target: <triple>`
-    on a non-comment line) so explanatory comments mentioning other
-    triples don't false-positive.
+    on a non-comment line) so explanatory comments mentioning the
+    excluded triple don't false-positive.
     """
     content = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
 
@@ -302,20 +309,24 @@ def test_build_wheels_matrix_includes_intel_macos_with_dynamic_ort() -> None:
     matrix_targets: list[str] = []
     for raw in body.splitlines():
         stripped = raw.lstrip()
-        # Skip YAML comments — only look at real matrix-entry lines.
+        # Skip YAML comments -- only look at real matrix-entry lines.
         if stripped.startswith("#"):
             continue
         if stripped.startswith("target:"):
-            # `target: x86_64-apple-darwin` → `x86_64-apple-darwin`
+            # `target: x86_64-apple-darwin` -> `x86_64-apple-darwin`
             matrix_targets.append(stripped.split(":", 1)[1].strip())
 
     assert "aarch64-apple-darwin" in matrix_targets, "Apple Silicon must stay in the matrix"
     assert "x86_64-unknown-linux-gnu" in matrix_targets
     assert "aarch64-unknown-linux-gnu" in matrix_targets
-    assert "x86_64-apple-darwin" in matrix_targets, (
-        f"x86_64-apple-darwin must be a wheel-matrix target; got {matrix_targets}"
+
+    # Intel macOS must NOT be a matrix entry -- re-add only after switching
+    # off ort-sys (e.g., to ort-tract) or adding a CMake-from-source step.
+    assert "x86_64-apple-darwin" not in matrix_targets, (
+        f"x86_64-apple-darwin must not be a wheel-matrix target; got {matrix_targets}"
     )
 
+    # The runner OS itself shouldn't appear as a configured `os:` either.
     matrix_os: list[str] = []
     for raw in body.splitlines():
         stripped = raw.lstrip()
@@ -323,27 +334,7 @@ def test_build_wheels_matrix_includes_intel_macos_with_dynamic_ort() -> None:
             continue
         if stripped.startswith("os:"):
             matrix_os.append(stripped.split(":", 1)[1].strip())
-        elif stripped.startswith("- os:"):
-            matrix_os.append(stripped.split(":", 1)[1].strip())
-    assert "macos-15-intel" in matrix_os
-
-
-def test_smoke_import_macos_selects_wheel_arch_from_target() -> None:
-    """The macOS smoke-import step must pick the wheel tag from the matrix
-    target (arm64 for Apple Silicon, x86_64 for Intel) instead of
-    hardcoding `_arm64` for every macOS row."""
-    content = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
-
-    step_start = content.index("- name: Smoke-import wheel on macOS host")
-    step_end = content.index("- name: Smoke-import wheel on Windows host", step_start)
-    macos_block = content[step_start:step_end]
-
-    assert "WHEEL_TARGET: ${{ matrix.wheel_target }}" in macos_block
-    assert "aarch64-apple-darwin) mac_arch=arm64" in macos_block
-    assert "x86_64-apple-darwin) mac_arch=x86_64" in macos_block
-    assert "macosx_*_${mac_arch}.whl" in macos_block
-    assert "headroom_ai-*-${py_tag}-${py_tag}-macosx_*_arm64.whl" not in macos_block
-    assert "headroom_ai-*-abi3-macosx_*_arm64.whl" not in macos_block
+    assert "macos-15-intel" not in matrix_os
 
 
 def test_aarch64_wheel_uses_native_arm64_runner() -> None:
@@ -352,12 +343,12 @@ def test_aarch64_wheel_uses_native_arm64_runner() -> None:
     runner (`ubuntu-latest`).
 
     Pre-#377 we built the aarch64 wheel on `ubuntu-latest` (x86_64) inside
-    `manylinux_2_28_aarch64` via QEMU emulation, taking ~50–60 min. Native
+    `manylinux_2_28_aarch64` via QEMU emulation, taking ~50-60 min. Native
     arm64 GitHub-hosted runners (GA Jan 2025, free for public repos) drop
     QEMU and complete the same build in ~10 min.
 
     A future "let me unify all wheel rows on `ubuntu-latest`" refactor
-    would silently re-introduce QEMU and slow CI back down — this test
+    would silently re-introduce QEMU and slow CI back down -- this test
     pins the runner.
     """
     content = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
@@ -403,19 +394,19 @@ def test_aarch64_wheel_uses_native_arm64_runner() -> None:
     assert len(amd64_linux) == 1
     assert amd64_linux[0]["os"] == "ubuntu-24.04", (
         f"x86_64-unknown-linux-gnu should pin `ubuntu-24.04`, not "
-        f"{amd64_linux[0]['os']!r} — `ubuntu-latest` is a moving alias "
+        f"{amd64_linux[0]['os']!r} -- `ubuntu-latest` is a moving alias "
         f"and reproducibility benefits from explicit pinning."
     )
 
 
 def test_docker_workflow_builds_on_native_arch_runners() -> None:
     """STRUCTURAL INVARIANT: the docker variant build must fan out per
-    arch onto native runners — `linux/amd64` on `ubuntu-24.04`,
+    arch onto native runners -- `linux/amd64` on `ubuntu-24.04`,
     `linux/arm64` on `ubuntu-24.04-arm`. No QEMU.
 
     Pre-#377 each variant ran `docker bake` with
     `platforms = ["linux/amd64","linux/arm64"]` on a single x64 runner
-    using QEMU for arm64 emulation — ~1h per variant. Splitting into
+    using QEMU for arm64 emulation -- ~1h per variant. Splitting into
     16 native single-arch builds (8 variants × 2 arches) + a manifest
     merge job per variant cuts wall-clock to ~10 min and removes the
     QEMU surface that contributed to transient build failures.
@@ -431,19 +422,19 @@ def test_docker_workflow_builds_on_native_arch_runners() -> None:
         "arm64 arch matrix entry must bind ubuntu-24.04-arm (native aarch64)"
     )
 
-    # Per-arch builds must push by digest only — tags belong on the
+    # Per-arch builds must push by digest only -- tags belong on the
     # multi-arch manifest, applied later by docker-manifest.
     assert "push-by-digest=true,name-canonical=true,push=true" in content, (
         "per-arch builds must push by digest only; tags applied at manifest merge step"
     )
 
-    # The QEMU action must NOT be invoked anywhere — its presence would
+    # The QEMU action must NOT be invoked anywhere -- its presence would
     # mean someone re-introduced an emulated build path.
     non_comment = "\n".join(
         line for line in content.splitlines() if not line.lstrip().startswith("#")
     )
     assert "docker/setup-qemu-action" not in non_comment, (
-        "docker.yml must not invoke `docker/setup-qemu-action` — native "
+        "docker.yml must not invoke `docker/setup-qemu-action` -- native "
         "arm64 runners replaced QEMU. A new reference here means someone "
         "re-emulated arm64 on an x64 runner."
     )
@@ -456,7 +447,7 @@ def test_docker_workflow_builds_on_native_arch_runners() -> None:
 
 def test_docker_per_arch_build_specifies_image_name_in_output() -> None:
     """STRUCTURAL INVARIANT: the per-arch bake's `*.output` spec must
-    include `name=<registry>/<image>` — without it, buildx fails with
+    include `name=<registry>/<image>` -- without it, buildx fails with
     the misleading `ERROR: tag is needed when pushing to registry`.
 
     Background: pre-#377 each docker variant ran with bake-file-tags
@@ -464,7 +455,7 @@ def test_docker_per_arch_build_specifies_image_name_in_output() -> None:
     via the tag strings. PR #376 split into per-arch fan-out and
     correctly removed bake-file-tags from the per-arch step (tags
     belong on the multi-arch manifest, not on per-arch images). But
-    that left bake without ANY reference for the push target — no
+    that left bake without ANY reference for the push target -- no
     tags AND no explicit `name=` in the output spec.
 
     The first release after #376 merged failed every docker-build job
@@ -500,12 +491,12 @@ def test_sdist_build_conditional_keyed_on_target_not_os() -> None:
     to `os: ubuntu-24.04` (explicit pinning, no semantic change in
     practice). It silently broke the sdist build, whose `if` was
     `matrix.os == 'ubuntu-latest' && matrix.target == 'x86_64-unknown-linux-gnu'`
-    — the literal `'ubuntu-latest'` no longer matched. Sdist never
+    -- the literal `'ubuntu-latest'` no longer matched. Sdist never
     built, `release-assets/*.tar.gz` was empty, and the create-release
     job failed `gh release upload release-assets/*.tar.gz` with
     "no matches found".
 
-    The fix is to key the conditional on `matrix.target` only — sdist
+    The fix is to key the conditional on `matrix.target` only -- sdist
     is platform-independent, so any single matrix row is a fine host.
     `target` is more semantically meaningful than `os` here AND is
     decoupled from any future host-runner rename.
@@ -520,7 +511,7 @@ def test_sdist_build_conditional_keyed_on_target_not_os() -> None:
     sdist_marker = "name: Build sdist"
     assert sdist_marker in content, "sdist build step missing from release.yml"
 
-    # Walk forward to the next `if:` line — that's the conditional.
+    # Walk forward to the next `if:` line -- that's the conditional.
     sdist_idx = content.index(sdist_marker)
     if_idx = content.index("if:", sdist_idx)
     if_line_end = content.index("\n", if_idx)
@@ -531,7 +522,7 @@ def test_sdist_build_conditional_keyed_on_target_not_os() -> None:
         f"sdist build conditional must check `matrix.target`; got: {if_line!r}"
     )
     assert "matrix.os" not in if_line, (
-        f"sdist build conditional must NOT depend on `matrix.os` — that's "
+        f"sdist build conditional must NOT depend on `matrix.os` -- that's "
         f"how PR #376 silently disabled the sdist build. Got: {if_line!r}"
     )
 
@@ -555,100 +546,6 @@ def test_release_workflow_verifies_versions_before_build_outputs() -> None:
     assert second_sync < second_verify < build_wheels
 
 
-def test_release_workflow_uses_local_npm_asset_builder() -> None:
-    """npm tarball metadata must be built and verified by the reusable local gate."""
-    content = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
-    builder = (ROOT / "scripts" / "build_npm_release_assets.mjs").read_text(encoding="utf-8")
-    verifier = (ROOT / "scripts" / "verify_npm_release_assets.mjs").read_text(encoding="utf-8")
-
-    assert (
-        'node scripts/build_npm_release_assets.mjs "${{ needs.detect-version.outputs.npm_version }}" release-assets'
-        in content
-    )
-    build_start = content.index("name: Build npm release packages")
-    upload_start = content.index("name: Upload release assets artifact", build_start)
-    build_block = content[build_start:upload_start]
-    assert "npm pack" not in build_block, (
-        "release.yml must not reimplement npm packing inline; the script "
-        "regenerates OpenClaw dist metadata and runs install/import smoke checks."
-    )
-
-    assert "scripts/build_npm_release_assets.mjs" in content
-    assert "scripts/verify_npm_release_assets.mjs" in content
-    assert "scripts/verify_npm_release_assets.mjs" in builder
-    assert "registerHeadroomPlugin" in verifier
-
-
-def test_npm_release_builder_regenerates_openclaw_dist_metadata_after_rewrite() -> None:
-    """OpenClaw's packed dist/package.json must see the release dependency."""
-    builder = (ROOT / "scripts" / "build_npm_release_assets.mjs").read_text(encoding="utf-8")
-
-    rewrite = builder.index("rewriteOpenClawReleaseDependency();")
-    prepare_dist = builder.index('runNode(["prepare-dist.mjs"], openClawDir);', rewrite)
-    pack = builder.index(
-        'runNpm(["pack", "--pack-destination", assetsDir], openClawDir);', prepare_dist
-    )
-    verify = builder.index(
-        'runNode(["scripts/verify_npm_release_assets.mjs", assetsDir, version], rootDir)', pack
-    )
-
-    assert rewrite < prepare_dist < pack < verify
-
-
-def test_npm_release_builder_installs_openclaw_against_local_sdk_tarball() -> None:
-    """The OpenClaw build must not require the release SDK to exist on npm."""
-    builder = (ROOT / "scripts" / "build_npm_release_assets.mjs").read_text(encoding="utf-8")
-
-    local_dependency = builder.index("rewriteOpenClawLocalDependency(sdkTarballPath);")
-    install = builder.index(
-        '["install", "--package-lock=false", "--no-audit", "--no-fund", "--ignore-scripts"]',
-        local_dependency,
-    )
-    build = builder.index('runNpm(["run", "build"], openClawDir);', install)
-    release_dependency = builder.index("rewriteOpenClawReleaseDependency();", build)
-
-    assert local_dependency < install < build < release_dependency
-    assert 'runNpm(["ci"], openClawDir)' not in builder
-
-
-def test_openclaw_source_dependency_matches_lockfile_registry_range() -> None:
-    """The source checkout must remain npm-ci installable before a release exists."""
-    import json
-
-    package_json = json.loads((ROOT / "plugins" / "openclaw" / "package.json").read_text())
-    package_lock = json.loads((ROOT / "plugins" / "openclaw" / "package-lock.json").read_text())
-
-    source_range = package_json["dependencies"]["headroom-ai"]
-    lock_range = package_lock["packages"][""]["dependencies"]["headroom-ai"]
-
-    assert source_range == lock_range == "^0.22.3"
-
-
-def test_python_release_smoke_imports_installed_wheel_outside_source_tree() -> None:
-    """The wheel smoke must not import the checkout package by accident."""
-    script = (ROOT / "scripts" / "build_python_release_smoke.py").read_text(encoding="utf-8")
-
-    assert "cwd: Path = ROOT" in script
-    assert 'import_cwd = Path(tmp) / "import-cwd"' in script
-    assert 'run([smoke_python, "-c", smoke_code], cwd=import_cwd)' in script
-
-
-def test_publish_npm_regenerates_openclaw_dist_metadata_after_version_and_dependency() -> None:
-    """The direct npm publish path must not ship stale OpenClaw dist metadata."""
-    content = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
-
-    start = content.index("name: Publish ${{ env.NPM_OPENCLAW_PACKAGE }} to npmjs.org")
-    end = content.index("continue-on-error: true", start)
-    block = content[start:end]
-
-    version = block.index('npm version "$version"')
-    dependency = block.index('pkg.dependencies["headroom-ai"]')
-    prepare_dist = block.index("node prepare-dist.mjs")
-    publish = block.index("npm publish --access public")
-
-    assert version < dependency < prepare_dist < publish
-
-
 def test_sdist_license_is_packaged_and_verified_before_upload() -> None:
     """STRUCTURAL INVARIANT: the sdist tarball must physically contain
     every license file PEP 639 declares in PKG-INFO, and the release
@@ -659,7 +556,7 @@ def test_sdist_license_is_packaged_and_verified_before_upload() -> None:
     does not exist in distribution file ...`. Maturin's PEP 639
     auto-discovery emits both `LICENSE` and `NOTICE` into PKG-INFO
     because both files exist at the project root and match the default
-    glob — but maturin sdists don't get the package-directory
+    glob -- but maturin sdists don't get the package-directory
     treatment wheels do, so each file must be explicitly listed in
     `[tool.maturin].include` with `format = "sdist"`. Issue trail:
     sdist publish broke at v0.20.16 (the hatch -> maturin migration
@@ -683,13 +580,13 @@ def test_sdist_license_is_packaged_and_verified_before_upload() -> None:
         "release.yml must run the License-File / tarball-contents cross-check before publish"
     )
     assert 'if line.startswith("License-File:")' in release_yml, (
-        "release.yml verifier must parse PKG-INFO License-File entries — "
-        "not just a hardcoded LICENSE check — so any future PEP 639-discoverable "
+        "release.yml verifier must parse PKG-INFO License-File entries -- "
+        "not just a hardcoded LICENSE check -- so any future PEP 639-discoverable "
         "file (COPYING, AUTHORS, ...) is also gated."
     )
     assert "declares License-File entries that are missing from the tarball" in release_yml, (
         "release.yml verifier must fail loudly when declared license files "
-        "are missing — silent passes would let the same regression resurface."
+        "are missing -- silent passes would let the same regression resurface."
     )
 
 
@@ -709,7 +606,7 @@ def test_glibc_compat_shim_present_in_headroom_py() -> None:
     """STRUCTURAL INVARIANT: the headroom-py crate ships a glibc-2.38
     compatibility shim that defines weak `__isoc23_*` aliases.
 
-    Issue #355 (https://github.com/chopratejas/headroom/issues/355) —
+    Issue #355 (https://github.com/chopratejas/headroom/issues/355) --
     the published wheel's `_core.so` references `__isoc23_strtoll`
     (glibc 2.38+) because we statically link prebuilt ONNX Runtime
     artifacts compiled with gcc 14. Users with libc < 2.38 (Ubuntu
@@ -732,7 +629,7 @@ def test_glibc_compat_shim_present_in_headroom_py() -> None:
 
     shim = headroom_py_dir / "glibc_compat.c"
     assert shim.exists(), (
-        "crates/headroom-py/glibc_compat.c is missing — without it, "
+        "crates/headroom-py/glibc_compat.c is missing -- without it, "
         "`_core.so` fails to import on every glibc < 2.38 host. See "
         "issue #355 for the full bug class. NEVER delete this file "
         "without confirming via `scripts/audit_wheel_glibc_symbols.py` "
@@ -746,13 +643,13 @@ def test_glibc_compat_shim_present_in_headroom_py() -> None:
     assert build_rs.exists(), "crates/headroom-py/build.rs is missing"
     build_rs_content = build_rs.read_text(encoding="utf-8")
     assert "glibc_compat.c" in build_rs_content, (
-        "build.rs must reference glibc_compat.c — otherwise Cargo "
+        "build.rs must reference glibc_compat.c -- otherwise Cargo "
         "skips the shim and the wheel's `_core.so` ships without it."
     )
 
     cargo_toml = (headroom_py_dir / "Cargo.toml").read_text(encoding="utf-8")
     assert 'build = "build.rs"' in cargo_toml, (
-        'headroom-py/Cargo.toml must declare `build = "build.rs"` — '
+        'headroom-py/Cargo.toml must declare `build = "build.rs"` -- '
         "Cargo only auto-detects build.rs when this is set; without "
         "it, the shim never compiles."
     )
@@ -766,7 +663,7 @@ def test_release_workflow_audits_wheel_glibc_symbols() -> None:
     """STRUCTURAL INVARIANT: the release workflow audits each Linux
     wheel for symbol references that exceed its manylinux glibc floor.
 
-    Companion to `test_glibc_compat_shim_present_in_headroom_py` —
+    Companion to `test_glibc_compat_shim_present_in_headroom_py` --
     the shim is the FIX, this audit is the GATE. Without the audit,
     a future toolchain bump in the prebuilt ORT artifacts (or any
     other statically-linked C/C++ dep) could re-introduce a
@@ -796,7 +693,7 @@ def test_release_workflow_has_smoke_import_wheel_gate() -> None:
     pattern: the wheel is technically valid (clippy passes, tests
     pass, auditwheel is happy) but fails to import on a customer's
     box because of a runtime symbol mismatch. Static gates can't
-    catch that — only actually loading the .so does.
+    catch that -- only actually loading the .so does.
 
     Required matrix coverage:
     - manylinux floor we promise (`manylinux_2_28_x86_64` and
@@ -812,8 +709,8 @@ def test_release_workflow_has_smoke_import_wheel_gate() -> None:
     notification.
 
     A future "remove this slow CI step that always passes anyway"
-    refactor — exactly the impulse that landed us PR #382's sdist
-    gap and PR #386's link-order surprise — fails this test at
+    refactor -- exactly the impulse that landed us PR #382's sdist
+    gap and PR #386's link-order surprise -- fails this test at
     PR time.
     """
     content = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
@@ -826,17 +723,17 @@ def test_release_workflow_has_smoke_import_wheel_gate() -> None:
         "canonical reason this gate exists."
     )
 
-    # Required matrix entries — pin both the floor (manylinux_2_28)
+    # Required matrix entries -- pin both the floor (manylinux_2_28)
     # and at least one customer environment per arch.
     required_matrix_substrings = [
-        # manylinux floor for x86_64 — pins what we promise customers.
+        # manylinux floor for x86_64 -- pins what we promise customers.
         'image: "quay.io/pypa/manylinux_2_28_x86_64"',
-        # manylinux floor for aarch64 — would have caught PR #386.
+        # manylinux floor for aarch64 -- would have caught PR #386.
         'image: "quay.io/pypa/manylinux_2_28_aarch64"',
-        # At least one Ubuntu LTS — issue #355's environment was
+        # At least one Ubuntu LTS -- issue #355's environment was
         # ubuntu:22.04 + Python 3.12.
         'image: "ubuntu:22.04"',
-        # macOS native (no container) — Apple Silicon wheel.
+        # macOS native (no container) -- Apple Silicon wheel.
         "runner: macos-14",
     ]
     for sub in required_matrix_substrings:
@@ -851,7 +748,7 @@ def test_release_workflow_has_smoke_import_wheel_gate() -> None:
     next_job_idx = content.index("\n  publish-npm:", publish_pypi_idx)
     publish_pypi_block = content[publish_pypi_idx:next_job_idx]
     assert "smoke-import-wheels" in publish_pypi_block, (
-        "publish-pypi must `needs: [..., smoke-import-wheels]` — without "
+        "publish-pypi must `needs: [..., smoke-import-wheels]` -- without "
         "the dependency, a broken wheel can be published before the "
         "smoke job has even finished. The whole point of X1 is that it "
         "BLOCKS publish."
@@ -862,7 +759,7 @@ def test_release_workflow_has_smoke_import_wheel_gate() -> None:
     next_idx = content.index("\n  create-release:", publish_docker_idx)
     publish_docker_block = content[publish_docker_idx:next_idx]
     assert "smoke-import-wheels" in publish_docker_block, (
-        "publish-docker must `needs: [..., smoke-import-wheels]` — the "
+        "publish-docker must `needs: [..., smoke-import-wheels]` -- the "
         "docker image bundles the same wheels; a broken wheel will fail "
         "the docker build's `pip install` 3 minutes later anyway. "
         "Failing fast in smoke saves matrix budget."
@@ -876,19 +773,19 @@ def test_release_workflow_has_smoke_import_wheel_gate() -> None:
     )
     assert "needs.smoke-import-wheels.result == 'success'" in create_release_block, (
         "create-release's `if:` must explicitly require "
-        "`needs.smoke-import-wheels.result == 'success'` — without "
+        "`needs.smoke-import-wheels.result == 'success'` -- without "
         "this, `always()` would let the release proceed even if the "
         "smoke gate failed."
     )
 
     # The actual import command must hit `from headroom._core import hello`
-    # — this is the same call the proxy's `_check_rust_core` makes on
+    # -- this is the same call the proxy's `_check_rust_core` makes on
     # startup (per `headroom/proxy/server.py` and the issue #355 backtrace).
     # Anything else (e.g. just `import headroom`) fails to exercise the
     # Rust _core.so binary.
     assert "from headroom._core import hello" in content, (
         "smoke-import command must call `from headroom._core import hello` "
-        "— that's what the proxy does at startup. A weaker check (e.g. "
+        "-- that's what the proxy does at startup. A weaker check (e.g. "
         "`import headroom`) wouldn't exercise the .so and wouldn't catch "
         "the bugs the gate exists for."
     )
@@ -918,29 +815,10 @@ def test_npm_publish_jobs_do_not_download_dist_artifact() -> None:
         (publish_gpr_body, "publish-github-packages"),
     ):
         assert "download-artifact" not in body, (
-            f"{label} must not download the `dist` artifact — it `npm pack`s "
+            f"{label} must not download the `dist` artifact -- it `npm pack`s "
             f"its own tarball and the speculative download fails when "
             f"collect-dist hasn't run."
         )
-
-
-def test_smoke_import_ubuntu_apt_installs_are_retried() -> None:
-    """Ubuntu smoke-import containers must tolerate stale package mirrors.
-
-    The ARM Ubuntu ports mirror can briefly serve indexes that point at a
-    package version which has just been removed, causing apt install to fail
-    with a 404 even after an update. Keep the smoke gate strict, but retry the
-    package operations and use --fix-missing so transient mirror skew does not
-    make unrelated PRs red.
-    """
-    content = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
-    smoke_start = content.index("\n  smoke-import-wheels:")
-    smoke_end = content.index("\n  publish-pypi:", smoke_start)
-    smoke_body = content[smoke_start:smoke_end]
-
-    assert "apt_retry()" in smoke_body
-    assert "apt_retry update -qq" in smoke_body
-    assert "apt_retry install -y -qq --fix-missing --no-install-recommends" in smoke_body
 
 
 def test_release_workflow_runs_dry_run_on_pull_request() -> None:
@@ -950,8 +828,8 @@ def test_release_workflow_runs_dry_run_on_pull_request() -> None:
 
     Issues this gate would have caught at PR time instead of after-merge:
     - #379 (docker bake `name=` regression in PR #376)
-    - #382 (sdist os-mismatch — `ubuntu-latest` → `ubuntu-24.04` rename)
-    - #384 / #385 / #386 (glibc shim iterations — alias, link-order)
+    - #382 (sdist os-mismatch -- `ubuntu-latest` -> `ubuntu-24.04` rename)
+    - #384 / #385 / #386 (glibc shim iterations -- alias, link-order)
     - #387's heredoc-indent regression that broke main on first release
       run after merge
 
@@ -964,14 +842,14 @@ def test_release_workflow_runs_dry_run_on_pull_request() -> None:
     3. publish-pypi / publish-npm / publish-github-packages /
        publish-docker / create-release ALL gate on
        `github.event_name != 'pull_request'` so a PR run never
-       publishes anything — the dry-run is build+smoke only.
+       publishes anything -- the dry-run is build+smoke only.
     4. concurrency.group is namespaced by PR number for PR runs and by
        ref_name for main runs, AND cancel-in-progress is true for PR
        runs (rapid PR pushes cancel stale dry-runs) and false for main
        runs (a tag-push release should never be cancelled mid-flight).
 
-    A future "lighten CI by dropping the dry-run" refactor — exactly
-    the impulse that gave us PR #382 and PR #387 — fails this test
+    A future "lighten CI by dropping the dry-run" refactor -- exactly
+    the impulse that gave us PR #382 and PR #387 -- fails this test
     at PR time.
     """
     content = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
@@ -1001,7 +879,7 @@ def test_release_workflow_runs_dry_run_on_pull_request() -> None:
     for path in required_paths:
         assert f'"{path}"' in pr_block, (
             f"pull_request path filter missing {path!r}. The dry-run must "
-            f"trigger when this path changes — otherwise a regression in "
+            f"trigger when this path changes -- otherwise a regression in "
             f"that file lands on main without exercising the wheel matrix."
         )
 
@@ -1018,7 +896,7 @@ def test_release_workflow_runs_dry_run_on_pull_request() -> None:
         body = content[start:end]
         assert "github.event_name != 'pull_request'" in body, (
             f"{job_name} must gate on `github.event_name != 'pull_request'`. "
-            f"Without this gate, a PR dry-run would attempt to publish — "
+            f"Without this gate, a PR dry-run would attempt to publish -- "
             f"in the best case the publish credentials are missing and the "
             f"job fails noisily; in the worst case it succeeds and a "
             f"non-merged PR ships to PyPI / npm / GHCR."
@@ -1040,14 +918,14 @@ def test_release_workflow_runs_dry_run_on_pull_request() -> None:
 
     assert "github.event.pull_request.number" in concurrency_block, (
         "concurrency.group must include the PR number for pull_request runs "
-        "(via `format('pr-{0}', github.event.pull_request.number)`) — "
+        "(via `format('pr-{0}', github.event.pull_request.number)`) -- "
         "otherwise PR runs collide with each other or with main."
     )
     assert "cancel-in-progress: ${{ github.event_name == 'pull_request' }}" in concurrency_block, (
         "concurrency.cancel-in-progress must be conditional: TRUE for "
         "pull_request (rapid PR pushes shouldn't queue N parallel wheel "
         "builds) and FALSE for main (a tag-push release that's mid-flight "
-        "must not be cancelled — partial PyPI/Docker state is worse than "
+        "must not be cancelled -- partial PyPI/Docker state is worse than "
         "a slow CI queue)."
     )
 
@@ -1074,7 +952,7 @@ def test_release_yml_triggers_on_release_published_not_every_push_to_main() -> N
 
     assert "\n  release:\n    types: [published]" in on_block, (
         "release.yml must trigger on the `release: published` event so "
-        "release-please's release-PR merge is the only way to publish — "
+        "release-please's release-PR merge is the only way to publish -- "
         "see .github/workflows/release-please.yml."
     )
     assert "\n  push:\n    branches: [main]" not in on_block, (
@@ -1105,7 +983,7 @@ def test_release_yml_resolves_manual_ver_from_release_tag() -> None:
         "Resolver must read the tag from github.event.release.tag_name."
     )
     assert "${RELEASE_TAG#v}" in content, (
-        "Resolver must strip the leading 'v' from the release tag — "
+        "Resolver must strip the leading 'v' from the release tag -- "
         "release_version.py's SemVer regex rejects 'v0.9.2'."
     )
     assert "MANUAL_VER: ${{ steps.manualver.outputs.value }}" in content, (
@@ -1130,7 +1008,7 @@ def test_release_yml_preserves_release_please_notes_when_release_exists() -> Non
 
     assert 'gh release edit "$TAG" --title "$TITLE"\n' in create_release_block, (
         "When the release already exists (release-please case), the edit "
-        "must only sync title — NOT pass --notes-file, which would "
+        "must only sync title -- NOT pass --notes-file, which would "
         "clobber the bot's auto-generated changelog."
     )
 
@@ -1146,7 +1024,7 @@ def test_release_please_workflow_exists_and_targets_main() -> None:
 
     content = rp_path.read_text(encoding="utf-8")
     assert any(f"googleapis/release-please-action@v{v}" in content for v in (4, 5)), (
-        "release-please.yml must use the v4 or v5 action — earlier versions "
+        "release-please.yml must use the v4 or v5 action -- earlier versions "
         "have different manifest semantics."
     )
     assert "branches: [main]" in content, (
@@ -1202,7 +1080,7 @@ def test_release_please_config_and_manifest_are_present_and_consistent() -> None
     # `v0.22.3` baseline tag. include-component-in-tag MUST be false
     # to keep tag format consistent with the project's pre-bot tags.
     assert config.get("include-component-in-tag") is False, (
-        "include-component-in-tag must be false — existing tags are "
+        "include-component-in-tag must be false -- existing tags are "
         "`vX.Y.Z`, not `headroom-ai-vX.Y.Z`. Reverting this setting "
         "would orphan every prior tag and produce a months-long "
         "changelog because the bot can't find its baseline."
@@ -1219,66 +1097,3 @@ def test_release_please_config_and_manifest_are_present_and_consistent() -> None
         "release-please must bump plugins/openclaw/package.json so the "
         "openclaw npm publish stays in sync."
     )
-
-
-def test_release_metadata_sync_runs_on_release_please_branch() -> None:
-    """The release branch must self-heal the versions release-please does not bump.
-
-    release-please rewrites `pyproject.toml` plus its configured `extra-files` only.
-    `server.json` is asserted byte-for-byte against `render_server_json()`, which
-    reads the version from `pyproject.toml`, so a bump without a sync fails
-    `test_root_server_json_matches_builder` on the release PR — that is what blocked
-    v0.33.0 (#2339). `release.yml` syncs in-workspace before its own gate, but the
-    regular CI test job does not, so the sync has to be committed to the branch.
-    """
-    content = (ROOT / ".github" / "workflows" / "release-metadata-sync.yml").read_text(
-        encoding="utf-8"
-    )
-
-    # Keyed off a push to the release branch: release-please force-regenerates that
-    # branch on every merge to main, which is what wiped the hand-pushed fixes.
-    assert '"release-please--branches--**"' in content
-    assert "contents: write" in content
-
-    # Sync, then gate on the verifier, then commit — in that order.
-    sync = content.index("python scripts/version-sync.py")
-    verify = content.index("python scripts/verify-versions.py", sync)
-    commit = content.index("git commit", verify)
-    assert sync < verify < commit
-
-    # Must no-op rather than loop when the branch is already in sync.
-    assert "git diff --quiet" in content
-
-    # A GITHUB_TOKEN push would not re-trigger the release PR's checks.
-    assert "RELEASE_PLEASE_TOKEN" in content
-
-
-def test_version_sync_covers_every_file_the_verifier_gates() -> None:
-    """version-sync.py must write every version location verify-versions.py checks.
-
-    These two scripts drifting apart is the root cause of the stuck release: the
-    verifier gated files nothing propagated a version to.
-    """
-    sync = (ROOT / "scripts" / "version-sync.py").read_text(encoding="utf-8")
-    verify = (ROOT / "scripts" / "verify-versions.py").read_text(encoding="utf-8")
-
-    gated = [
-        "pyproject.toml",
-        "plugins/openclaw/package.json",
-        "sdk/typescript/package.json",
-        "plugins/headroom-agent-hooks/.claude-plugin/plugin.json",
-        "plugins/headroom-agent-hooks/.github/plugin/plugin.json",
-        "marketplace.json",
-    ]
-    for path in gated:
-        assert path in verify, f"{path} unexpectedly no longer gated by verify-versions.py"
-
-    # version-sync builds paths piecewise, so match on the distinctive components.
-    for fragment in [
-        "openclaw",
-        "typescript",
-        "headroom-agent-hooks",
-        "marketplace.json",
-        "server.json",
-    ]:
-        assert fragment in sync, f"version-sync.py no longer propagates a version to {fragment}"

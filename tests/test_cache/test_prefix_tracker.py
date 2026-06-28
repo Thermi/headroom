@@ -1,4 +1,4 @@
-"""Tests for PrefixCacheTracker — cache-aware compression."""
+"""Tests for PrefixCacheTracker -- cache-aware compression."""
 
 import time
 
@@ -28,7 +28,7 @@ class TestPrefixCacheTracker:
         return PrefixCacheTracker("openai")
 
     def test_turn_0_no_freeze(self, tracker):
-        """First turn should never freeze — no cache state yet."""
+        """First turn should never freeze -- no cache state yet."""
         assert tracker.get_frozen_message_count() == 0
 
     def test_turn_1_with_cache_hit_freezes(self, tracker):
@@ -109,7 +109,7 @@ class TestPrefixCacheTracker:
 
         messages = [{"role": "user", "content": "Hello"}]
 
-        # Turn 1: only 500 tokens cached — below threshold
+        # Turn 1: only 500 tokens cached -- below threshold
         tracker.update_from_response(
             cache_read_tokens=0,
             cache_write_tokens=500,
@@ -175,20 +175,20 @@ class TestPrefixCacheTracker:
         """For Anthropic (90% discount), compression must save >90% to be worth it."""
         tracker._cached_message_count = 5
 
-        # 95% savings > 90% discount — should force compress
+        # 95% savings > 90% discount -- should force compress
         assert tracker.should_force_compress(2, 1000, 50) is True
 
-        # 50% savings < 90% discount — should NOT force compress
+        # 50% savings < 90% discount -- should NOT force compress
         assert tracker.should_force_compress(2, 1000, 500) is False
 
     def test_should_force_compress_openai(self, openai_tracker):
         """For OpenAI (50% discount), compression must save >50% to be worth it."""
         openai_tracker._cached_message_count = 5
 
-        # 60% savings > 50% discount — should force compress
+        # 60% savings > 50% discount -- should force compress
         assert openai_tracker.should_force_compress(2, 1000, 400) is True
 
-        # 40% savings < 50% discount — should NOT force compress
+        # 40% savings < 50% discount -- should NOT force compress
         assert openai_tracker.should_force_compress(2, 1000, 600) is False
 
     def test_estimate_message_tokens(self):
@@ -445,7 +445,7 @@ class TestSessionTrackerStore:
         store.get_or_create("session-c", "anthropic")  # Fill to capacity
         # Manually expire session-a
         store._trackers["session-a"]._last_activity = time.time() - 9999
-        # Adding a 4th triggers eviction — expired session-a goes first
+        # Adding a 4th triggers eviction -- expired session-a goes first
         store.get_or_create("session-d", "anthropic")
         assert "session-a" not in store._trackers
 
