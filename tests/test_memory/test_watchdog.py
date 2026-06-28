@@ -325,8 +325,11 @@ class TestEmbeddingServerClient:
         client._reader = reader
         client._writer = writer
 
-        # Patch wait_for to simulate timeout
-        async def fake_wait_for(*args: object, **kwargs: object) -> bytes:
+        # Patch wait_for to simulate timeout.  Must close the coroutine
+        # that reader.readline() produces to avoid a RuntimeWarning.
+        async def fake_wait_for(coro: object, *args: object, **kwargs: object) -> bytes:
+            if hasattr(coro, "close"):
+                coro.close()  # type: ignore[union-attr]
             raise asyncio.TimeoutError()
 
         with patch("asyncio.wait_for", fake_wait_for):
