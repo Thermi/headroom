@@ -316,8 +316,15 @@ _MEMORY_DEFAULTS: dict[str, int] = {
     "HEADROOM_GRAPH_MAX_ENTITIES": 50000,
     "HEADROOM_GRAPH_MAX_RELATIONSHIPS": 100000,
     "HEADROOM_LRU_CACHE_MAX_SIZE": 1000,
-    "HEADROOM_ONNX_INTRA_OP_THREADS": 2,
-    "HEADROOM_ONNX_INTER_OP_THREADS": 1,
+    # Kompress ONNX: intra-op / inter-op thread counts control CPU-side
+    # parallelism.  For GPU backends these threads handle I/O binding and
+    # memory management; reducing them lowers RSS without affecting
+    # inference throughput (actual computation runs on GPU).
+    "HEADROOM_KOMPRESS_ONNX_INTRA_THREADS": 2,
+    "HEADROOM_KOMPRESS_ONNX_INTER_THREADS": 1,
+    # Kompress batch size (number of 512-token chunks per ONNX call).
+    # Smaller batches use less scratch memory but increase call overhead.
+    "HEADROOM_KOMPRESS_BATCH_SIZE": 32,
 }
 
 
