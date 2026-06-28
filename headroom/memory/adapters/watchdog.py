@@ -57,10 +57,10 @@ class _EmbedProtocol(asyncio.Protocol):
     def __init__(self, embedder: OnnxLocalEmbedder) -> None:
         self._embedder = embedder
         self._buffer = b""
-        self._transport: asyncio.Transport | None = None
+        self._transport: Any = None
         self._busy = False
 
-    def connection_made(self, transport: asyncio.Transport) -> None:
+    def connection_made(self, transport: asyncio.BaseTransport) -> None:
         self._transport = transport
 
     def connection_lost(self, exc: Exception | None) -> None:
@@ -151,6 +151,8 @@ class EmbeddingServerClient:
     """
 
     DEFAULT_DIMENSION = 384
+    DEFAULT_MAX_TOKENS = 256
+    MODEL_NAME = "all-MiniLM-L6-v2 (sidecar)"
 
     def __init__(self, socket_path: str) -> None:
         self._socket_path = socket_path
@@ -162,10 +164,18 @@ class EmbeddingServerClient:
     def dimension(self) -> int:
         return self.DEFAULT_DIMENSION
 
+    @property
+    def max_tokens(self) -> int:
+        return self.DEFAULT_MAX_TOKENS
+
+    @property
+    def model_name(self) -> str:
+        return self.MODEL_NAME
+
     async def _ensure_connected(self) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
         if self._reader is not None and self._writer is not None:
             return self._reader, self._writer
-        reader, writer = await asyncio.open_unix_connection(self._socket_path)
+        reader, writer = await asyncio.open_unix_connection(self._socket_path)  # type: ignore[attr-defined]
         self._reader = reader
         self._writer = writer
         return reader, writer
@@ -196,7 +206,8 @@ class EmbeddingServerClient:
                 await self._close()
                 raise RuntimeError("Embedding server closed connection")
             try:
-                return json.loads(raw.decode("utf-8"))
+                result: dict[str, Any] = json.loads(raw.decode("utf-8"))  # type: ignore[no-any-return]
+                return result
             except json.JSONDecodeError as err:
                 raise RuntimeError(f"Bad response from embedding server: {raw!r}") from err
 
@@ -217,7 +228,7 @@ class EmbeddingServerClient:
     async def ping(self) -> bool:
         try:
             resp = await self._call({"method": "ping"})
-            return resp.get("pong", False)
+            return bool(resp.get("pong", False))
         except Exception:
             return False
 
