@@ -31,7 +31,7 @@ HEADROOM_CONFIG_DIR: /tmp/headroom-home/.headroom/config
       - ${HEADROOM_HOST_HOME:?set HEADROOM_HOST_HOME}/.codex:/tmp/headroom-home/.codex
       - ${HEADROOM_HOST_HOME:?set HEADROOM_HOST_HOME}/.gemini:/tmp/headroom-home/.gemini
     command: []
-    scale: 1
+    scale: 0
     env_file: .env
 
   proxy:
