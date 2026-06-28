@@ -23,6 +23,11 @@ Usage:
 
 from __future__ import annotations
 
+# Apply memory budget before any other imports so component-level
+# constants (class defaults, module constants) see the scaled values
+# when HEADROOM_MEMORY_MODE is set.
+import headroom.memory.budget  # noqa: F401 — side-effect: sets os.environ
+
 import argparse
 import asyncio
 import concurrent.futures
@@ -1376,6 +1381,8 @@ prefer_code_aware_for_code=_get_env_bool("HEADROOM_PREFER_CODE_AWARE_FOR_CODE", 
                 agent_type=config.traffic_learning_agent_type,
                 min_evidence=config.traffic_learning_min_evidence,
                 max_memory_bytes=config.traffic_learning_max_memory_bytes,
+                max_patterns=int(os.environ.get("HEADROOM_TRAFFIC_LEARNER_MAX_PATTERNS", "5000")),
+                max_persisted_ids=int(os.environ.get("HEADROOM_TRAFFIC_LEARNER_MAX_PERSISTED_IDS", "5000")),
             )
 
         # Code graph file watcher (live reindex on file changes)

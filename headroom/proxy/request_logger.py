@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import gzip
 import logging
+import os
 import sys
 import threading
 import time
@@ -87,8 +88,8 @@ class RequestLogger:
     pressure for the flush cycle.
     """
 
-    MAX_LOG_ENTRIES = 10_000
-    MAX_TOTAL_BYTES = 100 * 1024 * 1024  # 100 MB — evict oldest if exceeded
+    MAX_LOG_ENTRIES = int(os.environ.get("HEADROOM_REQUEST_LOGGER_MAX_ENTRIES", "10000"))
+    MAX_TOTAL_BYTES = int(os.environ.get("HEADROOM_REQUEST_LOGGER_MAX_BYTES", str(100 * 1024 * 1024)))
     MAX_BUFFER_SIZE = 512 * 1024  # 512 KB before forced flush
     FLUSH_INTERVAL_SECONDS = 5.0
 

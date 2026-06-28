@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
@@ -23,10 +24,10 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # Default TTL for batch contexts (24 hours - batches can take a while)
-DEFAULT_BATCH_CONTEXT_TTL = 86400
+DEFAULT_BATCH_CONTEXT_TTL = int(os.environ.get("HEADROOM_BATCH_STORE_TTL", "86400"))
 
 # Maximum contexts to store (prevent memory issues)
-MAX_BATCH_CONTEXTS = 10000
+MAX_BATCH_CONTEXTS = int(os.environ.get("HEADROOM_BATCH_STORE_MAX_CONTEXTS", "10000"))
 
 
 @dataclass

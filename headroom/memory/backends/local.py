@@ -199,20 +199,16 @@ class LocalBackend:
             if self._config.graph_db_path:
                 _graph_db_path = self._config.graph_db_path
             else:
-                # "memory.db" -> "memory_graph.db"
-                db_path = Path(self._config.db_path)
-                graph_db_path = str(db_path.parent / f"{db_path.stem}_graph{db_path.suffix}")
+                import os as _os
+                from headroom.memory.adapters.graph import InMemoryGraphStore
 
-            self._graph = SQLiteGraphStore(
-                db_path=graph_db_path,
-                page_cache_size_kb=self._config.graph_cache_size_kb,
-            )
-            logger.info(
-                f"LocalBackend: Using SQLiteGraphStore at {graph_db_path} "
-                f"(cache: {self._config.graph_cache_size_kb}KB)"
-            )
-        else:
-            from headroom.memory.adapters.graph import InMemoryGraphStore
+                _max_e = int(_os.environ.get("HEADROOM_GRAPH_MAX_ENTITIES", "50000"))
+                _max_r = int(_os.environ.get("HEADROOM_GRAPH_MAX_RELATIONSHIPS", "100000"))
+                self._graph = InMemoryGraphStore(max_entities=_max_e, max_relationships=_max_r)
+                logger.info(
+                    "LocalBackend: Using InMemoryGraphStore (entities=%d, relationships=%d)",
+                    _max_e, _max_r,
+                )
 
             self._graph = InMemoryGraphStore()
             logger.info("LocalBackend: Using InMemoryGraphStore (unbounded)")
