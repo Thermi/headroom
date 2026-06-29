@@ -941,7 +941,14 @@ def _calculate_throughput_stats(records: list[PerfRecord], window_seconds: float
     # 3. Compression
     compression_rates = []
     for r in records:
-        duration_ms = r.stages.get("compression_first_stage") or r.stages.get("compression")
+        # Prefer dedicated stage timings (anthropic: compression_first_stage,
+        # openai-ws: compression). Fall back to total optimization overhead
+        # when stage timings are unavailable (e.g. OpenAI REST chat completions).
+        duration_ms = (
+            r.stages.get("compression_first_stage")
+            or r.stages.get("compression")
+            or r.optimization_ms
+        )
         if duration_ms is not None and duration_ms > 0:
             compression_rates.append(r.tokens_before / (duration_ms / 1000.0))
 

@@ -358,3 +358,29 @@ def test_throughput_empty_and_percentiles():
     # _calculate_throughput_stats with empty records
     stats = _calculate_throughput_stats([], 10.0)
     assert stats["input_wall_clock"] == 0.0
+
+    # Compression falls back to optimization_ms when stage timings are missing
+    from headroom.perf.analyzer import PerfRecord as PR
+
+    rec_no_stages = PR(
+        timestamp="2026-06-15 10:00:00,000",
+        request_id="r1",
+        tokens_before=1500,
+        optimization_ms=30.0,
+        total_ms=500.0,
+        tokens_out=500,
+    )
+    rec_with_stages = PR(
+        timestamp="2026-06-15 10:00:01,000",
+        request_id="r2",
+        tokens_before=1000,
+        optimization_ms=10.0,
+        total_ms=400.0,
+        tokens_out=400,
+        stages={"compression_first_stage": 100.0},
+    )
+    stats = _calculate_throughput_stats([rec_no_stages, rec_with_stages], 3.0)
+    # rec_no_stages: 1500 / (30/1000) = 50000
+    # rec_with_stages: 1000 / (100/1000) = 10000 (uses stage timer, not optimization_ms)
+    # P50 of [50000, 10000] = 30000
+    assert stats["compression_p50"] == 30000.0

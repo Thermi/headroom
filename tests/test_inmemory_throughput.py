@@ -462,6 +462,58 @@ class TestThroughputFromInmemoryFallback:
 
         assert inmem_records[0].stages == {}
 
+    def test_compression_falls_back_to_optimization_ms(self):
+        """When no compression stage timing exists, optimization_ms is used as duration."""
+        from headroom.proxy.server import (
+            _INMEMORY_PERF_LOCK,
+            _INMEMORY_PERF_RECORDS,
+            _INMEMORY_STAGE_TIMINGS,
+            _INMEMORY_TIMINGS_LOCK,
+            store_inmemory_perf_record,
+        )
+
+        with _INMEMORY_PERF_LOCK:
+            _INMEMORY_PERF_RECORDS.clear()
+        with _INMEMORY_TIMINGS_LOCK:
+            _INMEMORY_STAGE_TIMINGS.clear()
+
+        now = datetime.now()
+        ts1 = (now - timedelta(seconds=8)).strftime("%Y-%m-%d %H:%M:%S,%f")[:-3]
+        ts2 = (now - timedelta(seconds=3)).strftime("%Y-%m-%d %H:%M:%S,%f")[:-3]
+
+        # Two records: one with stage timing, one without (optimization_ms only)
+        store_inmemory_perf_record(
+            _perf_record(
+                request_id="cpt-1",
+                timestamp=ts1,
+                tokens_before=1000,
+                optimization_ms=50.0,
+                stages={"compression_first_stage": 100.0},
+            )
+        )
+        store_inmemory_perf_record(
+            _perf_record(
+                request_id="cpt-2",
+                timestamp=ts2,
+                tokens_before=1500,
+                optimization_ms=30.0,
+                # No stages — simulate OpenAI REST request without stage timings
+            )
+        )
+
+        with _INMEMORY_PERF_LOCK:
+            inmem_records = list(_INMEMORY_PERF_RECORDS)
+
+        report = PerfReport(perf_records=inmem_records)
+        throughput = calculate_throughput(report)
+
+        rolling = throughput["rolling"]
+        # compression_p50 should be non-zero because optimization_ms is used
+        # as fallback for the record without stage timings
+        assert rolling["compression_p50"] > 0
+        # P50 of [10000, 50000] = 30000
+        assert rolling["compression_p50"] == 30000.0
+
 
 # ── Thread safety ──────────────────────────────────────────────────────────
 
