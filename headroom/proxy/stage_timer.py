@@ -184,6 +184,15 @@ async def emit_stage_timings_log(
             f"[{request_id}] STAGE_TIMINGS path={path} session_id={session_id} stages={padded!r}"
         )
 
+    # Store in memory for throughput stats when file logging is disabled
+    try:
+        numeric_stages = {k: float(v) for k, v in padded.items() if v is not None}
+        from headroom.proxy.server import store_inmemory_stage_timings
+
+        store_inmemory_stage_timings(request_id, numeric_stages)
+    except Exception:
+        pass
+
     if metrics is not None and hasattr(metrics, "record_stage_timings"):
         try:
             await metrics.record_stage_timings(path, summary)

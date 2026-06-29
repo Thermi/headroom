@@ -36,6 +36,7 @@ import os
 import sys
 import threading
 import time
+from collections import deque
 from collections.abc import Callable
 from dataclasses import fields, is_dataclass, replace
 from datetime import datetime, timezone
@@ -733,6 +734,35 @@ def _external_compressor_selection(compressors: set[str] | None) -> list[str] | 
         return ["*"]
     external = sorted(selected - set(BUILTIN_COMPRESSOR_FLAGS))
     return external or None
+
+
+# ── In-memory throughput buffers ─────────────────────────────────────────
+# When HEADROOM_NO_FILE_LOG is set, PERF/STAGE_TIMINGS log lines are not
+# written to disk. These in-memory buffers mirror what would have been
+# logged, so /stats throughput is populated even without file logging.
+
+_MAX_INMEMORY_PERF_RECORDS = 1000
+_INMEMORY_PERF_RECORDS: deque[Any] = deque(maxlen=_MAX_INMEMORY_PERF_RECORDS)
+_INMEMORY_STAGE_TIMINGS: dict[str, dict[str, float]] = {}
+_MAX_INMEMORY_STAGE_TIMINGS = 2000
+_INMEMORY_PERF_LOCK = threading.Lock()
+_INMEMORY_TIMINGS_LOCK = threading.Lock()
+
+
+def store_inmemory_perf_record(perf_record: Any) -> None:
+    """Store a PerfRecord in the in-memory buffer (thread-safe)."""
+    with _INMEMORY_PERF_LOCK:
+        _INMEMORY_PERF_RECORDS.append(perf_record)
+
+
+def store_inmemory_stage_timings(request_id: str, stages: dict[str, float]) -> None:
+    """Store stage timings for a request_id in the in-memory buffer (thread-safe)."""
+    with _INMEMORY_TIMINGS_LOCK:
+        _INMEMORY_STAGE_TIMINGS[request_id] = stages
+        if len(_INMEMORY_STAGE_TIMINGS) > _MAX_INMEMORY_STAGE_TIMINGS:
+            keys = list(_INMEMORY_STAGE_TIMINGS.keys())
+            for k in keys[: -_MAX_INMEMORY_STAGE_TIMINGS // 2]:
+                del _INMEMORY_STAGE_TIMINGS[k]
 
 
 class HeadroomProxy(
@@ -3770,9 +3800,29 @@ def create_app(config: ProxyConfig | None = None) -> FastAPI:
             if _throughput_cache["expires_at"] < now or _throughput_cache["value"] is None:
 
                 def _compute_throughput():
-                    from headroom.perf.analyzer import build_perf_summary, parse_log_files
+                    from headroom.perf.analyzer import (
+                        PerfReport,
+                        build_perf_summary,
+                        parse_log_files,
+                    )
 
                     perf_report = parse_log_files(last_n_hours=1.0)
+
+                    # Fall back to in-memory records when file logging is disabled
+                    # (HEADROOM_NO_FILE_LOG=true means no proxy.log* on disk).
+                    if not perf_report.perf_records:
+                        with _INMEMORY_PERF_LOCK:
+                            inmem_records = list(_INMEMORY_PERF_RECORDS)
+                        if inmem_records:
+                            with _INMEMORY_TIMINGS_LOCK:
+                                inmem_timings = dict(_INMEMORY_STAGE_TIMINGS)
+                            for r in inmem_records:
+                                ts = inmem_timings.get(r.request_id)
+                                if ts:
+                                    r.stages = ts
+                            inmem_report = PerfReport(perf_records=inmem_records)
+                            return build_perf_summary(inmem_report).get("throughput")
+
                     return build_perf_summary(perf_report).get("throughput")
 
                 try:
