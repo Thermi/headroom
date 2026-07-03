@@ -14,6 +14,8 @@ cached. On the next turn, freeze that many messages so the transform
 pipeline skips them entirely.
 """
 
+#  Copyright (c) 2026 Noel Kuntze
+
 from __future__ import annotations
 
 import copy
@@ -381,7 +383,9 @@ class PrefixCacheTracker:
         )
     """
 
-    def __init__(self, provider: str, config: PrefixFreezeConfig | None = None):
+    def __init__(
+        self, provider: str, config: PrefixFreezeConfig | None = None, project: str | None = None
+    ):
         self.provider = provider
         self.config = config or PrefixFreezeConfig()
         self._cached_token_count: int = 0
@@ -390,6 +394,7 @@ class PrefixCacheTracker:
         self._last_activity: float = time.time()
         self._last_original_messages: list[dict[str, Any]] = []
         self._last_forwarded_messages: list[dict[str, Any]] = []
+        self.project: str | None = project
 
         # Session-scoped ReadMaturationManager (Mechanism B), created
         # lazily by the handler when read maturation is enabled. Rides
@@ -737,13 +742,17 @@ class SessionTrackerStore:
         self._cleanup_interval: float = 60.0  # Cleanup every 60s
         self._max_sessions = max_sessions
 
-    def get_or_create(self, session_id: str, provider: str) -> PrefixCacheTracker:
+    def get_or_create(
+        self, session_id: str, provider: str, project: str | None = None
+    ) -> PrefixCacheTracker:
         """Get existing tracker or create a new one for this session."""
         self._maybe_cleanup()
 
         if session_id in self._trackers:
             tracker = self._trackers[session_id]
             tracker._last_activity = time.time()
+            if project and not tracker.project:
+                tracker.project = project
             return tracker
 
         # Evict oldest if at capacity
@@ -764,7 +773,7 @@ class SessionTrackerStore:
                 for sid in sorted_ids:
                     del self._trackers[sid]
 
-        tracker = PrefixCacheTracker(provider, self._default_config)
+        tracker = PrefixCacheTracker(provider, self._default_config, project=project)
         self._trackers[session_id] = tracker
         return tracker
 
@@ -839,5 +848,6 @@ class SessionTrackerStore:
                 "idle_seconds": round(now - tracker._last_activity, 1),
                 "frozen_message_count": tracker.get_frozen_message_count(),
                 "expired": tracker.is_expired,
+                "project": tracker.project,
             }
         return result
