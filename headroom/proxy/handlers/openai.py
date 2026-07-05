@@ -4080,6 +4080,44 @@ class OpenAIHandlerMixin:
                     },
                 )
 
+        # Strip reasoning_content from assistant messages before forwarding
+        # upstream.  DeepSeek rejects requests where these fields appear
+        # in the message history without corresponding reasoning_effort /
+        # thinking-mode parameters on the request itself.
+        #
+        # Cases that lead here:
+        #
+        # 1. Multi-turn chat with a thinking model
+        #    Client (e.g. opencode, Claude Code) posts a conversation that
+        #    includes the assistant's previous thinking response verbatim.
+        #    DeepSeek's assistant message schema includes reasoning_content
+        #    for thinking responses; the client includes it in the history.
+        #    Re-sending it without reasoning_effort → 400.
+        #
+        # 2. Non-thinking model following a thinking model
+        #    If the user switches from deepseek-v4-flash to deepseek-v4-pro
+        #    mid-conversation (or vice versa), the history still contains
+        #    reasoning_content from the earlier thinking turns.  The target
+        #    model may not accept this field → 400.
+        #
+        # 3. Other providers that pass through via OPENAI_TARGET_API_URL
+        #    (Anthropic, Google, Ollama) also reject unknown fields on
+        #    assistant messages.  Stripping prophylactically is safe.
+        #
+        # Why this is safe:
+        # - The response path (streaming _stream_response and non-streaming
+        #   _retry_request) passes the upstream response through unchanged,
+        #   so the client still receives reasoning_content on the current
+        #   turn.
+        # - The field is only meaningful in the *response* — the client does
+        #   not need to re-send it to maintain conversation state.
+        # - The Anthropic handler already strips its own thinking blocks in
+        #   the content_router for analogous reasons.
+        for msg in body.get("messages", []):
+            if isinstance(msg, dict) and msg.get("role") == "assistant":
+                msg.pop("reasoning_content", None)
+                msg.pop("redacted_reasoning_content", None)
+
         # Direct OpenAI API (no backend configured)
         url = build_copilot_upstream_url(
             upstream_base_url or self.OPENAI_API_URL,
