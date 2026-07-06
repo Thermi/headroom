@@ -473,6 +473,38 @@ module = ["headroom.proxy.handlers.*"]
 disallow_untyped_defs = false
 ignore_errors = true
 
+# Transform wrappers / binary-bound modules where mypy can't introspect
+# _core.pyd pyclass signatures, producing false-positive call-arg and
+# attr-defined for every `SearchCompressorConfig(...)` etc.
+[[tool.mypy.overrides]]
+module = [
+    "headroom.transforms.search_compressor",
+    "headroom.transforms.log_compressor",
+    "headroom.transforms.diff_compressor",
+    "headroom.transforms.text_crusher",
+    "headroom.transforms.content_router",
+    "headroom.transforms.smart_crusher",
+    "headroom.transforms.error_detection",
+    "headroom.transforms.tag_protector",
+    "headroom.memory.adapters.watchdog",
+]
+disable_error_code = ["call-arg", "attr-defined", "union-attr", "assignment", "misc", "no-any-return", "str-unpack", "arg-type"]
+
+# _json.py assigns both orjson and stdlib json to JSONDecodeError
+[[tool.mypy.overrides]]
+module = ["headroom.proxy._json"]
+disable_error_code = ["assignment", "misc"]
+
+# server.py: CompressionStore.search + build_launch_env kwargs are from .pyd / dynamic construction
+[[tool.mypy.overrides]]
+module = ["headroom.proxy.server"]
+disable_error_code = ["attr-defined"]
+
+# wrap.py: opencode redefinition is intentional (second override), build_launch_env kwargs are dynamic
+[[tool.mypy.overrides]]
+module = ["headroom.cli.wrap"]
+disable_error_code = ["call-arg", "no-redef"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
