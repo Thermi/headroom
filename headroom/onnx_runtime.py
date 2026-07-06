@@ -233,17 +233,6 @@ def warm_onnxruntime() -> None:
         time.sleep(2)
 
 
-
-def _resolve_revision(repo_id: str, revision: str | None) -> str | None:
-    """Resolve the HF revision to download: explicit arg wins, else the pinned
-    SHA for a known repo, else ``None`` (floating ref)."""
-    if revision is not None:
-        return revision
-    if os.environ.get("HEADROOM_HF_PIN", "").strip().lower() in ("off", "0", "false", "no"):
-        return None
-    return _PINNED_REVISIONS.get(repo_id)
-
-
 def hf_hub_download_local_first(
     repo_id: str,
     filename: str,
