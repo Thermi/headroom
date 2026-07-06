@@ -1044,6 +1044,8 @@ def proxy(
     stateless: bool,
     no_anthropic: bool,
     model_cost_map: str | None,
+    embedding_server: bool,
+    embedding_server_socket: str | None,
 ) -> None:
     """Start the optimization proxy server.
 
