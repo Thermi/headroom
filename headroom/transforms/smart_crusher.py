@@ -261,9 +261,6 @@ class SmartCrusher(Transform):
         # install a prebuilt one. Failing loudly is better than silent
         # degradation; see feedback memory `feedback_no_silent_fallbacks.md`.
         from headroom._core import (
-            SmartCrusher as _RustSmartCrusher,
-        )
-        from headroom._core import (
             SmartCrusherConfig as _RustSmartCrusherConfig,
         )
 
@@ -366,7 +363,7 @@ class SmartCrusher(Transform):
         # config, plus the relevance_threshold default (0.3) — the
         # Python dataclass doesn't carry that field; it lives on
         # `RelevanceScorerConfig` instead.
-        rust_cfg = _RustSmartCrusherConfig(
+        _rust_cfg = _RustSmartCrusherConfig(
             enabled=cfg.enabled,
             min_items_to_analyze=cfg.min_items_to_analyze,
             min_tokens_to_crush=cfg.min_tokens_to_crush,

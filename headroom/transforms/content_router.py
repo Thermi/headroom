@@ -5937,11 +5937,11 @@ class ContentRouter(Transform):
                 # Enrich the relevance query with the triggering tool call's
                 # args (grep pattern, read path, …) — the sharpest, per-output
                 # signal. Gated so default behavior is byte-identical.
-                block_context = context
+                _block_context = context
                 if self.config.relevance_split and tool_use_id:
                     call_args = self._tool_call_args.get(tool_use_id, "")
                     if call_args:
-                        block_context = build_relevance_query(context, tool_name, call_args)
+                        _block_context = build_relevance_query(context, tool_name, call_args)
 
                 tool_content = block.get("content", "")
 

@@ -254,7 +254,7 @@ class TransformPipeline:
         """
         record_metrics = kwargs.pop("record_metrics", True)
         waste_messages = kwargs.pop("waste_messages", None)
-        waste_signal_token_limit = int(
+        _waste_signal_token_limit = int(
             kwargs.pop("waste_signal_token_limit", MAX_WASTE_SIGNAL_DETECTION_TOKENS)
         )
         tokenizer = self._get_tokenizer(model)

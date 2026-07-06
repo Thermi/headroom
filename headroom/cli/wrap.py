@@ -6883,7 +6883,7 @@ def openclaw(
 @click.option("--verbose", "-v", is_flag=True, help="Verbose output")
 @click.option("--prepare-only", is_flag=True, hidden=True)
 @click.argument("opencode_args", nargs=-1, type=click.UNPROCESSED)
-def opencode(
+def opencode(  # noqa: F811 — overrides the simpler legacy opencode above
     port: int,
     no_mcp: bool,
     no_serena: bool,

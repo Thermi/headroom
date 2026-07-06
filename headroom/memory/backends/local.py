@@ -149,7 +149,6 @@ class LocalBackend:
         if not self._initialized:
             Path(self._config.db_path).parent.mkdir(parents=True, exist_ok=True)
 
-            from headroom.memory import HierarchicalMemory, MemoryConfig
             from headroom.memory.config import EmbedderBackend
 
             # Map string embedder_backend to enum
@@ -160,7 +159,7 @@ class LocalBackend:
                 "ollama": EmbedderBackend.OLLAMA,
                 "none": EmbedderBackend.NONE,
             }
-            embedder_backend = embedder_backend_map.get(
+            _embedder_backend = embedder_backend_map.get(
                 self._config.embedder_backend, EmbedderBackend.LOCAL
             )
 
@@ -195,11 +194,10 @@ class LocalBackend:
 
         # Choose graph store based on config
         if self._config.graph_persist:
-            from headroom.memory.adapters.sqlite_graph import SQLiteGraphStore
 
             # Derive graph db path from main db path if not specified
             if self._config.graph_db_path:
-                graph_db_path = self._config.graph_db_path
+                _graph_db_path = self._config.graph_db_path
             else:
                 # "memory.db" -> "memory_graph.db"
                 db_path = Path(self._config.db_path)
