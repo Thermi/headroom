@@ -57,7 +57,8 @@ def _get_litellm_module() -> Any | None:
         return None
 
     litellm = imported_litellm
-    litellm.suppress_debug_info = True
+    if hasattr(litellm, "suppress_debug_info"):  # type: ignore[attr-defined]
+        litellm.suppress_debug_info = True
     return litellm
 
 
@@ -583,7 +584,7 @@ class SavingsTracker:
                 }
             )
             self._trim_history_locked(reference_time=timestamp_dt)
-            self._maybe_save_locked()
+            self._save_locked()
             return True
 
     def record_request(
@@ -729,7 +730,7 @@ class SavingsTracker:
                 )
                 self._trim_history_locked(reference_time=timestamp_dt)
 
-            self._maybe_save_locked()
+            self._save_locked()
             return True
 
     def _record_project_locked(

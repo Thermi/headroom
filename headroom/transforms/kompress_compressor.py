@@ -499,19 +499,6 @@ _GPU_PROVIDERS: list[str] = [
 ]
 
 
-def _available_gpu_providers() -> list[str]:
-    """Return the subset of GPU providers that are available in this ORT build."""
-    if not _is_onnx_available():
-        return []
-    try:
-        import onnxruntime as ort
-
-        available = set(ort.get_available_providers())
-        return [p for p in _GPU_PROVIDERS if p in available]
-    except Exception:
-        return []
-
-
 def _is_gpu_available() -> bool:
     """Check if ONNX Runtime can use any GPU provider."""
     return len(_available_gpu_providers()) > 0
