@@ -2121,6 +2121,69 @@ def _codex_config_paths() -> tuple[Path, Path]:
     return config_file, backup_file
 
 
+# ── Codex / OpenCode helpers (stubs) ─────────────────────────────────
+
+
+def codex_uses_chatgpt_auth(auth_path: Path) -> bool:
+    """Check whether Codex auth.json indicates ChatGPT OAuth login (#406).
+
+    Returns True when the auth file has a token that implies the user logged in
+    via ChatGPT OAuth rather than an API key, so we emit ``requires_openai_auth``
+    in the injected provider block.
+    """
+    if not auth_path.is_file():
+        return False
+    try:
+        data = json.loads(auth_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return False
+    return bool(data.get("token") and not data.get("api_key"))
+
+
+def retag_to_headroom(codex_home: Path) -> None:
+    """Pull existing native threads into the headroom-provider menu (best-effort)."""
+
+
+def _with_project_prefix(base_url: str, project_name: str | None) -> str:
+    """Prepend ``/p/<project>`` path prefix so the proxy can attribute savings."""
+    if project_name:
+        return base_url.rstrip("/") + "/p/" + project_name
+    return base_url
+
+
+def retag_to_native(codex_home: Path) -> None:
+    """Return threads to the native-provider menu (best-effort)."""
+
+
+# ── OpenCode config helpers (stubs) ─────────────────────────────────
+
+_OPencode_home = Path.home() / ".opencode"
+
+
+def opencode_config_paths() -> tuple[Path, Path]:
+    """Return ``(config_file, backup_file)`` paths for opencode.json."""
+    config_file = _OPencode_home / "config.json"
+    backup_file = _OPencode_home / "config.json.headroom-backup"
+    return config_file, backup_file
+
+
+def snapshot_opencode_config_if_unwrapped(config_file: Path, backup_file: Path) -> None:
+    """Create a pre-wrap backup of opencode.json if not already backed up."""
+
+
+def inject_opencode_provider_config(port: int) -> None:
+    """Write Headroom provider + MCP blocks into the active opencode.json."""
+
+
+_PROVIDER_MARKER_START = "HeadroomProvider"
+_MCP_MARKER_START = "HeadroomMcp"
+
+
+def strip_opencode_headroom_blocks(content: str) -> str:
+    """Remove Headroom-managed blocks from an opencode.json string."""
+    return content
+
+
 def _strip_codex_headroom_blocks(
     content: str,
     *,
