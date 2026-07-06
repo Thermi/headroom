@@ -485,6 +485,7 @@ impl PySmartCrusherConfig {
         compaction_max_flatten_inner_keys = 6,
         compaction_min_buckets = 2,
         compaction_max_buckets = 8,
+        lossless_only = false,
     ))]
     #[allow(clippy::too_many_arguments)]
     fn new(
@@ -511,6 +512,7 @@ impl PySmartCrusherConfig {
         compaction_max_flatten_inner_keys: usize,
         compaction_min_buckets: usize,
         compaction_max_buckets: usize,
+        lossless_only: bool,
     ) -> Self {
         Self {
             inner: RustSmartCrusherConfig {
@@ -537,6 +539,7 @@ impl PySmartCrusherConfig {
                 compaction_max_flatten_inner_keys,
                 compaction_min_buckets,
                 compaction_max_buckets,
+                lossless_only,
             },
         }
     }
@@ -632,6 +635,10 @@ impl PySmartCrusherConfig {
     #[getter]
     fn compaction_max_buckets(&self) -> usize {
         self.inner.compaction_max_buckets
+    }
+    #[getter]
+    fn lossless_only(&self) -> bool {
+        self.inner.lossless_only
     }
 
     fn __repr__(&self) -> String {

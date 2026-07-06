@@ -101,6 +101,25 @@ pub struct SmartCrusherConfig {
     /// means the discriminator is too granular (e.g. an ID column).
     /// Mirrors `CompactConfig::max_buckets`. Default 8.
     pub compaction_max_buckets: usize,
+    /// Strict lossless mode: when `true`, the lossy row-drop fallback
+    /// is disabled entirely. Arrays that can't be losslessly compacted
+    /// pass through untouched rather than being row-dropped with CCR
+    /// markers. Default `false`.
+    ///
+    /// Mirrors Python's `SmartCruscerConfig.lossless_only`, consulted
+    /// by the per-call override `crush(..., lossless_only=True)`.
+    pub lossless_only: bool,
+}
+
+impl SmartCrusherConfig {
+    /// Returns `true` when opaque CCR markers should be emitted.
+    ///
+    /// Mirrors Python's `enable_ccr_marker` gate — when false, both
+    /// the row-drop `<<ccr:HASH>>` marker and opaque-blob substitutes
+    /// are suppressed, rendering blob content inline instead.
+    pub fn opaque_markers_enabled(&self) -> bool {
+        self.enable_ccr_marker
+    }
 }
 
 impl Default for SmartCrusherConfig {
@@ -132,6 +151,7 @@ impl Default for SmartCrusherConfig {
             compaction_max_flatten_inner_keys: 6,
             compaction_min_buckets: 2,
             compaction_max_buckets: 8,
+            lossless_only: false,
         }
     }
 }
@@ -169,5 +189,6 @@ mod tests {
         assert_eq!(c.compaction_max_flatten_inner_keys, 6);
         assert_eq!(c.compaction_min_buckets, 2);
         assert_eq!(c.compaction_max_buckets, 8);
+        assert!(!c.lossless_only);
     }
 }
