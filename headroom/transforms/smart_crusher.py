@@ -262,6 +262,8 @@ class SmartCrusher(Transform):
         # degradation; see feedback memory `feedback_no_silent_fallbacks.md`.
         from headroom._core import (
             SmartCrusher as _RustSmartCrusher,
+        )
+        from headroom._core import (
             SmartCrusherConfig as _RustSmartCrusherConfig,
         )
 
