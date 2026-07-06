@@ -20,6 +20,7 @@ from typing import Any
 
 from headroom import binaries
 from headroom.proxy import _json as json
+from headroom.proxy import runtime_env
 
 from . import base
 
@@ -199,7 +200,7 @@ def _run_ast_grep(
     try:
         for pattern in patterns:
             try:
-                completed = run(
+                completed = subprocess.run(
                     [
                         str(exe),
                         "run",

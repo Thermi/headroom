@@ -12,10 +12,8 @@ LiteLLM handles all the auth and format translation internally.
 
 from __future__ import annotations
 
-import importlib.util
 import json
 import logging
-import os
 import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field

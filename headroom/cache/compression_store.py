@@ -42,6 +42,8 @@ from contextvars import ContextVar
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any
 
+from headroom.relevance.bm25 import BM25Scorer
+
 if TYPE_CHECKING:
     from ..memory.tracker import ComponentStats
     from .backends import CompressionStoreBackend

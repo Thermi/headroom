@@ -46,6 +46,12 @@ _REPLACEMENT_CA_VARS = (
 # Env var that opts out of OpenSSL's RFC 5280 strict CA-constraint checks.
 TLS_STRICT_ENV = "HEADROOM_TLS_STRICT"
 
+
+def tls_strict_disabled() -> bool:
+    """Return True when the user has opted out of RFC-5280 strict CA checks."""
+    return os.environ.get(TLS_STRICT_ENV, "1").strip().lower() in ("0", "false", "no", "off")
+
+
 def _relax_x509_strict_for_custom_ca(ctx: ssl.SSLContext, *, path: str) -> ssl.SSLContext:
     """Relax OpenSSL strict-mode checks for an operator-provided CA bundle.
 
@@ -133,7 +139,11 @@ def _default_strict_relaxed_context() -> ssl.SSLContext:
     """
     ctx = ssl.create_default_context()
     ctx.set_alpn_protocols(["h2", "http/1.1"])
-    return _clear_x509_strict(ctx, reason="env_toggle")
+    strict_flag = getattr(ssl, "VERIFY_X509_STRICT", 0)
+    if strict_flag and ctx.verify_flags & strict_flag:
+        ctx.verify_flags &= ~strict_flag
+        logger.info("event=ssl_x509_strict_disabled reason=env_toggle")
+    return ctx
 
 
 def build_httpx_verify() -> ssl.SSLContext | bool:
