@@ -100,7 +100,6 @@ fn build_crush_array_dict<'py>(
 #[pyclass(
     name = "DiffCompressorConfig",
     module = "headroom._core",
-    from_py_object
 )]
 #[derive(Clone)]
 struct PyDiffCompressorConfig {
@@ -452,7 +451,7 @@ impl PyDiffCompressor {
 /// Defaults match Python's dataclass byte-for-byte. The constructor
 /// accepts every field as a kwarg with the same name and type so the
 /// Python shim can pass `SmartCrusherConfig(**asdict(py_cfg))`.
-#[pyclass(name = "SmartCrusherConfig", module = "headroom._core", from_py_object)]
+#[pyclass(name = "SmartCrusherConfig", module = "headroom._core")]
 #[derive(Clone)]
 struct PySmartCrusherConfig {
     inner: RustSmartCrusherConfig,
@@ -930,7 +929,7 @@ impl PySmartCrusher {
 /// `content_type` is exposed as the lowercase string tag (e.g.
 /// `"json_array"`). The Python wrapper translates it back into the
 /// `ContentType` enum so the call-site looks identical.
-#[pyclass(name = "DetectionResult", module = "headroom._core", from_py_object)]
+#[pyclass(name = "DetectionResult", module = "headroom._core")]
 #[derive(Clone)]
 struct PyDetectionResult {
     inner: RustDetectionResult,
@@ -1138,7 +1137,6 @@ fn keyword_registry_snapshot(py: Python<'_>) -> Py<PyDict> {
 #[pyclass(
     name = "SearchCompressorConfig",
     module = "headroom._core",
-    from_py_object
 )]
 #[derive(Clone)]
 struct PySearchCompressorConfig {
@@ -1336,7 +1334,6 @@ fn parse_search_lines(content: &str) -> Vec<(String, u64, String)> {
 #[pyclass(
     name = "LogCompressorConfig",
     module = "headroom._core",
-    from_py_object
 )]
 #[derive(Clone)]
 struct PyLogCompressorConfig {
@@ -1678,7 +1675,7 @@ fn compress_openai_responses_live_zone(
 
 // --- TextCrusher (Phase 2, #1171): fast extractive prose compressor ---
 
-#[pyclass(name = "TextCrusherConfig", module = "headroom._core", from_py_object)]
+#[pyclass(name = "TextCrusherConfig", module = "headroom._core")]
 #[derive(Clone)]
 struct PyTextCrusherConfig {
     inner: RustTextCrusherConfig,
@@ -1810,7 +1807,7 @@ impl PyTextCrusher {
     ) -> PyTextCrusherResult {
         let content = content.to_string();
         let context = context.to_string();
-        let inner = py.detach(|| self.inner.compress(&content, &context, target_ratio));
+        let inner = py.allow_threads(|| self.inner.compress(&content, &context, target_ratio));
         PyTextCrusherResult { inner }
     }
 }
