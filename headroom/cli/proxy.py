@@ -1,5 +1,7 @@
 """Proxy server CLI commands."""
 
+#  Copyright (c) 2026 Noel Kuntze
+
 import json
 import logging
 import os
@@ -1015,7 +1017,7 @@ def proxy(
     memory_db_path: str,
     memory_storage: str,
     memory_project_root: str,
-    no_memory_tools: bool = False,
+    no_memory_tools: bool,
     no_inline_tools: bool,
     no_memory_context: bool,
     memory_top_k: int,
