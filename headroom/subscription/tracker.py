@@ -29,7 +29,7 @@ import threading
 import time
 from datetime import timedelta
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 from headroom import paths as _paths
 from headroom.subscription.base import QuotaTracker
