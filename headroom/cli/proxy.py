@@ -756,6 +756,13 @@ def dashboard(port: int, no_open: bool) -> None:
     "--no-memory-context", is_flag=True, help="Disable automatic memory context injection"
 )
 @click.option(
+    "--no-memory-tools",
+    is_flag=True,
+    envvar="HEADROOM_NO_MEMORY_TOOLS",
+    help="Disable inline memory tool injection (CCR headroom_retrieve still active). "
+    "Env: HEADROOM_NO_MEMORY_TOOLS.",
+)
+@click.option(
     "--memory-top-k",
     type=click.IntRange(min=1, max=100),
     default=10,
@@ -1028,7 +1035,7 @@ def proxy(
     memory_db_path: str,
     memory_storage: str,
     memory_project_root: str,
-    no_memory_tools: bool,
+    no_memory_tools: bool = False,
     no_inline_tools: bool,
     no_memory_context: bool,
     memory_top_k: int,
