@@ -81,7 +81,9 @@ verify-rust-core:
 	fi
 	bash scripts/build_rust_extension.sh
 
-TAG ?= headroom:latest
+TAG_PREFIX ?= headroom
+TAG_SUFFIX ?= latest
+TAG ?= $(TAG_PREFIX):$(TAG_SUFFIX)
 EXTRAS ?= all
 
 # Compute build metadata at parse time using Make's shell function (works
@@ -101,7 +103,7 @@ build-image:
 		--build-arg GIT_COMMIT="$(GIT_COMMIT)" \
 		--build-arg BUILD_TIME="$(BUILD_TIME)" \
 		--build-arg HEADROOM_EXTRAS="$(EXTRAS)" \
-		-t "$(TAG)" \
+		-t "$(TAG)" -t "$(TAG_PREFIX):$(GIT_COMMIT)" \
 		-f Dockerfile .
 	$(info )
 	$(info Built: $(TAG))
