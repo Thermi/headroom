@@ -220,6 +220,13 @@ def _register_openai_image_routes(app: FastAPI, proxy: Any) -> None:
 def register_provider_routes(app: FastAPI, proxy: Any) -> None:
     """Register provider-specific proxy endpoints."""
 
+    def normalize_request_path(request: Request, path: str) -> None:
+        request.scope["path"] = path
+        if "raw_path" in request.scope:
+            request.scope["raw_path"] = quote(path).encode("ascii")
+        if hasattr(request, "_url"):
+            delattr(request, "_url")
+
     async def vertex_publisher_passthrough(request: Request, publisher: str, action: str):
         return await proxy.handle_passthrough(
             request,
