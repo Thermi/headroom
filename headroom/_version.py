@@ -116,6 +116,10 @@ def get_version() -> str:
     if build_version:
         return build_version
 
+    build_version = _packaged_build_version()
+    if build_version:
+        return build_version
+
     try:
         return version("headroom-ai")
     except PackageNotFoundError:
