@@ -41,6 +41,8 @@ fallback. Build it locally with `scripts/build_rust_extension.sh`
   Python bridge.
 """
 
+#  Copyright (c) 2026 Noel Kuntze
+
 from __future__ import annotations
 
 import json
@@ -230,6 +232,47 @@ class SmartCrusherConfig:
 
 
 # ─── Rust-backed SmartCrusher ─────────────────────────────────────────────
+
+
+# Cached probe: does the deployed ``headroom._core.SmartCrusherConfig`` accept
+# the ``lossless_only`` kwarg? Wheels built before commit b80a351e ("fix: add
+# missing lossless_only field ... to SmartCrusherConfig") lack the field in the
+# PyO3 constructor signature and raise ``TypeError`` on it. The probe is keyed
+# by the pyclass object so distinct interpreters / wheel reloads re-probe
+# correctly; the result is memoized to keep the per-instance hot path branch-free.
+_RUST_LOSSLESS_ONLY_PROBE: dict[int, bool] = {}
+_RUST_LOSSLESS_ONLY_WARNED: bool = False
+
+
+def _rust_supports_lossless_only(rust_config_cls: Any) -> bool:
+    """Return ``True`` if ``rust_config_cls`` accepts ``lossless_only=``.
+
+    Probes the constructor once per pyclass (cheap relative to a compression
+    call, and memoized so the request hot path pays nothing after the first
+    build). A constructor that rejects the kwarg yields ``False`` — callers
+    then omit it and let the Rust default (``lossless_only=False``) apply,
+    preserving the pre-field behaviour instead of crashing.
+    """
+    global _RUST_LOSSLESS_ONLY_WARNED
+    key = id(rust_config_cls)
+    cached = _RUST_LOSSLESS_ONLY_PROBE.get(key)
+    if cached is not None:
+        return cached
+    try:
+        rust_config_cls(lossless_only=False)
+        supported = True
+    except TypeError:
+        supported = False
+        if not _RUST_LOSSLESS_ONLY_WARNED:
+            _RUST_LOSSLESS_ONLY_WARNED = True
+            logger.warning(
+                "headroom._core.SmartCrusherConfig does not accept "
+                "'lossless_only' (stale _core.pyd — rebuild with "
+                "`make verify-rust-core`). Strict-lossless mode is "
+                "silently degraded to the lossy path."
+            )
+    _RUST_LOSSLESS_ONLY_PROBE[key] = supported
+    return supported
 
 
 class SmartCrusher(Transform):
@@ -437,7 +480,18 @@ class SmartCrusher(Transform):
         if cached is not None:
             return cached
         kwargs = dict(self._rust_cfg_kwargs)
-        kwargs["lossless_only"] = lossless_only
+        # Probe once whether the deployed Rust `SmartCrusherConfig` accepts
+        # the `lossless_only` kwarg. Wheels built before the field was
+        # added to the PyO3 signature (crates/headroom-py/src/lib.rs,
+        # "fix: add missing lossless_only field") reject it with a
+        # `TypeError`, which broke every SmartCrusher / tabular compression
+        # in the request path. When the field is unsupported we drop it —
+        # the Rust side defaults to `lossless_only=False` (the pre-field
+        # behaviour), so strict-lossless mode silently degrades to the
+        # lossy path rather than crashing the whole optimization step.
+        # See AGENTS.md "stale _core.pyd" handling precedent.
+        if _rust_supports_lossless_only(self._RustSmartCrusherConfig):
+            kwargs["lossless_only"] = lossless_only
         rust_cfg = self._RustSmartCrusherConfig(**kwargs)
         if not self._with_compaction:
             rust = self._RustSmartCrusher.without_compaction(rust_cfg)
