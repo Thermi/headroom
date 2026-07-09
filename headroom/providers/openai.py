@@ -4,6 +4,8 @@ Token counting is accurate (uses tiktoken).
 Cost estimates are APPROXIMATE - always verify against your actual billing.
 """
 
+#  Copyright (c) 2026 Noel Kuntze
+
 from __future__ import annotations
 
 import importlib.util
@@ -120,16 +122,13 @@ _CONTEXT_LIMITS: dict[str, int] = {
     # these are the manual fallback when LiteLLM doesn't know the model.
     "deepseek-v4-flash": 1_000_000,
     "deepseek-v4-pro": 1_000_000,
-    "deepseek-v3.2": 128_000,
-    "deepseek-v3-0324": 128_000,
-    "deepseek-v3": 128_000,
-    "deepseek-v2": 128_000,
     "deepseek-chat": 131_072,
     "deepseek-reasoner": 131_072,
-    "deepseek-r1": 131_072,
-    "deepseek-r1-0528": 131_072,
     "deepseek-coder": 16384,
-    "deepseek-coder-v2": 128_000,
+    # GLM (Z-AI, commonly accessed via OpenRouter / OpenAI-compatible API)
+    "z-ai/glm-5.2": 131_072,
+    "z-ai/glm-5": 131_072,
+    "z-ai/glm-4": 131_072,
 }
 
 # USD per 1M tokens, (input, output). NOTE: these are ESTIMATES -- always verify
@@ -528,16 +527,6 @@ class OpenAIProvider(Provider):
 
         Never raises an exception - uses sensible defaults for unknown models.
         """
-        # Explicitly configured limits win first. Behind a gateway/alias proxy
-        # (Kong, LiteLLM, ...) Headroom sees the raw client model name
-        # (e.g. "claude-opus"), which litellm.get_model_info can't resolve, so
-        # resolution would fall through to the 128K default + an "Unknown model"
-        # warning and skew compression. Configuring the alias via
-        # HEADROOM_MODEL_LIMITS / ~/.headroom/models.json makes it authoritative
-        # here, before the dynamic LiteLLM lookup. Fail-soft, no network.
-        if model in self._context_limits:
-            return self._context_limits[model]
-
         # Try LiteLLM first
         litellm = _get_litellm_module()
         if litellm is not None:
