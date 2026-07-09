@@ -6,6 +6,8 @@ for prefix cache statistics, cost merging, and session summaries.
 Extracted from server.py for maintainability.
 """
 
+#  Copyright (c) 2026 Noel Kuntze
+
 from __future__ import annotations
 
 import importlib.util
@@ -762,6 +764,8 @@ class CostTracker:
             from headroom.pricing.litellm_pricing import resolve_litellm_model
 
             resolved_model = resolve_litellm_model(model)
+            if resolved_model.startswith("passthrough:") or resolved_model.startswith("internal:"):
+                return None
 
             # litellm.cost_per_token handles all token types natively:
             # prompt_tokens at input rate, cache_read at ~10%, cache_creation at ~125%
@@ -1029,6 +1033,8 @@ class CostTracker:
             from headroom.pricing.litellm_pricing import resolve_litellm_model
 
             resolved = resolve_litellm_model(model)
+            if resolved.startswith("passthrough:") or resolved.startswith("internal:"):
+                return None
             info = litellm.model_cost.get(resolved, {})
             cost_per_token = info.get("input_cost_per_token")
             return cost_per_token * 1_000_000 if cost_per_token else None
@@ -1048,6 +1054,8 @@ class CostTracker:
             from headroom.pricing.litellm_pricing import resolve_litellm_model
 
             resolved = resolve_litellm_model(model)
+            if resolved.startswith("passthrough:") or resolved.startswith("internal:"):
+                return None
             info = litellm.model_cost.get(resolved, {})
             uncached = info.get("input_cost_per_token")
             if not uncached:
