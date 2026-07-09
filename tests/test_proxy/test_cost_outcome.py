@@ -241,8 +241,12 @@ class TestMergeCostStats:
 
 
 class TestAggregateMcpEvents:
+    @patch.dict("sys.modules", {"headroom.ccr.mcp_server": None}, clear=False)
     def test_returns_zero_when_import_fails(self) -> None:
-        result = _aggregate_mcp_events()
+        # Re-import forces the local import path to fail
+        from headroom.proxy.cost import _aggregate_mcp_events as _agg
+
+        result = _agg()
         assert result == {"compressions": 0, "tokens_removed": 0, "retrievals": 0}
 
     @patch("headroom.ccr.mcp_server._read_shared_events")
