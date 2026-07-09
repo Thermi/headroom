@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from fastapi.responses import Response
 
 from headroom.proxy.auth_mode import classify_client
-from headroom.proxy.helpers import COMPRESSION_TIMEOUT_SECONDS, extract_tags
+from headroom.proxy.helpers import extract_tags
 from headroom.proxy.outcome import RequestOutcome
 
 logger = logging.getLogger("headroom.proxy")
@@ -1102,18 +1102,11 @@ result = self.openai_pipeline.apply(
                 if self.config.optimize:
                     try:
                         context_limit = self.openai_provider.get_context_limit(model)
-                        # Offload off the event loop (#1701); timeouts fall to
-                        # the except below and pass the line through.
-                        result = await self._run_compression_in_executor(
-                            lambda messages=messages, model=model, context_limit=context_limit: (
-                                self.openai_pipeline.apply(
-                                    messages=messages,
-                                    model=model,
-                                    model_limit=context_limit,
-                                    context=extract_user_query(messages),
-                                )
-                            ),
-                            timeout=COMPRESSION_TIMEOUT_SECONDS,
+                        result = self.openai_pipeline.apply(
+                            messages=messages,
+                            model=model,
+                            model_limit=context_limit,
+                            context=extract_user_query(messages),
                         )
                         compressed_messages = result.messages
                         original_tokens = result.tokens_before

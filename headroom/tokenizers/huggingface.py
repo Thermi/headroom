@@ -7,8 +7,6 @@ tokenizers. Requires the `transformers` library.
 from __future__ import annotations
 
 import logging
-import os
-import threading
 from functools import lru_cache
 from typing import Any
 
@@ -107,31 +105,9 @@ MODEL_TO_TOKENIZER: dict[str, str] = {
 }
 
 
-# Bound the first (network) load of a HuggingFace tokenizer. Without a bound,
-# huggingface_hub download retries can block for many minutes (GH #1701: 610s
-# on a restricted Windows network). 0 disables network loads entirely.
-_LOAD_TIMEOUT_ENV = "HEADROOM_HF_TOKENIZER_LOAD_TIMEOUT_SECS"
-_LOAD_TIMEOUT_DEFAULT = 10.0
-
-
-def _load_timeout_secs() -> float:
-    try:
-        return float(os.environ.get(_LOAD_TIMEOUT_ENV, _LOAD_TIMEOUT_DEFAULT))
-    except (TypeError, ValueError):
-        return _LOAD_TIMEOUT_DEFAULT
-
-
 @lru_cache(maxsize=16)
 def _load_tokenizer(tokenizer_name: str):
     """Load and cache HuggingFace tokenizer.
-
-    The first attempt is cache-only (``local_files_only=True``) so a warm
-    HF cache never touches the network. A cache miss falls through to a
-    network download bounded by ``HEADROOM_HF_TOKENIZER_LOAD_TIMEOUT_SECS``
-    (default 10s) on a daemon thread — the download itself cannot be
-    cancelled, but the caller unblocks and falls back to estimation.
-    Failures are cached by ``lru_cache`` (returns ``None``), so a slow or
-    offline hub is probed at most once per process per tokenizer.
 
     Args:
         tokenizer_name: HuggingFace model/tokenizer name.
@@ -145,61 +121,17 @@ def _load_tokenizer(tokenizer_name: str):
         tok = AutoTokenizer.from_pretrained(
             tokenizer_name,
             trust_remote_code=True,
-            local_files_only=True,
         )
-    except Exception:
-        pass  # Not in the local cache — try the network below, bounded.
-
-    timeout = _load_timeout_secs()
-    if timeout <= 0:
-        logger.warning(
-            f"Tokenizer {tokenizer_name} not in local HF cache and network "
-            f"loading is disabled ({_LOAD_TIMEOUT_ENV}=0); using estimation"
-        )
+        # Suppress the "Token indices sequence length is longer than the
+        # specified maximum sequence length" warning — Headroom counts
+        # tokens for cost estimation and does NOT feed them into the
+        # model, so truncation is neither needed nor desired.
+        if hasattr(tok, "model_max_length"):
+            tok.model_max_length = 1 << 30  # 1B — effectively unlimited
+        return tok
+    except Exception as e:
+        logger.warning(f"Failed to load tokenizer {tokenizer_name}: {e}")
         return None
-
-    result: list[Any] = []
-    error: list[BaseException] = []
-
-    def _download() -> None:
-        try:
-            result.append(
-                AutoTokenizer.from_pretrained(
-                    tokenizer_name,
-                    trust_remote_code=True,
-                )
-            )
-        except BaseException as e:  # noqa: BLE001 — report any failure to the waiter
-            error.append(e)
-
-    thread = threading.Thread(
-        target=_download,
-        name=f"headroom-hf-tokenizer-load-{tokenizer_name}",
-        daemon=True,
-    )
-    thread.start()
-    thread.join(timeout)
-    if thread.is_alive():
-        logger.warning(
-            f"Timed out loading tokenizer {tokenizer_name} after {timeout}s "
-            f"(set {_LOAD_TIMEOUT_ENV} to adjust); using estimation"
-        )
-        return None
-    if error:
-        logger.warning(f"Failed to load tokenizer {tokenizer_name}: {error[0]}")
-        return None
-    tok = result[0] if result else None
-
-    if tok is None:
-        return None
-
-    # Suppress the "Token indices sequence length is longer than the
-    # specified maximum sequence length" warning — Headroom counts
-    # tokens for cost estimation and does NOT feed them into the
-    # model, so truncation is neither needed nor desired.
-    if hasattr(tok, "model_max_length"):
-        tok.model_max_length = 1 << 30  # 1B — effectively unlimited
-    return tok
 
 
 def get_tokenizer_name(model: str) -> str:

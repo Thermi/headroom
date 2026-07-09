@@ -22,7 +22,6 @@ busy timeout only covers a transient checkpoint lock.
 from __future__ import annotations
 
 import logging
-import re
 import sqlite3
 from pathlib import Path
 
@@ -34,34 +33,15 @@ NATIVE_PROVIDER = "openai"
 # Seconds to wait on a busy store before giving up (a running Codex only holds an
 # exclusive lock briefly, during a WAL checkpoint).
 _BUSY_TIMEOUT_S = 0.75
-_STATE_DB_RE = re.compile(r"^state_(\d+)\.sqlite$")
 
 
 def _codex_state_db_paths(codex_home: Path) -> list[Path]:
-    """Discover direct Codex state stores under the known home locations."""
-    discovered: list[Path] = []
-    seen: set[Path] = set()
-    for base in (codex_home / "sqlite", codex_home):
-        if not base.exists():
-            continue
-        matches: list[tuple[int, Path]] = []
-        try:
-            entries = list(base.iterdir())
-        except OSError:
-            continue
-        for path in entries:
-            match = _STATE_DB_RE.match(path.name)
-            if match is None or not path.is_file():
-                continue
-            matches.append((int(match.group(1)), path))
-        matches.sort(key=lambda item: (item[0], str(item[1])))
-        for _, path in matches:
-            resolved = path.resolve()
-            if resolved in seen:
-                continue
-            seen.add(resolved)
-            discovered.append(path)
-    return discovered
+    """Both known Codex state stores under ``codex_home`` (the ``.codex`` dir).
+
+    The v148 desktop GUI reads ``<codex_home>/sqlite/state_5.sqlite``; the
+    CLI/TUI uses ``<codex_home>/state_5.sqlite``.  Retag whichever exist.
+    """
+    return [codex_home / "sqlite" / "state_5.sqlite", codex_home / "state_5.sqlite"]
 
 
 def _retag_one(path: Path, *, frm: str, to: str) -> int:
@@ -96,9 +76,11 @@ def retag_thread_providers(codex_home: Path, *, frm: str, to: str) -> None:
     if frm == to:
         return
     for path in _codex_state_db_paths(codex_home):
+        if not path.exists():
+            continue
         try:
             moved = _retag_one(path, frm=frm, to=to)
-        except (OSError, sqlite3.Error) as exc:
+        except sqlite3.Error as exc:
             logger.warning("codex thread retag %s->%s skipped for %s: %s", frm, to, path, exc)
             continue
         if moved:

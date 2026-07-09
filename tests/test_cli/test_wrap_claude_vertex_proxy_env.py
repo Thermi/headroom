@@ -80,10 +80,9 @@ def _invoke_wrap_claude(
     monkeypatch.setattr(wrap_mod, "_restore_claude_wrap_base_url", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(wrap_mod, "_print_telemetry_notice", lambda: None)
 
-    def fake_ensure_proxy(*args: object, **kwargs: object) -> tuple[None, int]:
+    def fake_ensure_proxy(*args: object, **kwargs: object) -> None:
         captured["ensure_args"] = args
         captured["ensure_kwargs"] = kwargs
-        return None, args[0] if args else 8787
 
     def fake_run(cmd: list[str], *, env: dict[str, str]) -> _Completed:
         captured["child_cmd"] = cmd
@@ -402,14 +401,13 @@ def test_ensure_proxy_restarts_idle_proxy_for_vertex_api_url_mismatch(
         lambda *args, **kwargs: calls.append(("start", args, kwargs)),
     )
 
-    proc, actual_port = wrap_mod._ensure_proxy(
+    result = wrap_mod._ensure_proxy(
         8787,
         False,
         vertex_api_url="https://new-gateway.example.com/vertex/v1",
     )
 
-    assert proc is None
-    assert actual_port == 8787
+    assert result is None
     assert calls[0] == ("kill", 12345, 8787)
     assert calls[1][0] == "start"
     assert calls[1][2]["vertex_api_url"] == "https://new-gateway.example.com/vertex/v1"
@@ -447,10 +445,9 @@ def test_ensure_proxy_restarts_idle_proxy_to_clear_vertex_api_url(
         lambda *args, **kwargs: calls.append(("start", args, kwargs)),
     )
 
-    proc, actual_port = wrap_mod._ensure_proxy(8787, False, clear_vertex_api_url=True)
+    result = wrap_mod._ensure_proxy(8787, False, clear_vertex_api_url=True)
 
-    assert proc is None
-    assert actual_port == 8787
+    assert result is None
     assert calls[0] == ("kill", 12345, 8787)
     assert calls[1][0] == "start"
     assert calls[1][2]["vertex_api_url"] is None

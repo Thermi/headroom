@@ -169,8 +169,8 @@ class ProxyConfig:
     ccr_inject_tool: bool = True
     ccr_inject_system_instructions: bool = False
     # Proxy-level mirror of ContentRouterConfig.ccr_inject_marker, so retrieval
-    # markers can be toggled from the CLI (--no-ccr, which also drops the retrieve
-    # tool). Threaded into the router in server.py; default preserves current behavior.
+    # markers can be toggled from the CLI (--no-ccr-marker). Threaded into the
+    # router in server.py; default preserves current behavior.
     ccr_inject_marker: bool = True
 
     # Disable all inline tool injection (CCR headroom_retrieve + memory tools).

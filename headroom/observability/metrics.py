@@ -5,13 +5,13 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass, field
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as package_version
 from threading import Lock
 from typing import Any, Literal
 
 from opentelemetry import metrics
 from opentelemetry.metrics import CallbackOptions, Observation
-
-from headroom._version import get_version
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +28,10 @@ _owned_metrics_config: OTelMetricsConfig | None = None
 
 
 def _headroom_version() -> str:
-    return get_version()
+    try:
+        return package_version("headroom-ai")
+    except PackageNotFoundError:
+        return "unknown"
 
 
 def _parse_bool(raw: str | None, default: bool = False) -> bool:

@@ -105,13 +105,10 @@ def test_retry_request_returns_429_verbatim_on_exhaustion() -> None:
 def test_retry_request_honors_retry_after(monkeypatch) -> None:
     slept: list[float] = []
 
-    async def _fake_wait(self, seconds: float) -> bool:  # type: ignore[no-untyped-def]
+    async def _fake_sleep(seconds: float) -> None:
         slept.append(seconds)
-        return False
 
-    monkeypatch.setattr(
-        "headroom.proxy.server.HeadroomProxy._wait_for_retry_delay_or_shutdown", _fake_wait
-    )
+    monkeypatch.setattr("headroom.proxy.server.asyncio.sleep", _fake_sleep)
     transport = _RateLimitTransport(fail_status=429, fail_times=1, retry_after="2")
     proxy = _proxy_with(transport)
     asyncio.run(proxy._retry_request("POST", "https://up/v1/messages", {}, {"messages": []}))
@@ -189,13 +186,10 @@ def test_retry_request_returns_529_verbatim_on_exhaustion() -> None:
 def test_retry_request_honors_retry_after_on_529(monkeypatch) -> None:
     slept: list[float] = []
 
-    async def _fake_wait(self, seconds: float) -> bool:  # type: ignore[no-untyped-def]
+    async def _fake_sleep(seconds: float) -> None:
         slept.append(seconds)
-        return False
 
-    monkeypatch.setattr(
-        "headroom.proxy.server.HeadroomProxy._wait_for_retry_delay_or_shutdown", _fake_wait
-    )
+    monkeypatch.setattr("headroom.proxy.server.asyncio.sleep", _fake_sleep)
     transport = _RateLimitTransport(fail_status=529, fail_times=1, retry_after="2")
     proxy = _proxy_with(transport)
     asyncio.run(proxy._retry_request("POST", "https://up/v1/messages", {}, {"messages": []}))

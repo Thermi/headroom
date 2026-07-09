@@ -22,7 +22,8 @@ def _sample_stats() -> dict:
         "cost": {
             "savings_usd": 12.34,
             "compression_savings_usd": 12.34,
-            "cache_savings_usd": 5.25,
+            "cache_savings_usd": 5.67,
+            "cli_tokens_avoided": 0,
         },
         "requests": {
             "total": 128,
@@ -36,6 +37,7 @@ def _sample_stats() -> dict:
             "input": 245_000,
             "output": 88_000,
             "saved": 143_000,
+            "cli_tokens_avoided": 0,
             "total_before_compression": 388_000,
             "savings_percent": 36.86,
         },
@@ -74,7 +76,7 @@ def _sample_stats() -> dict:
                     "write_premium": "25%",
                     "savings_usd": 5.67,
                     "write_premium_usd": 0.42,
-                    "net_savings_usd": 5.25,
+                    "net_savings_usd": 5.67,
                     "label": "Explicit breakpoints, 5-min TTL",
                     "observed_ttl_buckets": {
                         "5m": {"tokens": 185_000, "requests": 18},
@@ -100,7 +102,7 @@ def _sample_stats() -> dict:
                 "bust_write_tokens": 0,
                 "savings_usd": 5.67,
                 "write_premium_usd": 0.42,
-                "net_savings_usd": 5.25,
+                "net_savings_usd": 5.67,
                 "hit_rate": 75.0,
                 "observed_ttl_buckets": {
                     "5m": {"tokens": 185_000, "requests": 18},

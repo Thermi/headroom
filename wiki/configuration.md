@@ -53,8 +53,11 @@ headroom proxy --no-optimize
 # Disable semantic caching
 headroom proxy --no-cache
 
-# Disable CCR entirely (no retrieval markers and no injected retrieve tool)
-headroom proxy --no-ccr
+# Disable CCR tool injection
+headroom proxy --no-ccr-inject-tool
+
+# Disable CCR retrieval markers
+headroom proxy --no-ccr-marker
 
 # Disable proactive CCR expansion
 headroom proxy --no-ccr-proactive-expansion
