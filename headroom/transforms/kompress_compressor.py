@@ -159,7 +159,7 @@ _execution_wait_seconds_total: dict[str, float] = {
 }
 
 
-def _execution_wait_budget_seconds() -> float:
+def _execution_wait_budget_seconds() -> float | None:
     raw = os.environ.get(KOMPRESS_EXECUTION_SEMAPHORE_WAIT_MS_ENV)
     if raw is None:
         return KOMPRESS_EXECUTION_SEMAPHORE_WAIT_MS_DEFAULT / 1000.0
@@ -174,12 +174,13 @@ def _execution_wait_budget_seconds() -> float:
         )
         return KOMPRESS_EXECUTION_SEMAPHORE_WAIT_MS_DEFAULT / 1000.0
     if parsed < 0:
-        logger.warning(
-            "Negative %s=%r; disabling timeout and using fail-open.",
+        logger.info(
+            "Negative %s=%r; disabling timeout — "
+            "Kompress will wait indefinitely for execution slot.",
             KOMPRESS_EXECUTION_SEMAPHORE_WAIT_MS_ENV,
             raw,
         )
-        return 0.0
+        return None
     return parsed / 1000.0
 
 
@@ -221,9 +222,11 @@ def _acquire_execution_slot(
 
 def get_kompress_execution_stats() -> dict[str, int | float]:
     """Return execution-acquire observability counters."""
+    budget = _execution_wait_budget_seconds()
+    timeout_ms = -1 if budget is None else int(budget * 1000)
     with _execution_metrics_lock:
         return {
-            "execution_acquire_timeout_ms": int(_execution_wait_budget_seconds() * 1000),
+            "execution_acquire_timeout_ms": timeout_ms,
             "execution_timeout_skips_total": _execution_skip_counters["timeout"],
             "execution_wait_seconds_total": _execution_wait_seconds_total["timeout"],
         }
