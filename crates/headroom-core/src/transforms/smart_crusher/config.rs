@@ -129,8 +129,8 @@ impl Default for SmartCrusherConfig {
         // Python counterpart — they govern Rust-side dispatch only.
         SmartCrusherConfig {
             enabled: true,
-            min_items_to_analyze: 5,
-            min_tokens_to_crush: 200,
+            min_items_to_analyze: 3,
+            min_tokens_to_crush: 80,
             variance_threshold: 2.0,
             uniqueness_threshold: 0.1,
             similarity_threshold: 0.8,
@@ -141,8 +141,8 @@ impl Default for SmartCrusherConfig {
             use_feedback_hints: true,
             toin_confidence_threshold: 0.5,
             dedup_identical_items: true,
-            first_fraction: 0.3,
-            last_fraction: 0.15,
+            first_fraction: 0.2,
+            last_fraction: 0.1,
             relevance_threshold: 0.3,
             lossless_min_savings_ratio: 0.15,
             enable_ccr_marker: true,
@@ -167,8 +167,8 @@ mod tests {
         // default, this test must be updated in lockstep.
         let c = SmartCrusherConfig::default();
         assert!(c.enabled);
-        assert_eq!(c.min_items_to_analyze, 5);
-        assert_eq!(c.min_tokens_to_crush, 200);
+        assert_eq!(c.min_items_to_analyze, 3);
+        assert_eq!(c.min_tokens_to_crush, 80);
         assert_eq!(c.variance_threshold, 2.0);
         assert_eq!(c.uniqueness_threshold, 0.1);
         assert_eq!(c.similarity_threshold, 0.8);
@@ -179,8 +179,8 @@ mod tests {
         assert!(c.use_feedback_hints);
         assert_eq!(c.toin_confidence_threshold, 0.5);
         assert!(c.dedup_identical_items);
-        assert_eq!(c.first_fraction, 0.3);
-        assert_eq!(c.last_fraction, 0.15);
+        assert_eq!(c.first_fraction, 0.2);
+        assert_eq!(c.last_fraction, 0.1);
         assert_eq!(c.relevance_threshold, 0.3);
         assert_eq!(c.lossless_min_savings_ratio, 0.15);
         assert!(c.enable_ccr_marker);

@@ -170,8 +170,8 @@ class SmartCrusherConfig:
     """
 
     enabled: bool = True
-    min_items_to_analyze: int = 5
-    min_tokens_to_crush: int = 200
+    min_items_to_analyze: int = 3
+    min_tokens_to_crush: int = 80
     variance_threshold: float = 2.0
     uniqueness_threshold: float = 0.1
     similarity_threshold: float = 0.8
@@ -182,8 +182,8 @@ class SmartCrusherConfig:
     use_feedback_hints: bool = True
     toin_confidence_threshold: float = 0.5
     dedup_identical_items: bool = True
-    first_fraction: float = 0.3
-    last_fraction: float = 0.15
+    first_fraction: float = 0.2
+    last_fraction: float = 0.1
     # Minimum byte-savings ratio for the lossless Table/CSV compaction
     # path to win over the lossy path (0.15, matching the Rust default —
     # the two must stay in lockstep, see config.rs). Lossless output

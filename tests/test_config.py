@@ -116,8 +116,8 @@ class TestSmartCrusherConfig:
     def test_default_values(self):
         """Default values are correctly set."""
         config = SmartCrusherConfig()
-        assert config.min_items_to_analyze == 5
-        assert config.min_tokens_to_crush == 200
+        assert config.min_items_to_analyze == 3
+        assert config.min_tokens_to_crush == 80
         assert config.variance_threshold == 2.0
         assert config.uniqueness_threshold == 0.1
         assert config.similarity_threshold == 0.8

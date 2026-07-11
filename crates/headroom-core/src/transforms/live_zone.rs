@@ -149,26 +149,26 @@ pub const DEFAULT_MODEL: &str = "claude-3-5-sonnet-20241022";
 // grep-able and reviewable in one place.
 
 /// JSON-array tool_results below this size route to no-op.
-const THRESHOLD_JSON_ARRAY: usize = 512;
-/// Build / log output below this size routes to no-op (512 B). Logs
+const THRESHOLD_JSON_ARRAY: usize = 128;
+/// Build / log output below this size routes to no-op (128 B). Logs
 /// are the most repetitive content type so the threshold is the
 /// lowest of the bunch.
-const THRESHOLD_BUILD_OUTPUT: usize = 512;
+const THRESHOLD_BUILD_OUTPUT: usize = 128;
 /// Search-result blocks below this size route to no-op.
-const THRESHOLD_SEARCH_RESULTS: usize = 512;
+const THRESHOLD_SEARCH_RESULTS: usize = 128;
 /// Git-diff blocks below this size route to no-op.
-const THRESHOLD_GIT_DIFF: usize = 512;
+const THRESHOLD_GIT_DIFF: usize = 128;
 /// Source-code blocks below this size route to no-op. Pinned
 /// for the future Rust code-compressor port — currently unused
 /// because `ContentType::SourceCode` short-circuits to no-op above
 /// the dispatch (see `dispatch_compressor`).
-const THRESHOLD_SOURCE_CODE: usize = 512;
+const THRESHOLD_SOURCE_CODE: usize = 128;
 /// Plain-text blocks below this size route to no-op. Pinned
 /// for the future Kompress wiring (PR-B7 follow-up); currently unused.
-const THRESHOLD_PLAIN_TEXT: usize = 512;
+const THRESHOLD_PLAIN_TEXT: usize = 128;
 /// HTML blocks have no compressor; threshold matches plain text so
 /// when an HTML compressor lands the value is already pinned.
-const THRESHOLD_HTML: usize = 512;
+const THRESHOLD_HTML: usize = 128;
 
 /// Map a content type to its byte threshold. Returning `usize` rather
 /// than an `Option` because every variant has a sensible default;

@@ -40,7 +40,7 @@ def test_agent_90_profile_sets_accuracy_preserving_compress_config() -> None:
 
     assert cfg.compress_user_messages is True
     assert cfg.compress_system_messages is True
-    assert cfg.protect_recent == 2
+    assert cfg.protect_recent == 1
     assert cfg.protect_analysis_context is True
     assert cfg.target_ratio == 0.10
     assert cfg.min_tokens_to_compress == 120
@@ -63,58 +63,21 @@ def test_agent_90_profile_exports_cross_agent_proxy_env() -> None:
     assert env["HEADROOM_ACCURACY_GUARD"] == "strict"
 
 
-def test_coding_persona_compresses_recent_delta_and_stays_visible() -> None:
+def test_coding_persona_protects_working_set_and_stays_visible() -> None:
     profile = get_agent_savings_profile("coding")
 
     env = profile.proxy_env()
 
     assert env["HEADROOM_SAVINGS_PROFILE"] == "coding"
-    assert env["HEADROOM_MODE"] == "cache"  # delta-only compression at ~0 prefix-cache busts
-    assert env["HEADROOM_PROTECT_RECENT"] == "0"  # reads guarded by type, not position
-    assert env["HEADROOM_MIN_TOKENS"] == "10"  # low → even modest deltas are eligible
-    # Cache mode compresses the newest observation delta → compress_user must be ON.
-    assert env["HEADROOM_COMPRESS_USER_MESSAGES"] == "1"
+    assert env["HEADROOM_MODE"] == "token"  # token-based compression mode
+    assert env["HEADROOM_PROTECT_RECENT"] == "2"  # keep the active code working set verbatim
+    assert env["HEADROOM_MIN_TOKENS"] == "25"  # low → compression is actually visible
+    # Token mode protects user messages by default — the model's own
+    # instructions are the subject, not the object, of compression.
+    assert env["HEADROOM_COMPRESS_USER_MESSAGES"] == "0"
     assert env["HEADROOM_COMPRESS_SYSTEM_MESSAGES"] == "0"  # system prompt is the hottest cache
     assert env["HEADROOM_ACCURACY_GUARD"] == "strict"
-    assert "HEADROOM_TARGET_RATIO" not in env  # unset → Kompress / ambient default decides
-    # Coding posture toggles seeded through the profile.
-    assert env["HEADROOM_TOOL_SEARCH"] == "1"
-    assert env["HEADROOM_DEDUPE"] == "1"
-    assert env["HEADROOM_LOSSLESS_THEN_LOSSY"] == "1"
-    assert env["HEADROOM_PROTECT_READS"] == "1"
-    assert env["HEADROOM_CODE_AWARE_ENABLED"] == "1"
-    assert env["HEADROOM_EFFORT_ROUTER"] == "0"
-    assert env["HEADROOM_LOSSLESS"] == "0"  # lossy enabled (CCR keeps it recoverable)
-    assert env["HEADROOM_MIN_CHARS_FOR_BLOCK"] == "25"
-
-
-def test_coding_profile_couples_zero_protect_recent_with_type_read_guard() -> None:
-    """Fidelity invariant behind #2145's protect_recent 2->0.
-
-    Dropping positional protection (protect_recent=0) is only safe because the
-    code working set stays byte-exact via the TYPE-based read guard
-    (protect_reads=True), and any *other* recent delta that does get compressed
-    stays losslessly recoverable via CCR (lossless=0 means lossy-with-CCR, not
-    silent loss) while the frozen prefix is left untouched (cache mode). This is
-    the honest boundary: recent file reads are verbatim, recent non-read deltas
-    are recoverable — not "nothing is ever touched". If a future edit drops the
-    read guard while keeping protect_recent=0, recent reads would silently
-    degrade, so this test fails closed on that pairing.
-    """
-    profile = get_agent_savings_profile("coding")
-
-    # Positional protection is off ...
-    assert profile.protect_recent == 0
-    # ... so the byte-exact guarantee for reads MUST come from the type guard.
-    assert profile.protect_reads is True
-
-    env = profile.proxy_env()
-    assert env["HEADROOM_PROTECT_RECENT"] == "0"
-    assert env["HEADROOM_PROTECT_READS"] == "1"
-    # Lossy compression is on, but CCR keeps compressed deltas recoverable, and
-    # cache mode compresses only the newest delta (frozen prefix stays byte-stable).
-    assert env["HEADROOM_LOSSLESS"] == "0"
-    assert env["HEADROOM_MODE"] == "cache"
+    assert "HEADROOM_TARGET_RATIO" not in env  # unset -> Kompress / ambient default decides
 
 
 def test_general_persona_has_no_positional_code_protection() -> None:
@@ -130,15 +93,15 @@ def test_general_persona_has_no_positional_code_protection() -> None:
 def test_personas_omit_target_ratio_in_pipeline_kwargs() -> None:
     # coding compresses the delta observation (cache mode) → compress_user True;
     # general has no positional code working set and leaves user turns intact.
-    for name, expected_protect, expected_compress_user, expected_min_tokens in (
-        ("coding", 0, True, 10),
-        ("general", 0, False, 25),
+    for name, expected_protect, expected_compress_user in (
+        ("coding", 2, False),
+        ("general", 0, False),
     ):
         kwargs = proxy_pipeline_kwargs(ProxyConfig(savings_profile=name))
 
         assert kwargs["protect_recent"] == expected_protect
         assert kwargs["read_protection_window"] == expected_protect
-        assert kwargs["min_tokens_to_compress"] == expected_min_tokens
+        assert kwargs["min_tokens_to_compress"] == 25
         assert kwargs["compress_user_messages"] is expected_compress_user
         assert kwargs["compress_system_messages"] is False
         assert kwargs["force_kompress"] is False
@@ -150,8 +113,8 @@ def test_persona_apply_profile_leaves_target_ratio_untouched() -> None:
 
     apply_agent_savings_profile(cfg, "coding")
 
-    assert cfg.protect_recent == 0
-    assert cfg.min_tokens_to_compress == 10
+    assert cfg.protect_recent == 2
+    assert cfg.min_tokens_to_compress == 25
     assert cfg.target_ratio == 0.42  # persona did not override an explicit ratio
 
 
@@ -224,7 +187,7 @@ def test_compress_applies_agent_savings_profile_to_pipeline(monkeypatch) -> None
     assert result.compression_ratio == 0.9
     assert captured["compress_user_messages"] is True
     assert captured["compress_system_messages"] is True
-    assert captured["protect_recent"] == 2
+    assert captured["protect_recent"] == 1
     assert captured["protect_analysis_context"] is True
     assert captured["target_ratio"] == 0.10
     assert captured["min_tokens_to_compress"] == 120
@@ -363,7 +326,7 @@ def test_agent_savings_config_mismatches_accepts_matching_runtime_config(monkeyp
         "target_ratio": "0.10",
         "compress_user_messages": True,
         "compress_system_messages": True,
-        "protect_recent": "2",
+        "protect_recent": "1",
         "protect_analysis_context": True,
         "min_tokens_to_crush": "120",
         "max_items_after_crush": "8",
@@ -410,14 +373,14 @@ def test_agent_90_profile_applies_to_proxy_config_runtime_kwargs() -> None:
 
     assert kwargs["compress_user_messages"] is True
     assert kwargs["compress_system_messages"] is True
-    assert kwargs["protect_recent"] == 2
+    assert kwargs["protect_recent"] == 1
     assert kwargs["protect_analysis_context"] is True
     assert kwargs["target_ratio"] == 0.10
     assert kwargs["min_tokens_to_compress"] == 120
     assert kwargs["max_items_after_crush"] == 8
     assert kwargs["smart_crusher_with_compaction"] is False
     assert kwargs["force_kompress"] is True
-    assert kwargs["read_protection_window"] == 2
+    assert kwargs["read_protection_window"] == 1
 
 
 def test_proxy_explicit_config_overrides_agent_90_profile() -> None:

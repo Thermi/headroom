@@ -113,7 +113,7 @@ def _scenarios() -> list[tuple[str, str, str, float]]:
         )
     )
 
-    # 3. Short array (below min_items_to_analyze=5) -> passthrough.
+    # 3. Short array (below min_items_to_analyze=3) -> passthrough.
     out.append(
         (
             "short_array_passthrough",

@@ -56,7 +56,7 @@ def _bigger_array(n: int = 60) -> str:
 
     Items use a low-uniqueness shape (`{"status": "ok", "tag": "x"}`)
     so the analyzer recommends compaction or row drops. We need at
-    least 200 tokens (`min_tokens_to_crush` default) to enter the
+    least 80 tokens (`min_tokens_to_crush` default) to enter the
     crusher; 60 items keeps us well above that.
     """
     items = [{"status": "ok", "tag": "x", "n": i} for i in range(n)]

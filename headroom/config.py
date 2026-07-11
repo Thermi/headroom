@@ -542,8 +542,8 @@ class SmartCrusherConfig:
     """
 
     enabled: bool = True  # Enabled by default — sole tool-output compressor
-    min_items_to_analyze: int = 5  # Don't analyze tiny arrays
-    min_tokens_to_crush: int = 200  # Only crush if > N tokens
+    min_items_to_analyze: int = 3  # Don't analyze tiny arrays
+    min_tokens_to_crush: int = 80  # Only crush if > N tokens
     variance_threshold: float = 2.0  # Std devs for change point detection
     uniqueness_threshold: float = 0.1  # Below this = nearly constant
     similarity_threshold: float = 0.8  # For clustering similar strings

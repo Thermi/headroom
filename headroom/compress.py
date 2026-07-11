@@ -108,7 +108,7 @@ class CompressConfig:
     Set False to preserve system prompts exactly as-is. Useful for voice
     agents where tool definitions and instructions must not be altered."""
 
-    protect_recent: int = 4
+    protect_recent: int = 2
     """Don't compress the last N messages (they're the active conversation).
     Set 0 to compress everything."""
 

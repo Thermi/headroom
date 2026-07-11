@@ -1536,7 +1536,7 @@ class ContentRouterConfig:
 
     # Protection: Don't compress content that's likely the subject of analysis
     skip_user_messages: bool = True  # User messages contain what they want analyzed
-    protect_recent_code: int = 4  # Don't compress CODE in last N messages (0 = disabled)
+    protect_recent_code: int = 2  # Don't compress CODE in last N messages (0 = disabled)
     protect_analysis_context: bool = True  # Detect "analyze/review" intent, protect code
 
     # Protection: failed tool calls / error outputs stay verbatim (issue #847).
@@ -1565,7 +1565,7 @@ class ContentRouterConfig:
     # block is considered for compression. Below this, the overhead of
     # routing/detecting/caching exceeds any savings, so the block is
     # passed through verbatim.
-    min_chars_for_block_compression: int = 500
+    min_chars_for_block_compression: int = 200
 
     # Adaptive Read protection: fraction of total messages to protect from
     # compression.  At 10 msgs, protects ~5 Reads.  At 100 msgs, protects ~10.
