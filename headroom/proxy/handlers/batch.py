@@ -166,12 +166,11 @@ class BatchHandlerMixin:
                     if hasattr(self, "openai_provider")
                     else 128000
                 )
-result = self.openai_pipeline.apply(
+                result = self.openai_pipeline.apply(
                     messages=messages,
                     model=model,
                     model_limit=context_limit,
                     context=extract_user_query(messages),
-                )
                 )
                 optimized_messages = result.messages
                 original_tokens = result.tokens_before
