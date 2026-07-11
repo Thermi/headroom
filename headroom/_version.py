@@ -1,5 +1,7 @@
 """Package version metadata — computed lazily to avoid startup I/O."""
 
+#  Copyright (c) 2026 Noel Kuntze
+
 from __future__ import annotations
 
 import importlib
@@ -101,7 +103,7 @@ def _source_tree_version(root: Path) -> str | None:
 
 
 def get_version() -> str:
-"""Return Headroom's runtime version, cached after first call."""
+    """Return Headroom's runtime version, cached after first call."""
     global _CACHED_VERSION
     if _CACHED_VERSION is not None:
         return _CACHED_VERSION
