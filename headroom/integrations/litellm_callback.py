@@ -109,6 +109,7 @@ class HeadroomCallback(_CustomLogger):
 
         if data is None:
             return None
+
         if call_type not in ("completion", "acompletion"):
             return data
 
