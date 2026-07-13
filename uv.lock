@@ -1979,6 +1979,7 @@ requires-dist = [
     { name = "openai", marker = "extra == 'dev'", specifier = ">=1.0.0" },
     { name = "openai", marker = "extra == 'evals'", specifier = ">=1.0.0" },
     { name = "openai", marker = "extra == 'proxy'", specifier = ">=2.14.0" },
+    { name = "orjson", marker = "platform_python_implementation != 'PyPy' and extra == 'proxy'", specifier = ">=3.9.14" },
     { name = "openpyxl", marker = "extra == 'dev'", specifier = ">=3.1.0" },
     { name = "openpyxl", marker = "extra == 'spreadsheet'", specifier = ">=3.1.0" },
     { name = "opentelemetry-api", specifier = ">=1.24.0" },
