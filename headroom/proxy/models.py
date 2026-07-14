@@ -39,6 +39,30 @@ def _qdrant_env_port_or_default() -> int:
         return qdrant_env.DEFAULT_QDRANT_PORT
 
 
+logger = logging.getLogger(__name__)
+
+
+def _qdrant_env_port_or_default() -> int:
+    """Resolve ``HEADROOM_QDRANT_PORT``, falling back to the default on a bad value.
+
+    ``qdrant_env.qdrant_env_port`` raises on an invalid port (intended for
+    explicit qdrant setup). As a ``ProxyConfig`` field ``default_factory`` it
+    runs on EVERY ``ProxyConfig()`` construction, regardless of whether
+    memory/qdrant is enabled (both off by default), so a stray or typo'd
+    ``HEADROOM_QDRANT_PORT`` would crash proxy startup for an unrelated,
+    off-by-default subsystem. Fail soft here so config construction never raises.
+    """
+    try:
+        return qdrant_env.qdrant_env_port()
+    except ValueError:
+        logger.warning(
+            "Ignoring invalid HEADROOM_QDRANT_PORT; using default %d. "
+            "Set a valid 1-65535 port to override.",
+            qdrant_env.DEFAULT_QDRANT_PORT,
+        )
+        return qdrant_env.DEFAULT_QDRANT_PORT
+
+
 # =============================================================================
 # Data Models
 # =============================================================================
