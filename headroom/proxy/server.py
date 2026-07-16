@@ -490,6 +490,15 @@ class CompressionQuarantinedError(asyncio.TimeoutError):
     """
 
 
+class CompressionQuarantinedError(asyncio.TimeoutError):
+    """Compression was skipped while a timed-out worker was still running.
+
+    Inherit from ``asyncio.TimeoutError`` rather than the builtin directly so
+    Python 3.10 callers classify quarantine bypasses exactly like executor
+    timeouts. The two exception classes only became aliases in Python 3.11.
+    """
+
+
 _MULTI_WORKER_CONFIG_ENV = "HEADROOM_PROXY_CONFIG_JSON"
 
 # Env var that opts out of the Rust core deployment smoke test (Hotfix-A0).
