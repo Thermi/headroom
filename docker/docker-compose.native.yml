@@ -34,7 +34,7 @@ HEADROOM_CONFIG_DIR: /tmp/headroom-home/.headroom/config
     scale: 0
     env_file: .env
 
-  proxy:
+  proxy-openrouter:
     image: ${HEADROOM_IMAGE:-ghcr.io/chopratejas/headroom:latest}
     build:
       context: ..
@@ -87,3 +87,79 @@ HEADROOM_CONFIG_DIR: /tmp/headroom-home/.headroom/config
       - ${PWD:-.}/kompress-int8.onnx:/opt/headroom/kompress-int8.onnx
     command: ["--host", "0.0.0.0", "--port", "${HEADROOM_PORT:-8787}", "--code-aware", "--memory"]
     env_file: .env
+  proxy-opencode:
+    image: ${HEADROOM_IMAGE:-ghcr.io/chopratejas/headroom:latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        <<: *build-args
+      labels:
+        <<: *build-labels
+    entrypoint: ["headroom", "proxy"]
+    working_dir: /workspace
+    restart: unless-stopped
+    user: root
+    # GPU support: uncomment the deploy block below and set
+    # HEADROOM_GPU_COUNT=all (or a number) to enable GPU passthrough.
+    # Requires nvidia-container-toolkit on the host.
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: ${HEADROOM_GPU_COUNT:-1}
+              capabilities: [gpu]
+    environment:
+      - HOME=${HEADROOM_HOST_HOME}
+      - HEADROOM_HOST=0.0.0.0
+      # Canonical Headroom filesystem contract (issue #175). See `cli` service
+      # above for rationale.
+      - HEADROOM_WORKSPACE_DIR=${HEADROOM_HOST_HOME}/.headroom
+      - HEADROOM_CONFIG_DIR=${HEADROOM_HOST_HOME}/.headroom/config
+      - HEADROOM_ANTHROPIC_ENABLED=false
+      - HEADROOM_SILENCE_HEALTH_PROBES=true
+      - HEADROOM_KOMPRESS_BACKEND=onnx_gpu
+      - HF_HOME=${HEADROOM_HOST_HOME}/hf-cache
+      - XDG_CACHE_HOME=${HEADROOM_HOST_HOME}/xdg-cache
+      - HEADROOM_KOMPRESS_ONNX_PATH=/opt/headroom/kompress-int8.onnx
+      - HEADROOM_KOMPRESS_TOKENIZER_PATH=/opt/headroom/kompress-tokenizer
+      # Persist the CUDA kernel JIT cache on the mounted HF volume. On new GPU
+      # architectures (e.g. Blackwell sm_120 / RTX 50xx) onnxruntime-gpu ships
+      # no precompiled SASS, so the driver JIT-compiles kernels on first
+      # inference (~60s). Caching it here (a bind-mounted dir) means that cost
+      # is paid once, not on every container recreate.
+      - CUDA_CACHE_PATH=${HEADROOM_HOST_HOME}/hf-cache/nv-compute
+      - CUDA_CACHE_MAXSIZE=2147483648
+      # Bound glibc heap fragmentation. This is a heavily-threaded process
+      # (ONNX intra-op threads + uvicorn + tokenizers); with MALLOC_ARENA_MAX
+      # unset glibc spawns up to 8*nproc arenas, each retaining freed
+      # variable-size inference buffers and rarely returning them to the OS,
+      # which makes RSS ratchet upward after start. Capping to 2 arenas and
+      # lowering the trim threshold flattens that creep (CUDA context/model
+      # weights are unaffected — those are the fixed ~2GB baseline).
+      - MALLOC_ARENA_MAX=2
+      - MALLOC_TRIM_THRESHOLD_=131072
+      - HEADROOM_NO_FILE_LOG=true
+      - HEADROOM_SAVINGS_PROFILE=balanced
+      - HEADROOM_MEMORY_MODE=low
+    ports:
+      - "10002:8787"
+    volumes:
+      - ${HEADROOM_WORKSPACE:-.}:/workspace
+      - ${HEADROOM_HOST_HOME:?set HEADROOM_HOST_HOME}/.headroom:/tmp/headroom-home/.headroom
+      - ${HEADROOM_HOST_HOME:?set HEADROOM_HOST_HOME}/.claude:/tmp/headroom-home/.claude
+      - ${HEADROOM_HOST_HOME:?set HEADROOM_HOST_HOME}/.codex:/tmp/headroom-home/.codex
+      - ${HEADROOM_HOST_HOME:?set HEADROOM_HOST_HOME}/.gemini:/tmp/headroom-home/.gemini
+      # Bind-mount host HuggingFace cache so pre-downloaded Kompress models
+      # are loaded from disk at container startup (no re-download on restart)
+      - ${HEADROOM_HOST_HOME:?set HEADROOM_HOST_HOME}/.cache/huggingface:/tmp/hf-cache
+      # Mount the locally-exported ONNX model so the proxy loads it directly
+      # without downloading from HuggingFace at startup.
+      - "./kompress-int8.onnx:/opt/headroom/kompress-int8.onnx"
+      # Mount the locally-saved ModernBERT tokenizer so the proxy loads it
+      # without downloading from HuggingFace at startup.
+      - "./kompress-tokenizer:/opt/headroom/kompress-tokenizer"
+    command: ["--host", "0.0.0.0", "--port", "8787", "--code-aware", "--memory", "--learn", "--no-inline-tools", "--auto-extract-memories", "--memory-storage", "project"]
+    env_file:
+    - .env2
