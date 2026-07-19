@@ -673,8 +673,14 @@ def _onnx_filename_candidates() -> tuple[str, ...]:
       3. Default candidates (int8-wo → fp32 → int8).
     """
     local_path = os.environ.get("HEADROOM_KOMPRESS_ONNX_PATH", "").strip()
-    if local_path:
+    if local_path and os.path.isfile(local_path):
         return (local_path,)
+    if local_path:
+        logger.warning(
+            "HEADROOM_KOMPRESS_ONNX_PATH set to %r but file not found; "
+            "falling back to HuggingFace download",
+            local_path,
+        )
 
     override = os.environ.get(KOMPRESS_ONNX_FILENAME_ENV, "").strip()
     if override:

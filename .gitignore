@@ -6,6 +6,7 @@
 # Local Kompress ONNX export artifacts (scripts/export_kompress_v2_onnx.py).
 # Hundreds of MB each — published to HuggingFace, never committed.
 /onnx/
+docker/kompress/*.onnx
 
 # Private scripts (contain credentials). Allowlist checked-in helpers below.
 scripts/
