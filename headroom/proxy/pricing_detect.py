@@ -35,10 +35,16 @@ def feed_response(
     try:
         entry = _extract_pricing(model, response_body, response_headers, provider)
         if entry is None:
+            logger.debug(
+                "No pricing found in response for model=%s (body=%s, headers=%s)",
+                model,
+                bool(response_body),
+                bool(response_headers),
+            )
             return
         _inject_pricing(model, entry, provider)
     except Exception:
-        pass  # never let pricing detection break the response
+        logger.debug("Auto-detect pricing failed for model=%s", model, exc_info=True)
 
 
 def _extract_pricing(
@@ -85,6 +91,14 @@ def _try_usage_block(
     completion_tokens = _as_int(usage.get("completion_tokens") or usage.get("output_tokens"))
     cost = _as_float(usage.get("cost") or usage.get("total_cost"))
 
+    logger.debug(
+        "Trying usage block for model=%s: prompt_tokens=%s, completion_tokens=%s, cost=%s",
+        model,
+        prompt_tokens,
+        completion_tokens,
+        cost,
+    )
+
     if not (prompt_tokens and completion_tokens and cost and cost > 0):
         return None
 
@@ -95,6 +109,15 @@ def _try_usage_block(
 
     input_cost_per_token = (cost * prompt_tokens / total_tokens) / prompt_tokens
     output_cost_per_token = (cost * completion_tokens / total_tokens) / completion_tokens
+
+    logger.info(
+        "Decoded pricing from usage block for model=%s: input=$%.8f/tok, output=$%.8f/tok "
+        "(total cost=$%s)",
+        model,
+        input_cost_per_token,
+        output_cost_per_token,
+        cost,
+    )
 
     return {
         "input_cost_per_token": input_cost_per_token,
@@ -123,20 +146,33 @@ def _try_pricing_headers(
         raw = headers.get(header_name)
         if not raw:
             continue
+        logger.debug(
+            "Trying pricing header=%s raw=%s for model=%s",
+            header_name,
+            str(raw)[:200],
+            model,
+        )
         try:
             data = json.loads(raw) if isinstance(raw, str) else raw
             if isinstance(data, dict):
-                return {
-                    "input_cost_per_token": _as_float(data.get("input", data.get("input_cost", 0)))
-                    / 1_000_000,
-                    "output_cost_per_token": _as_float(
-                        data.get("output", data.get("output_cost", 0))
-                    )
-                    / 1_000_000,
+                input_cost_per_1m = _as_float(data.get("input", data.get("input_cost", 0))) or 0.0
+                output_cost_per_1m = _as_float(data.get("output", data.get("output_cost", 0))) or 0.0
+                result : dict[str, Any] = {
+                    "input_cost_per_token": input_cost_per_1m / 1_000_000,
+                    "output_cost_per_token": output_cost_per_1m / 1_000_000,
                     "litellm_provider": provider or "openrouter",
                     "mode": "chat",
                 }
+                logger.info(
+                    "Decoded pricing header %s for model=%s: input=$%s/M, output=$%s/M",
+                    header_name,
+                    model,
+                    input_cost_per_1m,
+                    output_cost_per_1m,
+                )
+                return result
         except (json.JSONDecodeError, TypeError):
+            logger.debug("Failed to parse %s header as JSON for model=%s", header_name, model)
             continue
 
     # Per-header price signals (per-1M prices in USD)
