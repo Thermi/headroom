@@ -179,9 +179,11 @@ def _resolve_litellm_model(model: str) -> str:
         "o3-": "openai/",
         "o4-": "openai/",
         "gemini-": "google/",
+        "deepseek-": "deepseek/",
     }
+    model_lower = model.lower()
     for pattern, prefix in prefixes.items():
-        if model.startswith(pattern):
+        if model_lower.startswith(pattern):
             candidate = f"{prefix}{model}"
             try:
                 litellm.cost_per_token(
@@ -192,6 +194,20 @@ def _resolve_litellm_model(model: str) -> str:
                 return candidate
             except Exception:
                 break
+
+    provider_remap = {"moonshotai/": "moonshot/"}
+    for old_prefix, new_prefix in provider_remap.items():
+        if model_lower.startswith(old_prefix):
+            normalized = f"{new_prefix}{model[len(old_prefix) :]}"
+            try:
+                litellm.cost_per_token(
+                    model=normalized,
+                    prompt_tokens=1,
+                    completion_tokens=0,
+                )
+                return normalized
+            except Exception:
+                pass
 
     return model
 
