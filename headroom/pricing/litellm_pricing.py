@@ -125,7 +125,7 @@ def _resolve_litellm_model_uncached(model: str) -> str:
         return model
     except Exception:
         pass
-    # Try with provider prefix
+    # Try with known provider prefixes (fast-path for common models)
     prefixes = {
         "claude-": "anthropic/",
         "gpt-": "openai/",
@@ -135,9 +135,6 @@ def _resolve_litellm_model_uncached(model: str) -> str:
         "gemini-": "google/",
         "deepseek-": "deepseek/",
     }
-    # Case-insensitive prefix match: MiniMax uses mixed-case model
-    # names like "MiniMax-M3" (capital M's); we shouldn't require the
-    # user to lower-case their config to match.
     model_lower = model.lower()
     for pattern, prefix in prefixes.items():
         if model_lower.startswith(pattern):
@@ -147,18 +144,41 @@ def _resolve_litellm_model_uncached(model: str) -> str:
                 return prefixed
             except Exception:
                 break
-    # Provider prefix normalization: some clients use non-canonical
-    # provider prefixes that need remapping to litellm's canonical form.
-    provider_remap = {"moonshotai/": "moonshot/"}
-    for old_prefix, new_prefix in provider_remap.items():
-        if model_lower.startswith(old_prefix):
-            normalized = f"{new_prefix}{model[len(old_prefix) :]}"
-            try:
-                litellm.cost_per_token(model=normalized, prompt_tokens=1, completion_tokens=0)
-                return normalized
-            except Exception:
-                pass
+    # Dynamic provider prefix resolution: when a model has an unknown
+    # prefix (e.g. moonshotai/kimi-k3), strip the prefix and try every
+    # known litellm provider by checking model_cost directly.
+    if "/" in model:
+        bare_model = model.split("/", 1)[-1]
+        cost_db = litellm.model_cost
+        if bare_model in cost_db:
+            return bare_model
+        resolved = _find_provider_prefix(bare_model, cost_db)
+        if resolved:
+            return resolved
     return model
+
+
+def _known_provider_prefixes(cost_db: dict[str, Any]) -> list[str]:
+    """Return sorted list of known litellm provider prefixes."""
+    cached = getattr(_known_provider_prefixes, "_cache", None)
+    if cached is not None:
+        return cached
+    prefixes: set[str] = set()
+    for key in cost_db:
+        if "/" in key:
+            prefixes.add(key.split("/")[0] + "/")
+    result = sorted(prefixes)
+    _known_provider_prefixes._cache = result  # type: ignore[attr-defined]
+    return result
+
+
+def _find_provider_prefix(bare_model: str, cost_db: dict[str, Any]) -> str | None:
+    """Try each known provider prefix; return first match found in cost_db."""
+    for provider_prefix in _known_provider_prefixes(cost_db):
+        candidate = f"{provider_prefix}{bare_model}"
+        if candidate in cost_db:
+            return candidate
+    return None
 
 
 def _register_minimax_pricing() -> None:
@@ -397,49 +417,3 @@ def _inject_deepseek_pricing() -> None:
 
 
 _inject_deepseek_pricing()
-
-
-# ============================================================
-# Kimi K3 pricing injection
-# ============================================================
-# Kimi K3 launched late June 2026. Vendored LiteLLM JSON (1.93.0)
-# does not yet include it. Inject pricing at import time so the
-# primary cost-per-token path resolves it. Once upstream litellm
-# adds this entry, injection becomes a no-op.
-# Pricing source: https://platform.kimi.ai/docs/pricing/chat-k3
-# ============================================================
-
-_KIMI_K3_PRICING: dict[str, dict[str, float | str | int]] = {
-    "kimi-k3": {
-        # Cache miss: $3.00/M input, Cache hit: $0.30/M, Output: $15.00/M
-        "input_cost_per_token": 3.00 / 1_000_000,
-        "output_cost_per_token": 15.00 / 1_000_000,
-        "cache_read_input_token_cost": 0.30 / 1_000_000,
-        "input_cost_per_token_cache_hit": 0.30 / 1_000_000,
-        "litellm_provider": "moonshot",
-        "max_tokens": 1_048_576,
-        "max_input_tokens": 1_048_576,
-        "max_output_tokens": 1_048_576,
-    },
-}
-
-
-def _inject_kimi_k3_pricing() -> None:
-    """Inject Kimi K3 pricing into litellm's model_cost dict.
-
-    Only injects entries not already present, so upstream litellm
-    additions (once available) take precedence. Both bare and
-    provider-prefixed keys are added so resolve_litellm_model()
-    catches them via its provider prefix normalization loop.
-    """
-    if not LITELLM_AVAILABLE:
-        return
-    for model_name, pricing in _KIMI_K3_PRICING.items():
-        if model_name not in litellm.model_cost:
-            litellm.model_cost[model_name] = pricing
-        prefixed = f"moonshot/{model_name}"
-        if prefixed not in litellm.model_cost:
-            litellm.model_cost[prefixed] = pricing
-
-
-_inject_kimi_k3_pricing()

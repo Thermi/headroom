@@ -195,21 +195,31 @@ def _resolve_litellm_model(model: str) -> str:
             except Exception:
                 break
 
-    provider_remap = {"moonshotai/": "moonshot/"}
-    for old_prefix, new_prefix in provider_remap.items():
-        if model_lower.startswith(old_prefix):
-            normalized = f"{new_prefix}{model[len(old_prefix) :]}"
-            try:
-                litellm.cost_per_token(
-                    model=normalized,
-                    prompt_tokens=1,
-                    completion_tokens=0,
-                )
-                return normalized
-            except Exception:
-                pass
+    if "/" in model:
+        bare_model = model.split("/", 1)[-1]
+        cost_db = litellm.model_cost
+        if bare_model in cost_db:
+            return bare_model
+        for provider_prefix in _known_provider_prefixes(cost_db):
+            candidate = f"{provider_prefix}{bare_model}"
+            if candidate in cost_db:
+                return candidate
 
     return model
+
+
+def _known_provider_prefixes(cost_db: Any) -> list[str]:
+    """Return sorted list of known provider prefixes derived from model_cost."""
+    cached = getattr(_known_provider_prefixes, "_cache", None)
+    if cached is not None:
+        return cached
+    prefixes: set[str] = set()
+    for key in cost_db:
+        if "/" in key:
+            prefixes.add(key.split("/")[0] + "/")
+    result = sorted(prefixes)
+    _known_provider_prefixes._cache = result  # type: ignore[attr-defined]
+    return result
 
 
 def _estimate_compression_savings_usd(model: str, tokens_saved: int) -> float:
