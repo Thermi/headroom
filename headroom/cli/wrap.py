@@ -17,6 +17,8 @@ Usage:
     headroom wrap claude -- --model opus    # Pass args to claude
 """
 
+#  Copyright (c) 2026 Noel Kuntze
+
 from __future__ import annotations
 
 import errno
@@ -2140,6 +2142,11 @@ def codex_uses_chatgpt_auth(auth_path: Path) -> bool:
         data = json.loads(auth_path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
         return False
+    if not isinstance(data, dict):
+        return False
+    mode = data.get("auth_mode")
+    if isinstance(mode, str):
+        return mode.lower() == "chatgpt"
     return bool(data.get("token") and not data.get("api_key"))
 
 

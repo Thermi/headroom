@@ -1,3 +1,5 @@
+#  Copyright (c) 2026 Noel Kuntze
+
 from __future__ import annotations
 
 import pytest
@@ -11,6 +13,11 @@ from headroom.proxy.server import ProxyConfig, create_app  # noqa: E402
 
 
 class _FakePrefixTracker:
+    def __init__(self):
+        self._cached_token_count = 0
+        self._cached_message_count = 0
+        self.read_maturation_manager = None
+
     def get_frozen_message_count(self) -> int:
         return 0
 
@@ -80,7 +87,7 @@ def _make_config() -> ProxyConfig:
 def _install_prefix_tracker(proxy) -> None:
     tracker = _FakePrefixTracker()
     proxy.session_tracker_store.compute_session_id = lambda request, model, messages: "s1"
-    proxy.session_tracker_store.get_or_create = lambda session_id, provider: tracker
+    proxy.session_tracker_store.get_or_create = lambda session_id, provider, project=None: tracker
 
 
 def _anthropic_message_response() -> dict[str, object]:

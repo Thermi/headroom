@@ -1,3 +1,5 @@
+#  Copyright (c) 2026 Noel Kuntze
+
 from __future__ import annotations
 
 import asyncio
@@ -135,7 +137,7 @@ class TestSessionStats:
 class TestFormatSessionSummary:
     def test_empty_summary(self):
         text = _format_session_summary({}, {})
-        assert "Headroom Session Summary" in text
+        assert "Headroom Window-Scoped Session Summary" in text
         assert "Mode:" in text
 
     def test_with_compression_data(self):
@@ -504,7 +506,7 @@ class TestHandleStats:
             result = await server._handle_stats()
 
         assert len(result) == 1
-        assert "Headroom Session Summary" in result[0].text
+        assert "Headroom Window-Scoped Session Summary" in result[0].text
 
     async def test_stats_proxy_unreachable(self):
         server = _make_server(check_proxy=True)

@@ -16,6 +16,8 @@ The legacy behavior is still reachable via
 rollback (operator opt-in, not a fallback).
 """
 
+#  Copyright (c) 2026 Noel Kuntze
+
 from __future__ import annotations
 
 import gzip
@@ -340,7 +342,7 @@ def _make_anthropic_app(*, optimize: bool) -> tuple[TestClient, _CapturingTransp
     # turn 0 on every run.
     fake_tracker = _FakePrefixTracker(frozen_count=0)
     proxy.session_tracker_store.compute_session_id = lambda request, model, messages: "s1"
-    proxy.session_tracker_store.get_or_create = lambda session_id, provider: fake_tracker
+    proxy.session_tracker_store.get_or_create = lambda session_id, provider, project=None: fake_tracker
 
     return TestClient(app), transport
 
@@ -966,7 +968,7 @@ def test_streaming_forwarder_byte_faithful() -> None:
     # Pin session tracker so the cache-stable delta path is a no-op.
     fake_tracker = _FakePrefixTracker(frozen_count=0)
     proxy.session_tracker_store.compute_session_id = lambda request, model, messages: "s_stream"
-    proxy.session_tracker_store.get_or_create = lambda session_id, provider: fake_tracker
+    proxy.session_tracker_store.get_or_create = lambda session_id, provider, project=None: fake_tracker
 
     transport = _StreamingCapturingTransport()
     proxy.http_client = httpx.AsyncClient(transport=transport)

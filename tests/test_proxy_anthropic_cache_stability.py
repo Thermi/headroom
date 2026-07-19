@@ -1,5 +1,7 @@
 """Regression tests for Anthropic prefix-cache stability in proxy mode."""
 
+#  Copyright (c) 2026 Noel Kuntze
+
 from __future__ import annotations
 
 from types import SimpleNamespace
@@ -345,7 +347,7 @@ def test_token_mode_freeze_is_capped_by_prefix_tracker() -> None:
         proxy.session_tracker_store.compute_session_id = lambda request, model, messages: (
             "stable-session"
         )
-        proxy.session_tracker_store.get_or_create = lambda session_id, provider: fake_tracker
+        proxy.session_tracker_store.get_or_create = lambda session_id, provider, project=None: fake_tracker
 
         class _FakeCompressionCache:
             def apply_cached(self, messages):  # noqa: ANN001
@@ -420,7 +422,7 @@ def test_memory_context_avoids_system_mutation_when_prefix_frozen() -> None:
         proxy.session_tracker_store.compute_session_id = lambda request, model, messages: (
             "stable-session"
         )
-        proxy.session_tracker_store.get_or_create = lambda session_id, provider: fake_tracker
+        proxy.session_tracker_store.get_or_create = lambda session_id, provider, project=None: fake_tracker
 
         proxy.memory_handler = SimpleNamespace(
             config=SimpleNamespace(inject_context=True, inject_tools=False),
@@ -486,7 +488,7 @@ def test_ccr_system_instruction_injection_disabled_when_prefix_frozen(monkeypatc
         proxy.session_tracker_store.compute_session_id = lambda request, model, messages: (
             "stable-session"
         )
-        proxy.session_tracker_store.get_or_create = lambda session_id, provider: fake_tracker
+        proxy.session_tracker_store.get_or_create = lambda session_id, provider, project=None: fake_tracker
 
         class _FakeInjector:
             def __init__(
@@ -553,7 +555,7 @@ def test_ccr_tool_injection_disabled_when_prefix_frozen(monkeypatch) -> None:
         proxy.session_tracker_store.compute_session_id = lambda request, model, messages: (
             "stable-session"
         )
-        proxy.session_tracker_store.get_or_create = lambda session_id, provider: fake_tracker
+        proxy.session_tracker_store.get_or_create = lambda session_id, provider, project=None: fake_tracker
 
         class _FakeInjector:
             def __init__(
@@ -735,7 +737,7 @@ def test_previous_turns_always_frozen_only_final_turn_mutable() -> None:
         proxy.session_tracker_store.compute_session_id = lambda request, model, messages: (
             "stable-session"
         )
-        proxy.session_tracker_store.get_or_create = lambda session_id, provider: fake_tracker
+        proxy.session_tracker_store.get_or_create = lambda session_id, provider, project=None: fake_tracker
 
         proxy.anthropic_pipeline.apply = lambda **kwargs: (_ for _ in ()).throw(
             AssertionError("cache mode should not invoke anthropic pipeline")
@@ -921,7 +923,7 @@ def test_token_mode_does_not_force_freeze_all_previous_turns() -> None:
         proxy.session_tracker_store.compute_session_id = lambda request, model, messages: (
             "stable-session"
         )
-        proxy.session_tracker_store.get_or_create = lambda session_id, provider: fake_tracker
+        proxy.session_tracker_store.get_or_create = lambda session_id, provider, project=None: fake_tracker
 
         class _FakeCompressionCache:
             def apply_cached(self, messages):  # noqa: ANN001
@@ -1005,7 +1007,7 @@ def test_cache_mode_restores_frozen_prefix_if_transform_mutates_history() -> Non
         proxy.session_tracker_store.compute_session_id = lambda request, model, messages: (
             "stable-session"
         )
-        proxy.session_tracker_store.get_or_create = lambda session_id, provider: fake_tracker
+        proxy.session_tracker_store.get_or_create = lambda session_id, provider, project=None: fake_tracker
 
         original_messages = [
             {"role": "user", "content": "turn1"},
@@ -1075,7 +1077,7 @@ def test_cache_mode_does_not_forward_latest_turn_rewrites() -> None:
         proxy.session_tracker_store.compute_session_id = lambda request, model, messages: (
             "stable-session"
         )
-        proxy.session_tracker_store.get_or_create = lambda session_id, provider: fake_tracker
+        proxy.session_tracker_store.get_or_create = lambda session_id, provider, project=None: fake_tracker
 
         original_messages = [
             {"role": "user", "content": "turn1"},
@@ -1389,7 +1391,7 @@ def _drive_request(
     proxy.session_tracker_store.compute_session_id = lambda request, model, messages: (
         "issue-327-session"
     )
-    proxy.session_tracker_store.get_or_create = lambda session_id, provider: fake_tracker
+    proxy.session_tracker_store.get_or_create = lambda session_id, provider, project=None: fake_tracker
     proxy._get_compression_cache = lambda session_id: fake_comp_cache
 
     def _fake_apply(**kwargs):  # noqa: ANN003
@@ -1678,7 +1680,7 @@ def test_issue_327_streaming_and_non_streaming_compute_same_frozen_count() -> No
         proxy.session_tracker_store.compute_session_id = lambda request, model, messages: (
             "stream-parity-A"
         )
-        proxy.session_tracker_store.get_or_create = lambda s, p: fake_tracker
+        proxy.session_tracker_store.get_or_create = lambda s, p, _=None: fake_tracker
         proxy._get_compression_cache = lambda s: fake_cache_a
 
         def _fake_apply_a(**kwargs):  # noqa: ANN003
@@ -1735,7 +1737,7 @@ def test_issue_327_streaming_and_non_streaming_compute_same_frozen_count() -> No
         proxy.session_tracker_store.compute_session_id = lambda request, model, messages: (
             "stream-parity-B"
         )
-        proxy.session_tracker_store.get_or_create = lambda s, p: fake_tracker
+        proxy.session_tracker_store.get_or_create = lambda s, p, _=None: fake_tracker
         proxy._get_compression_cache = lambda s: fake_cache_b
 
         def _fake_apply_b(**kwargs):  # noqa: ANN003
