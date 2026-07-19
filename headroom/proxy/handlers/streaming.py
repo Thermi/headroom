@@ -225,6 +225,13 @@ class StreamingMixin:
                             usage["cache_creation_input_tokens"] = max(
                                 _input_val - _cached_val, 0
                             )
+                        # OpenRouter sends per-request cost in the usage block
+                        _cost = chunk_usage.get("cost")
+                        if _cost is not None:
+                            try:
+                                usage["cost"] = float(_cost)
+                            except (TypeError, ValueError):
+                                pass
 
                 elif provider == "gemini":
                     # Gemini sends usageMetadata in each streaming chunk
@@ -353,6 +360,12 @@ class StreamingMixin:
                             usage_found["cache_creation_input_tokens"] = max(
                                 _input_val - _cached_val, 0
                             )
+                        _cost = chunk_usage.get("cost")
+                        if _cost is not None:
+                            try:
+                                usage_found["cost"] = float(_cost)
+                            except (TypeError, ValueError):
+                                pass
 
             elif provider == "gemini":
                 usage_meta = data.get("usageMetadata")
@@ -962,6 +975,30 @@ class StreamingMixin:
                     compression_foregone=int(cache_read_tokens * _est_compression_ratio),
                 )
 
+        # Auto-detect pricing from upstream streaming response (OpenRouter etc.)
+        # Injects into litellm.model_cost before cost_tracker.record_tokens()
+        # runs, so future requests for the same model get accurate pricing.
+        _cost = stream_state.get("cost")
+        if _cost is not None and _cost > 0:
+            try:
+                from headroom.proxy.pricing_detect import feed_response
+
+                _prompt = stream_state.get("input_tokens", 0) or 0
+                _completion = stream_state.get("output_tokens", 0) or 0
+                feed_response(
+                    model,
+                    response_body={
+                        "usage": {
+                            "prompt_tokens": _prompt,
+                            "completion_tokens": _completion,
+                            "cost": _cost,
+                        }
+                    },
+                    provider=outcome_provider or provider,
+                )
+            except Exception:
+                pass
+
         # Active-compression denominator (``attempted_input_tokens``) is
         # derived inside ``RequestOutcome.from_stream`` as
         # ``optimized_tokens + tokens_saved``. No frozen_message_count
@@ -1168,6 +1205,7 @@ class StreamingMixin:
             "cache_creation_ephemeral_5m_input_tokens": 0,
             "cache_creation_ephemeral_1h_input_tokens": 0,
             "total_bytes": 0,
+            "cost": None,  # OpenRouter per-request cost from usage block
             # Buffer for incomplete SSE events (bytes, per PR-A8 / P1-8).
             # We split events on the ``\n\n`` byte sequence and decode
             # each complete event as UTF-8 only after the boundary is
@@ -1503,6 +1541,8 @@ class StreamingMixin:
                                 stream_state["cache_creation_ephemeral_1h_input_tokens"] = usage[
                                     "cache_creation_ephemeral_1h_input_tokens"
                                 ]
+                            if "cost" in usage and usage["cost"] is not None:
+                                stream_state["cost"] = usage["cost"]
 
                         # Per-chunk fallback for upstreams that emit only
                         # ``completion_tokens`` and not a full usage frame.
