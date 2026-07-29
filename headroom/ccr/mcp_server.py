@@ -385,6 +385,11 @@ class HeadroomMCPServer:
 
         if not MCP_AVAILABLE or Server is None:
             raise ImportError("MCP SDK not installed. Install with: pip install mcp")
+        if not hasattr(Server, "list_tools"):
+            raise ImportError(
+                "MCP SDK >=2.0.0 is not supported. Install a compatible version: "
+                "pip install 'mcp>=1.0.0,<2.0.0'"
+            )
 
         self.server: Server = Server("headroom")
         self._setup_handlers()
