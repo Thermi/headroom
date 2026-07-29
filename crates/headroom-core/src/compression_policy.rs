@@ -279,6 +279,10 @@ impl CompressionPolicy {
         } else {
             p_alive.clamp(0.0, 1.0)
         };
+        eprintln!(
+            "NetMutationGain w={w:.2} r={r:.2} delta_t={} suffix={} reads={reads:.2} alive={alive:.2}",
+            delta_t, suffix_tokens,
+        );
         // Corrected warm-case penalty (#856 follow-up): when the cache is
         // alive, the ΔT tokens are already cache-written, so keeping them
         // costs only reads — a mutation can avoid at most ΔT·r·R, not a

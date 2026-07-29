@@ -4410,6 +4410,7 @@ class ContentRouter(Transform):
         transforms_applied: list[str],
         batch_state: dict[str, int | None] | None = None,
         p_alive_override: float | None = None,
+        model: str = "",
     ) -> bool:
         """Break-even gate for one candidate mutation (#856 P2, flag-gated).
 
@@ -4494,6 +4495,12 @@ class ContentRouter(Transform):
                 p_alive = _p_alive
             except ValueError:
                 logger.warning("HEADROOM_NET_COST_P_ALIVE malformed; using 1.0")
+        w = 1.25  # CACHE_WRITE_MULTIPLIER
+        r = 0.1   # CACHE_READ_MULTIPLIER
+        logger.info(
+            "NetCostPolicy pre-calc model=%s w=%.2f r=%.2f delta_t=%d suffix=%d reads=%.1f p_alive=%.2f",
+            model, w, r, delta_t, suffix, reads, p_alive,
+        )
         gain = float(policy.net_mutation_gain(delta_t, suffix, reads, p_alive))
         allowed = gain > 0.0
         logger.info(
@@ -5175,6 +5182,7 @@ class ContentRouter(Transform):
                         transforms_applied=transforms_applied,
                         batch_state=netcost_batch_state,
                         p_alive_override=netcost_p_alive_override,
+                        model=tokenizer.model,
                     ):
                         # Net-cost gate: mutation would cost more in cache
                         # invalidation than it saves — leave untouched.
@@ -5352,6 +5360,7 @@ class ContentRouter(Transform):
                         transforms_applied=transforms_applied,
                         batch_state=netcost_batch_state,
                         p_alive_override=netcost_p_alive_override,
+                        model=tokenizer.model,
                     ):
                         result_slots[slot_idx] = message
                         continue
