@@ -14,6 +14,7 @@ source.
 from __future__ import annotations
 
 import logging
+from decimal import Decimal, getcontext
 from typing import Any
 
 logger = logging.getLogger("headroom.proxy.pricing_detect")
@@ -86,6 +87,7 @@ def _try_usage_block(
     {"prompt_tokens": 1000, "completion_tokens": 500, "cost": 0.0045}
 
     From this we can compute per-token costs.
+    Uses Decimal with high precision to avoid losing tiny cost values.
     """
     prompt_tokens = _as_int(usage.get("prompt_tokens") or usage.get("input_tokens"))
     completion_tokens = _as_int(usage.get("completion_tokens") or usage.get("output_tokens"))
@@ -102,20 +104,26 @@ def _try_usage_block(
     if not (prompt_tokens and completion_tokens and cost and cost > 0):
         return None
 
-    # Assume cost is split proportionally by token count
     total_tokens = prompt_tokens + completion_tokens
     if total_tokens <= 0:
         return None
 
-    input_cost_per_token = (cost * prompt_tokens / total_tokens) / prompt_tokens
-    output_cost_per_token = (cost * completion_tokens / total_tokens) / completion_tokens
+    getcontext().prec = 28
+    cost_dec = Decimal(str(cost))
+    total_dec = Decimal(str(total_tokens))
+
+    input_cost_per_token = float(cost_dec / total_dec)
+    output_cost_per_token = float(cost_dec / total_dec)
+
+    input_per_1m = input_cost_per_token * 1_000_000
+    output_per_1m = output_cost_per_token * 1_000_000
 
     logger.info(
-        "Decoded pricing from usage block for model=%s: input=$%.8f/tok, output=$%.8f/tok "
+        "Decoded pricing from usage block for model=%s: input=$%.6f/M, output=$%.6f/M "
         "(total cost=$%s)",
         model,
-        input_cost_per_token,
-        output_cost_per_token,
+        input_per_1m,
+        output_per_1m,
         cost,
     )
 
