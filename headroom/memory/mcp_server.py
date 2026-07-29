@@ -25,6 +25,8 @@ Usage:
     # When --db is omitted, the server resolves .headroom/memory.db from cwd.
 """
 
+#  Copyright (c) 2026 Noel Kuntze
+
 from __future__ import annotations
 
 import argparse
@@ -432,7 +434,16 @@ async def _handle_save(
         summary = f"Saved {saved} new, updated {superseded} existing ({saved + superseded} total)"
         return [TextContent(type="text", text=summary + "\n" + "\n".join(results_lines))]
     except Exception as e:
-        logger.error(f"memory_save failed: {e}")
+        logger.error(
+            "memory_save failed: %s | user_id=%s | facts=%s | project=%s | importance=%s | backend=%r",
+            e,
+            user_id,
+            [f[:80] for f in facts] if facts else None,
+            arguments.get("projectPath"),
+            arguments.get("importance"),
+            backend,
+            exc_info=True,
+        )
         return [TextContent(type="text", text=f"Save error: {e}")]
 
 
