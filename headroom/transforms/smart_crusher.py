@@ -1181,6 +1181,14 @@ class SmartCrusher(Transform):
                 compressed_tokens = meta["compressed_tokens"]
         except Exception:
             pass
+        # Older/native CCR paths store opaque strings through ``put()`` and
+        # therefore expose zero-valued metadata. Keep the Python mirror's
+        # accounting useful by applying the same conservative estimate used
+        # by the Rust store when metadata is absent.
+        if original_tokens <= 0:
+            original_tokens = max(1, len(canonical) // 4)
+        if compressed_tokens <= 0:
+            compressed_tokens = max(1, len(f"<<ccr:{ccr_hash}>>") // 4)
         try:
             from ..cache.compression_store import get_compression_store
         except ImportError:

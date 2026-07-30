@@ -143,6 +143,37 @@ def test_shim_lossy_crush_populates_store() -> None:
     assert crusher.ccr_len() > 0
 
 
+def test_shim_mirrors_opaque_ccr_with_token_metadata(monkeypatch) -> None:
+    """Opaque CCR entries must not be mirrored with zero token counts."""
+    from unittest.mock import MagicMock
+
+    from headroom.config import SmartCrusherConfig as PyConfig
+    from headroom.transforms.smart_crusher import SmartCrusher
+
+    crusher = SmartCrusher(PyConfig(), with_compaction=False)
+    original = "x" * 5000
+    marker = "<<ccr:abc123>>"
+    fake_rust = MagicMock()
+    fake_rust.ccr_get.return_value = original
+    fake_rust.ccr_get_metadata.return_value = {"original_tokens": 0, "compressed_tokens": 0}
+    crusher._rust = fake_rust
+    store = MagicMock()
+    monkeypatch.setattr(
+        "headroom.cache.compression_store.get_compression_store", lambda: store
+    )
+
+    crusher._mirror_single_hash_to_python_store(
+        "abc123",
+        strategy="string_ccr:string",
+        query_context="",
+        tool_name=None,
+    )
+
+    kwargs = store.store.call_args.kwargs
+    assert kwargs["original_tokens"] == len(original) // 4
+    assert kwargs["compressed_tokens"] == len(marker) // 4
+
+
 # ─── Explicit before/after roundtrip ───────────────────────────────────────
 #
 # These tests do the full user story end-to-end: take a payload,
