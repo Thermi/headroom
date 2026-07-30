@@ -1125,6 +1125,25 @@ def _unload_cache_entry(model_id: str) -> None:
         model.close()
 
 
+def _recover_onnx_gpu_session(model_id: str) -> bool:
+    """Replace a failed CUDA ONNX session with a CPU session."""
+    entry = _kompress_cache.get(model_id)
+    if entry is None or entry[2] != "onnx_gpu":
+        return False
+
+    logger.warning(
+        "Kompress ONNX GPU session failed; unloading it and retrying with CPU execution"
+    )
+    unload_kompress_model(model_id)
+    try:
+        model, tokenizer, backend = _load_kompress_onnx(model_id, allow_download=True)
+    except Exception as exc:
+        logger.warning("Kompress ONNX CPU recovery failed: %s", exc)
+        return False
+    _kompress_cache[model_id] = (model, tokenizer, backend)
+    return backend == "onnx"
+
+
 def unload_kompress_model(model_id: str | None = None) -> bool:
     """Unload Kompress model(s) to free memory.
 
@@ -2135,6 +2154,21 @@ class KompressCompressor(Transform):
                     )
 
             except Exception as e:
+                if backend == "onnx_gpu" and _recover_onnx_gpu_session(self.config.model_id):
+                    logger.warning(
+                        "Kompress recovered affected batch texts with ONNX CPU execution"
+                    )
+                    for text_idx, _, _, ratio in batch:
+                        if results[text_idx] is None:
+                            results[text_idx] = self.compress(
+                                contents[text_idx],
+                                context=context,
+                                content_type=content_type,
+                                question=question,
+                                target_ratio=ratio,
+                            )
+                            kept_ids_per_text.pop(text_idx, None)
+                    continue
                 logger.warning(
                     "Kompress batch forward pass failed: %s — passthrough affected texts", e
                 )
