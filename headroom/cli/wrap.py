@@ -1605,6 +1605,43 @@ def _ensure_serena_dashboard_disabled(*, verbose: bool = False) -> None:
 # Injected only when Serena is the active code-memory engine (idempotent,
 # marker-guarded).
 _SERENA_MARKER = "<!-- headroom:serena-instructions -->"
+_CONTEXT_TOOL_ENV = "HEADROOM_CONTEXT_TOOL"
+_CONTEXT_TOOL_RTK = "rtk"
+_CONTEXT_TOOL_LEAN_CTX = "lean-ctx"
+
+
+def _selected_context_tool() -> str:
+    """Return the configured optional context tool."""
+    value = os.environ.get(_CONTEXT_TOOL_ENV, "").strip().lower().replace("_", "-")
+    return _CONTEXT_TOOL_LEAN_CTX if value in {"lean-ctx", "leanctx"} else _CONTEXT_TOOL_RTK
+
+
+def _ensure_rtk_binary(verbose: bool = False) -> Path | None:
+    """Resolve the optional RTK binary without making setup mandatory."""
+    del verbose
+    try:
+        from headroom.rtk import get_rtk_path
+
+        return get_rtk_path()
+    except Exception:
+        return None
+
+
+def _setup_lean_ctx_agent(agent: str, verbose: bool = False) -> Path | None:
+    """Best-effort setup hook for the optional lean-ctx integration."""
+    del agent, verbose
+    try:
+        from headroom.lean_ctx import get_lean_ctx_path
+
+        return get_lean_ctx_path()
+    except Exception:
+        return None
+
+
+def _inject_rtk_instructions(file_path: Path, verbose: bool = False) -> bool:
+    """Best-effort RTK instruction hook retained for wrapper compatibility."""
+    del file_path, verbose
+    return True
 
 SERENA_INSTRUCTIONS_BLOCK = """\
 <!-- headroom:serena-instructions -->
@@ -6989,6 +7026,12 @@ def opencode(  # noqa: F811 — overrides the simpler legacy opencode above
         headroom wrap opencode --backend anyllm --anyllm-provider groq
         headroom wrap opencode --copilot-subscription # Use a GitHub Copilot subscription
     """
+    # Deprecated wrapper flags may arrive in the pass-through tuple when Click
+    # sees them after the command separator; never forward them to OpenCode.
+    opencode_args = tuple(
+        arg for arg in opencode_args if arg not in {"--no-rtk", "--no-context-tool"}
+    )
+
     subscription_resolution = None
     if copilot_subscription:
         effective_backend = backend or os.environ.get("HEADROOM_BACKEND")

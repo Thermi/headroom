@@ -50,7 +50,11 @@ def proxy_base_url(port: int) -> str:
 
 
 def build_launch_env(
-    port: int, environ: Mapping[str, str] | None = None
+    port: int,
+    environ: Mapping[str, str] | None = None,
+    project: str | None = None,
+    *,
+    include_mcp: bool = True,
 ) -> tuple[dict[str, str], list[str]]:
     """Build environment variables for OpenCode through the local proxy.
 
@@ -70,5 +74,7 @@ def build_launch_env(
     anthropic_url = claude_proxy_base_url(port)
     env["ANTHROPIC_BASE_URL"] = anthropic_url
     display_lines.append(f"ANTHROPIC_BASE_URL={anthropic_url}")
+    if project and "HEADROOM_PROJECT" not in env:
+        env["HEADROOM_PROJECT"] = project
 
     return env, display_lines
