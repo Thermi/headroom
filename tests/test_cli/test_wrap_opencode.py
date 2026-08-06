@@ -217,7 +217,7 @@ class TestFlagForwarding:
 
 
 class TestRtkContextTool:
-    """Without --no-rtk, opencode should attempt rtk setup."""
+    """RTK setup is no longer managed by the upstream wrapper."""
 
     def test_injects_rtk_instructions_when_rtk_present(
         self, runner, tmp_path, monkeypatch
@@ -239,11 +239,7 @@ class TestRtkContextTool:
                         result = runner.invoke(main, ["wrap", "opencode"])
 
         assert result.exit_code == 0, result.output
-        assert len(inject_calls) == 2
-        expected_global = Path.home() / ".opencode" / "agents" / "AGENTS.md"
-        expected_local = tmp_path / "AGENTS.md"
-        assert expected_global in inject_calls
-        assert expected_local in inject_calls
+        assert inject_calls == []
 
     def test_no_rtk_skips_context_tool_setup(
         self, runner, tmp_path, monkeypatch
@@ -277,8 +273,9 @@ class TestLeanCtxContextTool:
                 with patch.object(wrap_mod, "_launch_tool"):
                     result = runner.invoke(main, ["wrap", "opencode"])
 
-        assert result.exit_code == 0, result.output
-        mock_lean_ctx.assert_called_once_with("opencode", verbose=False)
+        assert result.exit_code != 0
+        assert "CLI context tools" in result.output
+        mock_lean_ctx.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
