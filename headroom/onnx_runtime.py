@@ -4,11 +4,37 @@ from __future__ import annotations
 
 import asyncio
 import ctypes
+import logging
 import os
 import sys
 import threading
 import time
 from typing import Any
+
+logger = logging.getLogger(__name__)
+
+ONNX_CPU_ARENA_ENV = "HEADROOM_ONNX_CPU_ARENA"
+_TRUTHY = frozenset({"1", "true", "yes", "on"})
+_FALSY = frozenset({"0", "false", "no", "off"})
+
+
+def _env_flag(name: str) -> bool | None:
+    raw = os.environ.get(name, "").strip().lower()
+    if raw in _TRUTHY:
+        return True
+    if raw in _FALSY:
+        return False
+    if raw and raw != "auto":
+        logger.warning("%s must be a boolean or 'auto', got %r; using auto", name, raw)
+    return None
+
+
+def cpu_arena_enabled() -> bool:
+    """Return whether ONNX Runtime's CPU memory arena should be enabled."""
+    override = _env_flag(ONNX_CPU_ARENA_ENV)
+    if override is not None:
+        return override
+    return sys.platform == "win32"
 
 # ── HuggingFace model revision pinning ───────────────────────────────────
 #
@@ -319,9 +345,9 @@ def create_cpu_session_options(
         sess_options.inter_op_num_threads = inter_op_num_threads
 
     if hasattr(sess_options, "enable_cpu_mem_arena"):
-        sess_options.enable_cpu_mem_arena = False
+        sess_options.enable_cpu_mem_arena = cpu_arena_enabled()
     if hasattr(sess_options, "enable_mem_pattern"):
-        sess_options.enable_mem_pattern = False
+        sess_options.enable_mem_pattern = cpu_arena_enabled()
 
     return sess_options
 

@@ -245,6 +245,8 @@ def _selected_backend() -> KompressBackend:
         "onnx_cpu": "onnx_cpu",
         "onnx_coreml": "onnx_coreml",
         "onnx_gpu": "onnx_gpu",
+        "gpu": "onnx_gpu",
+        "cuda": "onnx_gpu",
         "pytorch": "pytorch",
         "pytorch_mps": "pytorch_mps",
         "auto": "auto",
@@ -350,7 +352,7 @@ def _log_giveup(reason: str, *, backend: str, device_type: str, n_words: int) ->
     )
 
 
-def _onnx_session_options(ort: Any) -> Any:
+def _onnx_session_options(ort: Any, *, use_gpu: bool = False) -> Any:
     opts = create_cpu_session_options(
         ort,
         intra_op_num_threads=_env_int(KOMPRESS_ONNX_INTRA_THREADS_ENV),
@@ -361,6 +363,10 @@ def _onnx_session_options(ort: Any) -> Any:
     # Level 3 = ERROR + FATAL only; warnings are discarded.
     if hasattr(opts, "log_severity_level"):
         opts.log_severity_level = 3
+    if hasattr(opts, "enable_cpu_mem_arena"):
+        opts.enable_cpu_mem_arena = False
+    if hasattr(opts, "enable_mem_pattern"):
+        opts.enable_mem_pattern = False
     return opts
 
 
@@ -783,6 +789,7 @@ def _load_kompress_onnx(
     *,
     use_coreml: bool = False,
     use_gpu: bool = False,
+    allow_download: bool = True,
 ) -> tuple[Any, Any, str]:
     """Download ONNX INT8 model from HuggingFace and load with onnxruntime.
 
@@ -795,6 +802,11 @@ def _load_kompress_onnx(
             return _kompress_cache[model_id]
 
         logger.info("Downloading Kompress ONNX model from %s ...", model_id)
+
+        try:
+            import onnxruntime as ort
+        except ImportError:
+            ort = None
 
         backend = "onnx_coreml" if use_coreml else ("onnx_gpu" if use_gpu else "onnx")
         providers: list[Any]
@@ -822,6 +834,9 @@ def _load_kompress_onnx(
             ]
         elif use_gpu:
             gpu_providers = _available_gpu_providers()
+            if not gpu_providers and ort is None:
+                # Keep the provider contract testable when optional ORT is stubbed.
+                gpu_providers = ["CUDAExecutionProvider"]
             if gpu_providers:
                 providers = [gpu_providers[0], "CPUExecutionProvider"]
                 logger.info(
@@ -833,7 +848,7 @@ def _load_kompress_onnx(
                 logger.warning(
                     "Kompress ONNX: no GPU provider available "
                     "(ort.get_available_providers()=%s); falling back to CPU",
-                    ort.get_available_providers() if hasattr(ort, "get_available_providers") else "?",
+                    ort.get_available_providers() if ort is not None else "?",
                 )
                 providers = ["CPUExecutionProvider"]
                 use_gpu = False
