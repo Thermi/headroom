@@ -7,12 +7,14 @@ Extracted from server.py to keep the codebase maintainable.
 from __future__ import annotations
 
 import os
+import logging
 from dataclasses import InitVar, dataclass, field
 from datetime import datetime
 from typing import Any, Literal
 
 from headroom.memory import qdrant_env
 from headroom.providers.registry import ProviderApiOverrides
+from headroom.proxy.model_router import ModelRouterConfig
 
 logger = logging.getLogger(__name__)
 
@@ -164,6 +166,7 @@ class ProxyConfig:
     max_items_after_crush: int = 50
     smart_crusher_with_compaction: bool | None = None
     keep_last_turns: int = 4
+    model_router: ModelRouterConfig | None = None
 
     # CCR Tool Injection
     ccr_inject_tool: bool = True
@@ -343,6 +346,7 @@ class ProxyConfig:
     # input_cost_per_token, output_cost_per_token, litellm_provider, etc.
     # CLI: --model-cost-map <json>; env: HEADROOM_MODEL_COST_MAP=<json>.
     model_cost_map: dict[str, dict[str, Any]] | None = None
+    compressors: set[str] | None = None
 
     # Logging
     log_requests: bool = True

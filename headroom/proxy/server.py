@@ -607,6 +607,31 @@ from headroom.proxy.handlers import (  # noqa: E402
 )
 
 
+def _kompress_provider_banner(
+    *,
+    provider_override: str,
+    backend: str,
+    backend_raw: str,
+    provider_env: str,
+    backend_env: str,
+    probe_gpu: Callable[[], list[str]],
+) -> str:
+    """Describe the effective Kompress ONNX provider selection."""
+    if provider_override:
+        return f"[bg] GPU overridden by {provider_env}={provider_override} — Kompress ONNX will use {provider_override}"
+    if backend in {"onnx", "onnx_cpu"}:
+        return f"[bg] Kompress backend pinned to CPU by {backend_env}={backend_raw} — using CPUExecutionProvider (GPU detection skipped)."
+    if backend == "onnx_gpu":
+        gpu = probe_gpu()
+        if gpu:
+            return f"[bg] Kompress backend pinned to GPU by {backend_env}={backend_raw} — Kompress ONNX will use {gpu[0]}"
+        return f"[bg] Kompress backend pinned to GPU by {backend_env}={backend_raw} but no GPU detected -- fall back to CPUExecutionProvider."
+    gpu = probe_gpu()
+    if gpu:
+        return f"[bg] GPU detected -- Kompress ONNX will use {gpu[0]}"
+    return f"[bg] No GPU detected -- Kompress ONNX will use CPUExecutionProvider. Install onnxruntime-gpu or set {provider_env}=<provider> to override."
+
+
 def _apply_stateless_persistence(config: ProxyConfig) -> None:
     """When the proxy runs stateless, force global persisters to in-memory so no
     files are written to the workspace.
@@ -798,6 +823,10 @@ class HeadroomProxy(
     def __init__(self, config: ProxyConfig):
         self.config = config
         self.config.mode = normalize_proxy_mode(self.config.mode)
+        pipeline_extensions = list(config.pipeline_extensions or [])
+        probe_recorder = probe_recorder_from_env()
+        if probe_recorder is not None:
+            pipeline_extensions.append(probe_recorder)
 
         # Build info: injected at container build time via Docker build args,
         # falls back to runtime git detection when running from a source checkout.
@@ -1712,7 +1741,7 @@ prefer_code_aware_for_code=_get_env_bool("HEADROOM_PREFER_CODE_AWARE_FOR_CODE", 
         self.http_client_h1 = (
             self.http_client if not _http2 else httpx.AsyncClient(http2=False, **_client_kwargs)
         )
-logger.info(
+        logger.info(
             "Headroom Proxy started — v%s commit=%s build=%s",
             __version__,
             self._build_info.get("git_commit", "unknown"),
@@ -2129,7 +2158,7 @@ logger.info(
         construct their body from scratch, so canonical serialization is
         correct and original bytes do not exist).
         """
-from headroom.proxy.body_forwarding import prepare_outbound_body_bytes
+        from headroom.proxy.body_forwarding import prepare_outbound_body_bytes
         from headroom.proxy.helpers import log_outbound_request
         from headroom.proxy.upstream_diagnostics import diagnose_upstream
 
@@ -2222,14 +2251,13 @@ from headroom.proxy.body_forwarding import prepare_outbound_body_bytes
                 last_error = e
 
                 if not self.config.retry_enabled or attempt >= self.config.retry_max_attempts - 1:
-if isinstance(e, httpx.HTTPStatusError) and e.response is not None:
+                    if isinstance(e, httpx.HTTPStatusError) and e.response is not None:
                         return e.response
                     if isinstance(e, (httpx.ConnectError, httpx.TimeoutException)):
                         _correlation_id = request_id or f"retry-{time.time_ns()}"
                         asyncio.ensure_future(
                             diagnose_upstream(url, correlation_id=_correlation_id)
                         )
-                    raise
                     raise
 
                 # Exponential backoff with jitter
@@ -3236,11 +3264,12 @@ def create_app(config: ProxyConfig | None = None) -> FastAPI:
     # send their own response via ``request._send`` (e.g. the MCP handler)
     # can trigger a second ``http.response.start``, crashing the connection.
     # See https://github.com/anomalyco/headroom/issues/… for details.
-    _existing_stack = app.middleware_stack
-    if _existing_stack is None:
-        _existing_stack = app.build_middleware_stack()
+    _existing_stack = None
 
     async def _record_headroom_stack_asgi(scope, receive, send):
+        nonlocal _existing_stack
+        if _existing_stack is None:
+            _existing_stack = app.build_middleware_stack()
         if scope["type"] != "http":
             await _existing_stack(scope, receive, send)
             return
@@ -3303,11 +3332,14 @@ def create_app(config: ProxyConfig | None = None) -> FastAPI:
                     logger.debug("record_stack failed", exc_info=True)
 
         status_code = None
+        response_complete = False
 
         async def wrapped_send(message):
-            nonlocal status_code
+            nonlocal status_code, response_complete
             if message["type"] == "http.response.start":
                 status_code = message["status"]
+            elif message["type"] == "http.response.body" and not message.get("more_body", False):
+                response_complete = True
             await send(message)
 
         try:
@@ -3359,8 +3391,6 @@ def create_app(config: ProxyConfig | None = None) -> FastAPI:
                     status_code,
                     (time.perf_counter() - started) * 1000.0,
                 )
-
-    app.middleware_stack = _record_headroom_stack_asgi
 
     # ── Security gate (registered last → runs outermost) ──────────────────
     # Three concerns, kept together because they all wrap every inbound
@@ -5336,6 +5366,7 @@ def create_app(config: ProxyConfig | None = None) -> FastAPI:
 
         logger.info("MCP Streamable HTTP endpoint: /v1/mcp")
 
+    app.middleware_stack = _record_headroom_stack_asgi
     return app
 
 

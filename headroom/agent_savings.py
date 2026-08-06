@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, replace
+from collections.abc import MutableMapping
 from typing import Protocol
 
 AGENT_90_PROFILE = "agent-90"
@@ -178,6 +180,12 @@ def apply_agent_savings_env_defaults(
         else profile
     )
     return resolved.apply_proxy_env_defaults(env)
+
+
+def seed_proxy_env_defaults(env: MutableMapping[str, str] | None = None) -> None:
+    """Seed proxy environment defaults without overriding explicit settings."""
+    target = os.environ if env is None else env
+    apply_agent_savings_env_defaults(target)  # type: ignore[arg-type]
 
 
 def apply_agent_savings_profile(
