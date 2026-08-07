@@ -107,6 +107,18 @@ def _stop_deployment(manifest: DeploymentManifest) -> None:
     stop_runtime(manifest)
 
 
+def _deactivate_deployment_mutations(
+    manifest: DeploymentManifest, *, persist_manifest: bool = True
+) -> None:
+    """Revert managed provider mutations before a persistent deployment stops."""
+    if not manifest.mutations:
+        return
+    revert_mutations(manifest)
+    manifest.mutations = []
+    if persist_manifest:
+        save_manifest(manifest)
+
+
 def _remove_deployment(manifest: DeploymentManifest) -> None:
     try:
         _stop_deployment(manifest)
