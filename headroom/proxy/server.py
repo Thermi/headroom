@@ -3157,6 +3157,10 @@ def create_app(config: ProxyConfig | None = None) -> FastAPI:
                 # actually using and hot-sync it via /admin/runtime-env.
                 "runtime_env": runtime_env.effective_runtime_env(),
                 "pid": os.getpid(),
+                # Wrap-started proxies carry HEADROOM_STACK=wrap_<agent>; used
+                # by `headroom wrap` to positively identify (and safely reap)
+                # orphaned proxies left behind by an abruptly-killed wrapper.
+                "stack": os.environ.get("HEADROOM_STACK"),
             }
         return payload
 
