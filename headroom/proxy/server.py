@@ -21,6 +21,8 @@ Usage:
     ANTHROPIC_BASE_URL=http://localhost:8787 claude
 """
 
+#  Copyright (c) 2026 Noel Kuntze
+
 from __future__ import annotations
 
 # Apply memory budget before any other imports so component-level
@@ -1744,6 +1746,26 @@ prefer_code_aware_for_code=_get_env_bool("HEADROOM_PREFER_CODE_AWARE_FOR_CODE", 
                 for key, value in transform_status.items():
                     eager_status.setdefault(key, value)
                 transform_statuses.append(transform_status)
+
+        # LiteLLM's pricing tables. MEASURED 2.9-3.8s to import, and it was
+        # being imported lazily ON THE EVENT LOOP during the first request:
+        # emit_request_outcome -> record_request -> _estimate_compression_savings_usd
+        # calls it before its own `tokens_saved <= 0` early return, so even a
+        # request that saved nothing pays for it. Nothing about that is visible
+        # as a failure; it just makes one unlucky user wait ~3s.
+        #
+        # This function already runs under asyncio.to_thread, so importing here
+        # cannot delay the port bind.
+        try:
+            from .savings_tracker import _get_litellm_module
+
+            eager_status.setdefault(
+                "litellm", "ready" if _get_litellm_module() is not None else "not installed"
+            )
+        except Exception as exc:  # pricing is optional; never block startup on it
+            logger.debug("LiteLLM pre-load skipped: %s", exc)
+            eager_status.setdefault("litellm", "skipped")
+
         return eager_status, transform_statuses
 
     def _preload_kompress_models(self) -> dict[str, str]:

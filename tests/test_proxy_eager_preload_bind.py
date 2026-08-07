@@ -9,6 +9,8 @@ now runs off the event loop under ``asyncio.wait_for`` with
 bind still happens and transforms fall back to lazy loading.
 """
 
+#  Copyright (c) 2026 Noel Kuntze
+
 from __future__ import annotations
 
 import logging
@@ -91,8 +93,15 @@ def test_eager_preload_dedupes_and_swallows_failures():
 
     eager_status, statuses = proxy._eager_preload_transforms()
 
-    assert eager_status == {"shared": "enabled", "kompress": "enabled"}
+    # Keys the preload contributes itself rather than collecting from a
+    # transform, so this assertion stays about dedupe/swallowing.
+    non_transform_keys = {"litellm"}
+    assert {k: v for k, v in eager_status.items() if k not in non_transform_keys} == {
+        "shared": "enabled",
+        "kompress": "enabled",
+    }
     assert statuses == [{"shared": "enabled"}, {"kompress": "enabled"}]
+    assert eager_status["litellm"] in {"ready", "not installed", "skipped"}
 
 
 async def test_startup_binds_despite_hung_preload(monkeypatch):

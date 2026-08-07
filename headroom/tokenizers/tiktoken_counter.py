@@ -8,6 +8,8 @@ It supports multiple encodings:
 - r50k_base: GPT-3 models (davinci, curie, etc.)
 """
 
+#  Copyright (c) 2026 Noel Kuntze
+
 from __future__ import annotations
 
 import logging
@@ -16,7 +18,7 @@ import threading
 from functools import lru_cache
 from typing import Any
 
-from .base import BaseTokenizer, coerce_countable_text
+from .base import BaseTokenizer, TokenCountCache, coerce_countable_text
 
 logger = logging.getLogger(__name__)
 
@@ -237,6 +239,7 @@ class TiktokenCounter(BaseTokenizer):
         self.model = model
         self.encoding_name = encoding or get_encoding_for_model(model)
         self._encoding = None  # Lazy load
+        self._count_cache = TokenCountCache()
 
     @property
     def encoding(self):
@@ -256,7 +259,23 @@ class TiktokenCounter(BaseTokenizer):
         """
         if not text:
             return 0
-        return len(self.encoding.encode(text, disallowed_special=()))
+        cached = self._count_cache.get(text)
+        if cached is not None:
+            return cached
+        count = self._count_text_uncached(text)
+        self._count_cache.put(text, count)
+        return count
+
+    def _count_text_uncached(self, text: str) -> int:
+        try:
+            return len(self.encoding.encode(text))
+        except ValueError:
+            # Passthrough content can legitimately contain strings that look
+            # like tiktoken special tokens (e.g. "<|endoftext|>" or FIM markers
+            # in code/tool output). Treat them as ordinary text instead of
+            # raising, which would otherwise abort token counting for the whole
+            # request. Matches AnthropicTokenCounter.count_text.
+            return len(self.encoding.encode(text, disallowed_special=()))
 
     def count_messages(self, messages: list[dict[str, Any]]) -> int:
         """Count tokens in messages using OpenAI's exact formula.
