@@ -77,6 +77,12 @@ class RequestLog:
     cache_hit: bool
     transforms_applied: list[str]
 
+    # Provider-reported prompt-cache token deltas. These remain optional so
+    # older callers that only know the aggregate cache_hit flag still work.
+    cache_read_tokens: int = 0
+    cache_write_tokens: int = 0
+    uncached_input_tokens: int = 0
+
     # Waste signals detected in original messages
     waste_signals: dict[str, int] | None = None
 
