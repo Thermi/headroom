@@ -141,6 +141,19 @@ _NON_SEMANTIC_KEYS = frozenset(
 _OPAQUE_PAYLOAD_KEYS = frozenset({"input", "arguments", "json"})
 
 
+def _strip_cache_control(obj: Any) -> Any:
+    """Return a recursive copy without provider cache breakpoint metadata."""
+    if isinstance(obj, dict):
+        return {
+            key: _strip_cache_control(value)
+            for key, value in obj.items()
+            if key != "cache_control"
+        }
+    if isinstance(obj, list):
+        return [_strip_cache_control(value) for value in obj]
+    return obj
+
+
 def _canonicalize_for_prefix_compare(obj: Any) -> Any:
     """Build a comparison-only representation that ignores transport metadata."""
     if isinstance(obj, dict):
@@ -632,27 +645,10 @@ class SessionTrackerStore:
         messages: list[dict[str, Any]] | None = None,
     ) -> PrefixCacheTracker:
         """Return the session tracker used by provider handlers."""
-        if not messages or not self._default_config.enabled:
-            return self.get_or_create(session_id, provider, project)
-        family = self._lineages.setdefault(session_id, OrderedDict())
-        current = _canonicalize_for_prefix_compare(messages)
-        chosen: str | None = None
-        chosen_len = -1
-        for key, previous in family.items():
-            if len(previous) > len(current) or len(previous) <= chosen_len:
-                continue
-            if current[: len(previous)] == previous:
-                chosen = key
-                chosen_len = len(previous)
-        if chosen is None:
-            if not family:
-                chosen = session_id
-            elif len(family) >= self._default_config.max_lineages_per_session:
-                return self.get_or_create(f"{session_id}\x00overflow", provider, project)
-            else:
-                chosen = f"{session_id}\x00{next(self._lineage_counter)}"
-        family[chosen] = copy.deepcopy(current)
-        return self.get_or_create(chosen, provider, project)
+        # Keep this seam equivalent to the legacy store contract. Provider
+        # handlers and test doubles deliberately replace get_or_create, and
+        # lineage selection must not bypass that interception point.
+        return self.get_or_create(session_id, provider, project)
 
     def compute_session_id(
         self,

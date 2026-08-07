@@ -1115,6 +1115,22 @@ class AnthropicHandlerMixin:
                     original_client_messages,
                     frozen_message_count,
                 )
+            # A frozen CCR prefix cannot safely emit a new retrieve marker until
+            # the injected retrieval tool is present. Keep this turn verbatim;
+            # otherwise the cache-delta path compresses and replays a marker the
+            # client cannot resolve.
+            existing_tool_names = {
+                tool.get("name") or tool.get("function", {}).get("name")
+                for tool in (body.get("tools") or [])
+                if isinstance(tool, dict)
+            }
+            skip_ccr_request_compression = (
+                not is_token_mode(self.config.mode)
+                and
+                self.config.ccr_inject_tool
+                and frozen_message_count > 0
+                and "headroom_retrieve" not in existing_tool_names
+            )
             # Cold-prefix cache-miss hook (HEADROOM_COLD_RECOMPACT). Claude's thinking is
             # an encrypted handle we can't shrink, so when the prompt cache has lapsed
             # (idle past TTL → dead, nothing to bust) we instead recompact the whole
@@ -1267,7 +1283,11 @@ class AnthropicHandlerMixin:
                 logger.info(
                     f"[{request_id}] Compression skipped: reason={_decision.passthrough_reason}"
                 )
-            if _decision.should_compress and not _skip_compression_for_backpressure:
+            if (
+                _decision.should_compress
+                and not _skip_compression_for_backpressure
+                and not skip_ccr_request_compression
+            ):
                 try:
                     from headroom.proxy.helpers import COMPRESSION_TIMEOUT_SECONDS
 
@@ -1508,14 +1528,17 @@ class AnthropicHandlerMixin:
                     else:
                         previous_original_messages = prefix_tracker.get_last_original_messages()
                         previous_forwarded_messages = prefix_tracker.get_last_forwarded_messages()
-                        delta = self._extract_cache_stable_delta(
+                        delta = None if skip_ccr_request_compression else self._extract_cache_stable_delta(
                             original_client_messages,
                             previous_original_messages,
                             previous_forwarded_messages,
                         )
                         if delta is not None:
                             stable_forwarded_prefix, delta_messages = delta
-                            if delta_messages:
+                            if delta_messages and skip_ccr_request_compression:
+                                optimized_messages = messages
+                                optimized_tokens = tokenizer.count_messages(optimized_messages)
+                            elif delta_messages:
                                 # Compress the delta, with two cache-mode adjustments:
                                 #
                                 # fix-5: strip the client's transient cache_control marker so
@@ -1552,16 +1575,14 @@ class AnthropicHandlerMixin:
                                 # it below, so the forwarded prefix stays byte-identical to last
                                 # turn -> append-only -> no bust.
                                 prefix_n = len(stable_forwarded_prefix)
-                                compression_input = list(stable_forwarded_prefix) + list(
-                                    _strip_cache_control(delta_messages)
-                                )
+                                compression_input = list(_strip_cache_control(delta_messages))
                                 result = await self._run_compression_in_executor(
                                     lambda: self.anthropic_pipeline.apply(
                                         messages=compression_input,
                                         model=model,
                                         model_limit=context_limit,
                                         context=extract_user_query(compression_input),
-                                        frozen_message_count=prefix_n,
+                                        frozen_message_count=0,
                                         idle_seconds=idle_seconds,
                                         biases=biases,
                                         request_id=request_id,
@@ -1572,13 +1593,14 @@ class AnthropicHandlerMixin:
                                 )
                                 # Only the delta was eligible for compression (prefix frozen);
                                 # forward the byte-identical cached prefix + the compressed delta.
-                                compressed_delta = result.messages[prefix_n:]
-                                optimized_messages = stable_forwarded_prefix + compressed_delta
+                                optimized_messages = stable_forwarded_prefix + result.messages
                                 transforms_applied = result.transforms_applied
                                 pipeline_timing = result.timing
                                 optimized_tokens = tokenizer.count_messages(optimized_messages)
                             else:
-                                optimized_messages = stable_forwarded_prefix
+                                optimized_messages = (
+                                    messages if skip_ccr_request_compression else stable_forwarded_prefix
+                                )
                                 optimized_tokens = tokenizer.count_messages(optimized_messages)
                         else:
                             # Conservative rule for cache mode:
@@ -1627,11 +1649,15 @@ class AnthropicHandlerMixin:
             if _cold_recompact_active:
                 _overlay_replayed = False
             else:
-                _ov = overlay_cached_prefix(
-                    optimized_messages,
-                    original_client_messages,
-                    prefix_tracker.get_last_original_messages(),
-                    prefix_tracker.get_last_forwarded_messages(),
+                _ov = (
+                    optimized_messages
+                    if skip_ccr_request_compression
+                    else overlay_cached_prefix(
+                        optimized_messages,
+                        original_client_messages,
+                        prefix_tracker.get_last_original_messages(),
+                        prefix_tracker.get_last_forwarded_messages(),
+                    )
                 )
                 _overlay_replayed = _ov != optimized_messages
                 if _overlay_replayed:
