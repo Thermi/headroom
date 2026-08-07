@@ -5,11 +5,13 @@
 //!
 //! ```sql
 //! CREATE TABLE IF NOT EXISTS ccr_entries (
-//!     hash          TEXT PRIMARY KEY,
-//!     original      BLOB NOT NULL,
-//!     created_at    INTEGER NOT NULL,   -- unix-seconds
-//!     ttl_seconds   INTEGER NOT NULL,   -- idle window, restarted on get
-//!     last_accessed INTEGER NOT NULL    -- unix-seconds
+//!     hash              TEXT PRIMARY KEY,
+//!     original          BLOB NOT NULL,
+//!     created_at        INTEGER NOT NULL,   -- unix-seconds
+//!     ttl_seconds       INTEGER NOT NULL,   -- idle window, restarted on get
+//!     last_accessed     INTEGER NOT NULL,   -- unix-seconds
+//!     original_tokens   INTEGER NOT NULL DEFAULT 0,
+//!     compressed_tokens INTEGER NOT NULL DEFAULT 0
 //! );
 //! ```
 //!
@@ -48,7 +50,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use rusqlite::{params, Connection, OptionalExtension};
 
-use crate::ccr::{max_lifetime_for, CcrStore};
+use crate::ccr::{max_lifetime_for, CcrMetadata, CcrStore};
 
 /// SQLite-backed CCR store.
 pub struct SqliteCcrStore {
@@ -96,11 +98,13 @@ impl SqliteCcrStore {
 
         conn.execute(
             "CREATE TABLE IF NOT EXISTS ccr_entries (
-                 hash          TEXT PRIMARY KEY,
-                 original      BLOB NOT NULL,
-                 created_at    INTEGER NOT NULL,
-                 ttl_seconds   INTEGER NOT NULL,
-                 last_accessed INTEGER NOT NULL
+                 hash              TEXT PRIMARY KEY,
+                 original          BLOB NOT NULL,
+                 created_at        INTEGER NOT NULL,
+                 ttl_seconds       INTEGER NOT NULL,
+                 last_accessed     INTEGER NOT NULL,
+                 original_tokens   INTEGER NOT NULL DEFAULT 0,
+                 compressed_tokens INTEGER NOT NULL DEFAULT 0
              )",
             [],
         )?;
@@ -121,7 +125,8 @@ impl SqliteCcrStore {
     /// DBs created before the sliding-TTL change lack `last_accessed`.
     /// Add it in place and backfill from `created_at` so legacy rows
     /// keep their original expiry baseline rather than being purged or
-    /// artificially refreshed.
+    /// artificially refreshed. Also adds the token-metadata columns
+    /// (added later) with a 0 default for pre-existing rows.
     fn migrate_legacy_schema(conn: &Connection) -> rusqlite::Result<()> {
         let has_last_accessed = conn
             .prepare("SELECT 1 FROM pragma_table_info('ccr_entries') WHERE name = 'last_accessed'")?
@@ -133,6 +138,24 @@ impl SqliteCcrStore {
             )?;
             conn.execute(
                 "UPDATE ccr_entries SET last_accessed = created_at WHERE last_accessed = 0",
+                [],
+            )?;
+        }
+        let has_original_tokens = conn
+            .prepare("SELECT 1 FROM pragma_table_info('ccr_entries') WHERE name = 'original_tokens'")?
+            .exists([])?;
+        if !has_original_tokens {
+            conn.execute(
+                "ALTER TABLE ccr_entries ADD COLUMN original_tokens INTEGER NOT NULL DEFAULT 0",
+                [],
+            )?;
+        }
+        let has_compressed_tokens = conn
+            .prepare("SELECT 1 FROM pragma_table_info('ccr_entries') WHERE name = 'compressed_tokens'")?
+            .exists([])?;
+        if !has_compressed_tokens {
+            conn.execute(
+                "ALTER TABLE ccr_entries ADD COLUMN compressed_tokens INTEGER NOT NULL DEFAULT 0",
                 [],
             )?;
         }
@@ -228,24 +251,36 @@ impl SqliteCcrStore {
 }
 
 impl CcrStore for SqliteCcrStore {
-    fn put(&self, hash: &str, payload: &str) {
+    fn put_with_metadata(
+        &self,
+        hash: &str,
+        payload: &str,
+        original_tokens: usize,
+        compressed_tokens: usize,
+    ) {
         let now = Self::now_unix_seconds();
         let conn = self.conn.lock().expect("ccr sqlite mutex poisoned");
         // Upsert by PK. ON CONFLICT REPLACE matches the in-memory
         // backend's idempotent re-store semantics.
         let res = conn.execute(
-            "INSERT INTO ccr_entries (hash, original, created_at, ttl_seconds, last_accessed)
-             VALUES (?1, ?2, ?3, ?4, ?3)
+            "INSERT INTO ccr_entries
+                 (hash, original, created_at, ttl_seconds, last_accessed,
+                  original_tokens, compressed_tokens)
+             VALUES (?1, ?2, ?3, ?4, ?3, ?5, ?6)
              ON CONFLICT(hash) DO UPDATE SET
-                 original      = excluded.original,
-                 created_at    = excluded.created_at,
-                 ttl_seconds   = excluded.ttl_seconds,
-                 last_accessed = excluded.last_accessed",
+                 original          = excluded.original,
+                 created_at        = excluded.created_at,
+                 ttl_seconds       = excluded.ttl_seconds,
+                 last_accessed     = excluded.last_accessed,
+                 original_tokens   = excluded.original_tokens,
+                 compressed_tokens = excluded.compressed_tokens",
             params![
                 hash,
                 payload.as_bytes(),
                 now as i64,
                 self.default_ttl_seconds as i64,
+                original_tokens as i64,
+                compressed_tokens as i64,
             ],
         );
         // Loud-failure rule: surface as a structured warning. Caller
@@ -266,6 +301,45 @@ impl CcrStore for SqliteCcrStore {
 
     fn get(&self, hash: &str) -> Option<String> {
         self.get_at(hash, Self::now_unix_seconds())
+    }
+
+    fn get_metadata(&self, hash: &str) -> Option<CcrMetadata> {
+        let now = Self::now_unix_seconds();
+        let conn = self.conn.lock().expect("ccr sqlite mutex poisoned");
+
+        // Lazy purge sweep, then the lookup — same mutex discipline as
+        // `get_at` so the row we read is guaranteed live.
+        if let Err(err) = self.purge_expired(&conn, now) {
+            tracing::warn!(
+                target = "ccr.sqlite",
+                error = %err,
+                "ccr_sqlite_purge_failed"
+            );
+        }
+
+        conn.query_row(
+            "SELECT original_tokens, compressed_tokens FROM ccr_entries
+             WHERE hash = ?1
+               AND last_accessed + ttl_seconds >= ?2
+               AND created_at + ?3 >= ?2",
+            params![hash, now as i64, self.max_lifetime_seconds as i64],
+            |r| {
+                Ok(CcrMetadata {
+                    original_tokens: r.get::<_, i64>(0)? as usize,
+                    compressed_tokens: r.get::<_, i64>(1)? as usize,
+                })
+            },
+        )
+        .optional()
+        .unwrap_or_else(|err| {
+            tracing::warn!(
+                target = "ccr.sqlite",
+                hash = %hash,
+                error = %err,
+                "ccr_sqlite_get_metadata_failed"
+            );
+            None
+        })
     }
 
     fn len(&self) -> usize {
