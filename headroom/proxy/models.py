@@ -142,6 +142,9 @@ class ProxyConfig:
     gemini_api_url: str | None = None  # Custom Gemini API URL override
     cloudcode_api_url: str | None = None  # Custom Cloud Code Assist API URL override
     vertex_api_url: str | None = None  # Custom Vertex AI regional API URL override
+    # Extra headers merged into forwarded provider requests.
+    anthropic_extra_headers: dict[str, str] | None = None
+    openai_extra_headers: dict[str, str] | None = None
 
     # Feature flags
     anthropic_enabled: bool = True  # Set to False to disable Anthropic routes entirely

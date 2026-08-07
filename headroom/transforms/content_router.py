@@ -6039,7 +6039,7 @@ class ContentRouter(Transform):
                     compressed_content, was_compressed = self._compress_block_content(
                         content=tool_text,
                         content_key=hash((tool_text, getattr(self, "_runtime_target_ratio", None))),
-                        context=block_context,
+                        context=_block_context,
                         bias=bias,
                         min_ratio=min_ratio,
                         compressor_timing=compressor_timing,

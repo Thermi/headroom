@@ -34,6 +34,7 @@ from typing import Any
 
 from headroom import paths as _paths
 from headroom import savings_ledger
+from headroom.accounting import get_model_accounting
 from headroom.cache.compression_store import format_retrieval_miss_detail
 from headroom.telemetry import session as telemetry_session
 
@@ -287,17 +288,26 @@ class SessionStats:
     total_tokens_saved: int = 0
     started_at: float = field(default_factory=time.time)
     events: list[dict[str, Any]] = field(default_factory=list)
+    _model_accounting: Any = field(default_factory=get_model_accounting)
 
     def record_compression(
         self,
         input_tokens: int,
         output_tokens: int,
         strategy: str,
+        model_name: str | None = None,
+        runtime_ms: float | None = None,
     ) -> None:
         self.compressions += 1
         self.total_input_tokens += input_tokens
         self.total_output_tokens += output_tokens
         self.total_tokens_saved += max(0, input_tokens - output_tokens)
+        self._model_accounting.record(
+            model_name=model_name or strategy,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            runtime_ms=runtime_ms or 0.0,
+        )
         event = {
             "type": "compress",
             "input_tokens": input_tokens,
@@ -345,6 +355,7 @@ class SessionStats:
             "savings_percent": savings_pct,
             "estimated_cost_saved_usd": cost_saved,
             "recent_events": self.events[-10:],
+            "model_accounting": self._model_accounting.get_stats_dict(),
         }
 
 
@@ -475,6 +486,7 @@ class HeadroomMCPServer:
     async def _retrieve_content(
         self,
         hash_key: str,
+        query: str | None = None,
     ) -> dict[str, Any]:
         """Retrieve content by hash. Checks local store first, then proxy.
 
@@ -482,6 +494,17 @@ class HeadroomMCPServer:
         """
         # Check local store first
         store = self._get_local_store()
+        if query:
+            results = store.search(hash_key, query)
+            if results:
+                self._stats.record_retrieval(hash_key)
+                return {
+                    "hash": hash_key,
+                    "source": "local",
+                    "query": query,
+                    "results": results,
+                    "count": len(results),
+                }
         entry_status = store.get_entry_status(hash_key, clean_expired=False)
         entry = store.retrieve(hash_key)
         expired_entry_status = None
@@ -863,6 +886,7 @@ class HeadroomMCPServer:
     async def _handle_retrieve(self, arguments: dict[str, Any]) -> list[TextContent]:
         """Handle headroom_retrieve tool call."""
         hash_key = arguments.get("hash")
+        query = arguments.get("query")
         if not hash_key:
             return [
                 TextContent(
@@ -872,12 +896,6 @@ class HeadroomMCPServer:
             ]
 
         logger.info("event=mcp_retrieve_started hash=%s", hash_key)
-        result = await self._retrieve_content(hash_key)
-        logger.info(
-            "event=mcp_retrieve_completed hash=%s result=%s",
-            hash_key,
-            json.dumps(query, ensure_ascii=False, default=str),
-        )
         result = await self._retrieve_content(hash_key, query)
         logger.info(
             "event=mcp_retrieve_completed hash=%s query=%s found=%s",
@@ -945,11 +963,6 @@ class HeadroomMCPServer:
                 proxy_stats = self._extract_proxy_stats(proxy_data)
                 if proxy_stats:
                     stats["proxy"] = proxy_stats
-            else:
-                proxy_status = await self._probe_proxy_unreachable()
-                if proxy_status:
-                    stats["proxy"] = proxy_status
-                    stats["warning"] = proxy_status["warning"]
 
         return [TextContent(type="text", text=json.dumps(stats, indent=2))]
 

@@ -510,10 +510,6 @@ async def _handle_delete(
     backend: LocalBackend, arguments: dict[str, Any], user_id: str
 ) -> list[TextContent]:
     """Delete a memory by ID."""
-    project_path = arguments.get("projectPath")
-    if project_path:
-        backend = _backend_for_project(project_path)
-
     memory_id = arguments.get("memory_id", "")
     if not memory_id:
         return [TextContent(type="text", text="Error: memory_id is required")]

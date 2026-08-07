@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import logging
 from typing import Any
+from urllib.parse import quote
 
 from fastapi import FastAPI, Request, WebSocket
 

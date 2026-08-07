@@ -49,6 +49,19 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, TypedDict, cast
 from urllib.parse import urlsplit
 
+LoopExceptionHandler = Callable[[asyncio.AbstractEventLoop, dict[str, Any]], object]
+
+
+class LoopFailureDetails(TypedDict):
+    message: Any | None
+    exception: str | None
+
+
+class LoopHealthState(TypedDict):
+    status: str
+    known_failures: int
+    last_known_failure: LoopFailureDetails | None
+
 if TYPE_CHECKING:
     from ..backends.base import Backend
     from ..cache.compression_cache import CompressionCache
