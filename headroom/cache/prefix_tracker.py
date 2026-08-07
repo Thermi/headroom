@@ -23,6 +23,8 @@ import hashlib
 import json
 import logging
 import time
+import itertools
+from collections import OrderedDict
 from dataclasses import dataclass
 from typing import Any
 
@@ -72,6 +74,7 @@ class PrefixFreezeConfig:
     # default in `_PROVIDER_CACHE_TTL_SECONDS`. Set to 3600 for a session that
     # uses Anthropic's 1h cache breakpoint so idle-gap attribution stays honest.
     cache_ttl_seconds: int | None = None
+    max_lineages_per_session: int = 8
 
 
 @dataclass
@@ -112,6 +115,114 @@ class CacheMissAttribution:
     cache_read_tokens: int = 0
     prefix_changed: bool = False
     ttl_exceeded: bool = False
+
+
+_NON_SEMANTIC_KEYS = frozenset(
+    {
+        "cache_control",
+        "cachePoint",
+        "caller",
+        "provider_specific_fields",
+        "reasoning_content",
+        "reasoning_items",
+        "annotations",
+        "system_fingerprint",
+        "service_tier",
+        "providerMetadata",
+        "providerOptions",
+        "callProviderMetadata",
+        "state",
+        "providerExecuted",
+        "synthetic",
+        "ignored",
+        "index",
+    }
+)
+_OPAQUE_PAYLOAD_KEYS = frozenset({"input", "arguments", "json"})
+
+
+def _canonicalize_for_prefix_compare(obj: Any) -> Any:
+    """Build a comparison-only representation that ignores transport metadata."""
+    if isinstance(obj, dict):
+        result: dict[str, Any] = {}
+        for key, value in obj.items():
+            if key in _NON_SEMANTIC_KEYS:
+                continue
+            if key in _OPAQUE_PAYLOAD_KEYS:
+                result[key] = value
+            elif key == "content" and isinstance(value, str):
+                result[key] = [{"type": "text", "text": value}]
+            else:
+                result[key] = _canonicalize_for_prefix_compare(value)
+        return result
+    if isinstance(obj, list):
+        return [value for value in (_canonicalize_for_prefix_compare(v) for v in obj) if value != {}]
+    return obj
+
+
+def extract_cache_stable_delta(
+    current_messages: list[dict[str, Any]],
+    previous_original_messages: list[dict[str, Any]] | None,
+    previous_forwarded_messages: list[dict[str, Any]] | None,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]] | None:
+    """Return the previously forwarded prefix and newly appended messages."""
+    if not previous_original_messages or previous_forwarded_messages is None:
+        return None
+    prefix_len = len(previous_original_messages)
+    if len(current_messages) < prefix_len:
+        return None
+    if _canonicalize_for_prefix_compare(current_messages[:prefix_len]) != _canonicalize_for_prefix_compare(
+        previous_original_messages
+    ):
+        return None
+    return copy.deepcopy(previous_forwarded_messages), copy.deepcopy(current_messages[prefix_len:])
+
+
+def overlay_cached_prefix(
+    optimized_messages: list[dict[str, Any]],
+    current_original_messages: list[dict[str, Any]],
+    previous_original_messages: list[dict[str, Any]] | None,
+    previous_forwarded_messages: list[dict[str, Any]] | None,
+) -> list[dict[str, Any]]:
+    """Replay the prior forwarded prefix when the conversation is append-only."""
+    if not previous_original_messages or not previous_forwarded_messages:
+        return optimized_messages
+    prefix_len = len(previous_original_messages)
+    if (
+        len(previous_forwarded_messages) != prefix_len
+        or len(current_original_messages) < prefix_len
+        or len(optimized_messages) < prefix_len
+        or _canonicalize_for_prefix_compare(current_original_messages[:prefix_len])
+        != _canonicalize_for_prefix_compare(previous_original_messages)
+    ):
+        return optimized_messages
+    return list(previous_forwarded_messages) + list(optimized_messages[prefix_len:])
+
+
+def normalize_message_cache_control(
+    messages: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Keep at most one message-level cache breakpoint in the request."""
+    result = copy.deepcopy(messages)
+    changed = False
+    last_block: tuple[int, int] | None = None
+    for message_index, message in enumerate(result):
+        content = message.get("content")
+        if not isinstance(content, list):
+            continue
+        for block_index, block in enumerate(content):
+            if isinstance(block, dict) and "cache_control" in block:
+                block.pop("cache_control", None)
+                changed = True
+            if isinstance(block, dict) and block.get("type") == "text":
+                last_block = (message_index, block_index)
+    if last_block is not None:
+        message_index, block_index = last_block
+        block = result[message_index]["content"][block_index]
+        if isinstance(block, dict):
+            block["cache_control"] = {"type": "ephemeral"}
+            changed = True
+    return result if changed else messages
 
 
 class PrefixCacheTracker:
@@ -475,6 +586,8 @@ class SessionTrackerStore:
         self._last_cleanup: float = time.time()
         self._cleanup_interval: float = 60.0  # Cleanup every 60s
         self._max_sessions = max_sessions
+        self._lineages: dict[str, OrderedDict[str, list[Any]]] = {}
+        self._lineage_counter = itertools.count(1)
 
     def get_or_create(
         self, session_id: str, provider: str, project: str | None = None
@@ -510,6 +623,36 @@ class SessionTrackerStore:
         tracker = PrefixCacheTracker(provider, self._default_config, project=project)
         self._trackers[session_id] = tracker
         return tracker
+
+    def resolve_tracker(
+        self,
+        session_id: str,
+        provider: str,
+        project: str | None = None,
+        messages: list[dict[str, Any]] | None = None,
+    ) -> PrefixCacheTracker:
+        """Return the session tracker used by provider handlers."""
+        if not messages or not self._default_config.enabled:
+            return self.get_or_create(session_id, provider, project)
+        family = self._lineages.setdefault(session_id, OrderedDict())
+        current = _canonicalize_for_prefix_compare(messages)
+        chosen: str | None = None
+        chosen_len = -1
+        for key, previous in family.items():
+            if len(previous) > len(current) or len(previous) <= chosen_len:
+                continue
+            if current[: len(previous)] == previous:
+                chosen = key
+                chosen_len = len(previous)
+        if chosen is None:
+            if not family:
+                chosen = session_id
+            elif len(family) >= self._default_config.max_lineages_per_session:
+                return self.get_or_create(f"{session_id}\x00overflow", provider, project)
+            else:
+                chosen = f"{session_id}\x00{next(self._lineage_counter)}"
+        family[chosen] = copy.deepcopy(current)
+        return self.get_or_create(chosen, provider, project)
 
     def compute_session_id(
         self,
