@@ -450,6 +450,9 @@ class TrafficLearner:
         max_history: int = 20,
         dedup_window: int = 100,
         min_evidence: int = 5,
+        max_memory_bytes: int | None = None,
+        max_patterns: int = 5000,
+        max_persisted_ids: int = 5000,
     ) -> None:
         """Initialize the traffic learner.
 
@@ -462,12 +465,22 @@ class TrafficLearner:
             max_history: Number of recent tool calls to keep for pattern matching.
             dedup_window: Number of recent pattern hashes to track for dedup.
             min_evidence: Minimum times a pattern must be seen before saving.
+            max_memory_bytes: Optional cap on the total rendered size of
+                patterns (in bytes). When exceeded, lowest-value patterns are
+                dropped. None or 0 means unlimited.
+            max_patterns: Maximum number of in-memory accumulator entries to
+                keep before evicting lowest-value patterns.
+            max_persisted_ids: Maximum number of content_hash -> memory.id
+                mappings to track for re-sighting bumps.
         """
         self._backend = backend
         self._user_id = user_id
         self.agent_type = agent_type
         self._max_history = max_history
         self._min_evidence = min_evidence
+        self._max_memory_bytes = max_memory_bytes
+        self._max_patterns = max_patterns
+        self._max_persisted_ids = max_persisted_ids
 
         # Recent tool call history for error→recovery matching
         self._tool_history: list[dict[str, Any]] = []
@@ -629,6 +642,12 @@ class TrafficLearner:
         if not patterns:
             return
 
+        # Enforce the memory size cap: drop lowest-value patterns when the
+        # total rendered size would exceed max_memory_bytes.
+        patterns = self._trim_by_size(patterns)
+        if not patterns:
+            return
+
         # Bucket patterns by project. discover_projects() walks the filesystem
         # to decode escaped project directory names, which on a large home tree
         # takes minutes; running it inline blocked the event loop, so uvicorn
@@ -731,6 +750,53 @@ class TrafficLearner:
         does not consult persisted rows. Use flush_to_file() for full data.
         """
         return [pattern for pattern, count in self._pattern_counts.values() if count >= 1]
+
+    def _trim_by_size(self, patterns: list[ExtractedPattern]) -> list[ExtractedPattern]:
+        """Drop lowest-value patterns when the rendered size exceeds the cap.
+
+        ``max_memory_bytes`` of None or 0 means unlimited (passthrough).
+        Otherwise patterns are ranked by value (importance, then evidence
+        count) and kept in that order until the cumulative rendered size
+        would exceed the cap. A single pattern that alone exceeds the cap
+        is dropped.
+
+        Args:
+            patterns: Patterns to trim, in any order.
+
+        Returns:
+            The trimmed list, highest-value first.
+        """
+        limit = self._max_memory_bytes
+        if not limit or limit <= 0 or not patterns:
+            return patterns
+
+        def _value(p: ExtractedPattern) -> tuple[float, int]:
+            return (p.importance, p.evidence_count)
+
+        ranked = sorted(patterns, key=_value, reverse=True)
+
+        kept: list[ExtractedPattern] = []
+        total = 0
+        for p in ranked:
+            size = len(p.content.encode("utf-8", errors="replace"))
+            if size > limit:
+                # A single pattern that alone exceeds the cap is dropped.
+                continue
+            if total + size >= limit:
+                # The cap is exclusive: stop once the running total would
+                # reach or exceed the limit.
+                break
+            kept.append(p)
+            total += size
+
+        if len(kept) != len(patterns):
+            logger.info(
+                "Traffic learner trimmed %d pattern(s) to %d (max_memory_bytes=%d)",
+                len(patterns),
+                len(kept),
+                limit,
+            )
+        return kept
 
     async def on_tool_result(
         self,
