@@ -236,6 +236,7 @@ class TestSavingsTracker:
             "history",
             "retention",
             "projects",
+            "by_model",
         }
 
     def test_snapshot_schema_version(self, tmp_path: Path) -> None:
@@ -267,6 +268,7 @@ class TestSavingsTracker:
             "retention",
             "projects",
             "projects_limit",
+            "by_model",
         }
 
     def test_stats_preview_recent_history_count(self, tmp_path: Path) -> None:
@@ -300,6 +302,7 @@ class TestSavingsTracker:
             "retention",
             "projects",
             "history_summary",
+            "by_model",
         }
 
     def test_history_response_mode_none(self, tmp_path: Path) -> None:
@@ -367,6 +370,8 @@ class TestSavingsTracker:
             "requests": 0,
             "tokens_saved": 0,
             "compression_savings_usd": 0.0,
+            "cache_read_tokens": 0,
+            "cache_savings_usd": 0.0,
             "total_input_tokens": 0,
             "total_input_cost_usd": 0.0,
         }
@@ -420,7 +425,7 @@ class TestSavingsTracker:
         assert tracker.snapshot()["lifetime"]["tokens_saved"] == 100
 
     def test_schema_version_constant(self) -> None:
-        assert SCHEMA_VERSION == 3
+        assert SCHEMA_VERSION == 5
 
     def test_full_lifetime_after_mixed_records(self, tmp_path: Path) -> None:
         tracker = SavingsTracker(path=str(tmp_path / "savings.json"))
