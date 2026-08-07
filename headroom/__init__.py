@@ -88,6 +88,9 @@ from .compress import CompressConfig, CompressResult, compress  # noqa: E402
 # Keep a real callable bound for the one-function compression API so
 # `from headroom import compress` is never shadowed by the submodule object.
 
+# These names are resolved by __getattr__ from _LAZY_EXPORTS below; PyCharm's
+# unresolved-reference inspection cannot follow that dynamic module mapping.
+# noinspection PyUnresolvedReferences
 __all__ = [
     # Main client
     "HeadroomClient",
