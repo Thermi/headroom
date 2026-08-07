@@ -16,6 +16,7 @@
 - keep your context clean
 - IMPORTANT: When applicable, prefer using pycharm-index MCP tools for code navigation and refactoring.
 - if you need to call git, disable the integrated pager first by passing the corresponding environment variable
+- commit granularly
 
 ## Quick start
 
