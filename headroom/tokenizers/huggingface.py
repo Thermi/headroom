@@ -145,14 +145,22 @@ def get_tokenizer_name(model: str) -> str:
     """
     model_lower = model.lower()
 
-    # Direct lookup
-    if model_lower in MODEL_TO_TOKENIZER:
-        return MODEL_TO_TOKENIZER[model_lower]
+    # Gateways commonly prefix model ids with a provider path. Resolve the
+    # most-specific model key on each progressively unwrapped form so a
+    # generic ``deepseek`` entry cannot shadow ``deepseek-v4-flash``.
+    candidates = [model_lower]
+    while "/" in model_lower:
+        model_lower = model_lower.split("/", 1)[1]
+        candidates.append(model_lower)
 
-    # Try prefix matching
-    for key, value in MODEL_TO_TOKENIZER.items():
-        if model_lower.startswith(key):
-            return value
+    for candidate in candidates:
+        if candidate in MODEL_TO_TOKENIZER:
+            return MODEL_TO_TOKENIZER[candidate]
+
+    for candidate in reversed(candidates):
+        for key in sorted(MODEL_TO_TOKENIZER, key=len, reverse=True):
+            if candidate.startswith(key):
+                return MODEL_TO_TOKENIZER[key]
 
     # Assume model name is the tokenizer name
     return model
