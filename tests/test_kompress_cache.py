@@ -1,4 +1,5 @@
 import hashlib
+import threading
 
 from headroom.cache.kompress_cache import KompressCache
 
@@ -116,6 +117,20 @@ def test_oversized_entries_are_not_cached_and_limits_apply_to_failures():
     assert cache.stats()["entries"] == 1
 
 
+def test_oversized_success_removes_existing_failure_entry():
+    cache = KompressCache(max_entries=10, max_bytes=30, max_attempts=3)
+    content = "x" * 20
+
+    cache.record_failure(content)
+    assert cache.lookup(content) is not None
+
+    cache.record_success(content, "y" * 10, 20, 10)
+
+    assert cache.lookup(content) is None
+    assert cache.stats()["entries"] == 0
+    assert cache.stats()["bytes"] == 0
+
+
 def test_lookup_returns_detached_entry_and_updates_access_accounting():
     cache = KompressCache(max_entries=10, max_bytes=10_000, max_attempts=2)
     cache.record_success("content", "compressed", 2, 1)
@@ -155,3 +170,42 @@ def test_invalid_environment_limits_use_positive_defaults(monkeypatch):
     assert cache.max_entries > 0
     assert cache.max_bytes > 0
     assert cache.max_attempts > 0
+
+
+def test_concurrent_cache_operations_preserve_accounting():
+    cache = KompressCache(max_entries=8, max_bytes=400, max_attempts=3)
+    errors: list[BaseException] = []
+    barrier = threading.Barrier(6)
+
+    def worker(worker_id: int) -> None:
+        try:
+            barrier.wait()
+            for i in range(200):
+                content = f"payload-{(worker_id * 17 + i) % 32}"
+                operation = i % 5
+                if operation == 0:
+                    cache.record_success(content, "compressed", 10, 1)
+                elif operation == 1:
+                    cache.record_failure(content)
+                elif operation == 2:
+                    cache.lookup(content)
+                elif operation == 3:
+                    cache.discard(content)
+                else:
+                    cache.stats()
+        except BaseException as exc:
+            errors.append(exc)
+
+    threads = [threading.Thread(target=worker, args=(worker_id,)) for worker_id in range(6)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert errors == []
+    stats = cache.stats()
+    assert stats["entries"] == len(cache._entries)
+    assert stats["bytes"] == sum(cache._estimate(entry) for entry in cache._entries.values())
+    assert stats["evictions"] > 0
+    assert 0 <= stats["entries"] <= cache.max_entries
+    assert 0 <= stats["bytes"] <= cache.max_bytes

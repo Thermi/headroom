@@ -406,6 +406,52 @@ class TestKompressResultCache:
         assert result.compressed == text
         assert calls == 2
 
+    def test_gpu_single_content_batch_failures_reach_exhaustion(self, monkeypatch) -> None:
+        cache = KompressCache(max_entries=10, max_bytes=100_000, max_attempts=2)
+        monkeypatch.setattr(kc, "get_kompress_cache", lambda: cache)
+        compressor = kc.KompressCompressor(kc.KompressConfig(enable_ccr=False))
+        text = "one two three four five six seven eight nine ten eleven twelve"
+        inference_calls = 0
+
+        class BatchEncoding(dict):
+            def __init__(self, batch_words):
+                input_ids = [[1] * len(words) for words in batch_words]
+                super().__init__(input_ids=input_ids, attention_mask=input_ids)
+                self.batch_words = batch_words
+
+            def word_ids(self, batch_index=0):
+                return list(range(len(self.batch_words[batch_index])))
+
+        class BatchTokenizer:
+            def __call__(self, batch_words, **kwargs):
+                return BatchEncoding(batch_words)
+
+        class FailingGpuModel:
+            def get_scores(self, input_ids, attention_mask):
+                nonlocal inference_calls
+                inference_calls += 1
+                raise TimeoutError("GPU batch inference failed")
+
+        monkeypatch.setattr(
+            kc,
+            "_load_kompress",
+            lambda *args, **kwargs: (FailingGpuModel(), BatchTokenizer(), "onnx_gpu"),
+        )
+        monkeypatch.setattr(compressor, "_should_batch_single_content", lambda *args, **kwargs: True)
+        monkeypatch.setattr(compressor, "_should_use_sequential_fallback", lambda: False)
+
+        first = compressor.compress(text)
+        first_entry = cache.lookup(text)
+        second = compressor.compress(text)
+        second_entry = cache.lookup(text)
+        exhausted = compressor.compress(text)
+
+        assert first.compressed == second.compressed == exhausted.compressed == text
+        assert first_entry is not None and first_entry.attempts == 1
+        assert second_entry is not None and second_entry.attempts == 2
+        assert second_entry.exhausted is True
+        assert inference_calls == 2
+
     def test_generic_model_load_failure_is_not_cached_or_suppressed(self, monkeypatch) -> None:
         cache = KompressCache(max_entries=10, max_bytes=100_000, max_attempts=2)
         monkeypatch.setattr(kc, "get_kompress_cache", lambda: cache)

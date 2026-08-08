@@ -125,12 +125,12 @@ class KompressCache:
             original_tokens=original_tokens,
             compressed_tokens=compressed_tokens,
         )
-        if self._estimate(entry) > self.max_bytes:
-            return
         with self._lock:
             previous = self._entries.pop(key, None)
             if previous is not None:
                 self._entry_bytes -= self._estimate(previous)
+            if self._estimate(entry) > self.max_bytes:
+                return
             sequence = self._next_sequence()
             entry.created_sequence = sequence
             entry.last_access_sequence = sequence

@@ -121,6 +121,7 @@ _DEFAULT_TIME_BUDGET_SECONDS = 20.0
 _DEFAULT_CANARY_THRESHOLD_SECONDS = 5.0
 
 KompressBackend = Literal["auto", "onnx", "onnx_cpu", "onnx_coreml", "onnx_gpu", "pytorch", "pytorch_mps"]
+_BatchCacheOutcome = Literal["success", "failure", "skip"]
 
 # HuggingFace local-lookup errors that mean "asset not in cache" rather than a
 # genuine failure. Caught when loading cache-only so startup can defer instead.
@@ -1760,6 +1761,7 @@ class KompressCompressor(Transform):
             device_type = _model_device_type(model, backend)
 
             if self._should_batch_single_content(model, backend):
+                batch_outcomes: list[_BatchCacheOutcome] = []
                 batch_result = self.compress_batch(
                     [content],
                     context=context,
@@ -1770,9 +1772,11 @@ class KompressCompressor(Transform):
                     ccr_originals=[ccr_original],
                     _deadline_started_at=t_deadline,
                     _emit_ccr=emit_ccr,
+                    _batch_outcomes=batch_outcomes,
+                    _record_cache=False,
                 )
                 if batch_result:
-                    return batch_result[0], False
+                    return batch_result[0], batch_outcomes[0] == "failure"
 
             max_chunk_words = self.config.chunk_words
             kept_ids: set[int] = set()
@@ -2041,6 +2045,8 @@ class KompressCompressor(Transform):
         ccr_originals: list[str | None] | None = None,
         _deadline_started_at: float | None = None,
         _emit_ccr: bool = True,
+        _batch_outcomes: list[_BatchCacheOutcome] | None = None,
+        _record_cache: bool = True,
     ) -> list[KompressResult]:
         """Compress multiple texts. Uses batched inference on GPU, sequential on CPU.
 
@@ -2101,6 +2107,8 @@ class KompressCompressor(Transform):
         n = len(contents)
         if n == 0:
             return []
+        if _batch_outcomes is not None:
+            _batch_outcomes.extend(["skip" for _ in range(n)])
         t_deadline = time.perf_counter() if _deadline_started_at is None else _deadline_started_at
 
         # Normalize target_ratio to a per-text list
@@ -2132,6 +2140,12 @@ class KompressCompressor(Transform):
         cache = get_kompress_cache()
         cached_results: list[KompressResult | None] = [None] * n
         active_indices: list[int] = []
+        original_indices = list(range(n))
+
+        def set_outcome(index: int, outcome: _BatchCacheOutcome) -> None:
+            if _batch_outcomes is not None:
+                _batch_outcomes[original_indices[index]] = outcome
+
         for i, content in enumerate(contents):
             if len(content.split()) < 10 or ratios[i] is not None:
                 active_indices.append(i)
@@ -2160,6 +2174,7 @@ class KompressCompressor(Transform):
         contents = [contents[i] for i in active_indices]
         ratios = [ratios[i] for i in active_indices]
         ccr_sources = [ccr_sources[i] for i in active_indices]
+        original_indices = active_indices
         n = len(contents)
         word_lists: list[list[str]] = [c.split() for c in contents]
 
@@ -2168,6 +2183,8 @@ class KompressCompressor(Transform):
                 self._passthrough(content, len(words))
                 for content, words in zip(contents, word_lists, strict=True)
             ]
+            for i in range(n):
+                set_outcome(i, "success")
             return _restore_batch_order(cached_results, active_results, active_indices)
 
         # Fast path: on backends where batch-dim parallelism does NOT help
@@ -2263,7 +2280,11 @@ class KompressCompressor(Transform):
                         contents[text_idx], len(word_lists[text_idx])
                     )
                     if cache_failure and ratios[text_idx] is None:
-                        cache.record_failure(contents[text_idx])
+                        set_outcome(text_idx, "failure")
+                        if _record_cache:
+                            cache.record_failure(contents[text_idx])
+                    else:
+                        set_outcome(text_idx, "skip")
                     kept_ids_per_text.pop(text_idx, None)
 
         for batch_start in range(0, len(chunk_queue), batch_size):
@@ -2399,7 +2420,11 @@ class KompressCompressor(Transform):
                             contents[text_idx], len(word_lists[text_idx])
                         )
                         if ratios[text_idx] is None:
-                            cache.record_failure(contents[text_idx])
+                            set_outcome(text_idx, "failure")
+                            if _record_cache:
+                                cache.record_failure(contents[text_idx])
+                        else:
+                            set_outcome(text_idx, "skip")
                         kept_ids_per_text.pop(text_idx, None)
 
         # Reconstruct compressed text for each non-passthrough result.
@@ -2413,7 +2438,11 @@ class KompressCompressor(Transform):
             if not kept_ids:
                 results[text_idx] = self._passthrough(content, n_words)
                 if ratios[text_idx] is None:
-                    cache.discard(content)
+                    set_outcome(text_idx, "success")
+                    if _record_cache:
+                        cache.discard(content)
+                else:
+                    set_outcome(text_idx, "skip")
                 continue
 
             compressed_words = [words[w] for w in sorted(kept_ids) if w < n_words]
@@ -2431,10 +2460,15 @@ class KompressCompressor(Transform):
             )
 
             if ratios[text_idx] is None:
+                set_outcome(text_idx, "success")
                 if compressed_count < n_words:
-                    cache.record_success(content, compressed, n_words, compressed_count)
+                    if _record_cache:
+                        cache.record_success(content, compressed, n_words, compressed_count)
                 else:
-                    cache.discard(content)
+                    if _record_cache:
+                        cache.discard(content)
+            else:
+                set_outcome(text_idx, "skip")
 
             if _emit_ccr and self.config.enable_ccr and comp_ratio < 0.8:
                 ccr_source = ccr_sources[text_idx]
@@ -2462,6 +2496,7 @@ class KompressCompressor(Transform):
         for i, r in enumerate(results):
             if r is None:
                 final.append(self._passthrough(contents[i], len(word_lists[i])))
+                set_outcome(i, "skip")
             else:
                 final.append(r)
         if inference_ms >= 1000.0:
