@@ -1448,8 +1448,6 @@ class KompressCompressor(Transform):
         # Consecutive inference failures — reset by any success, so a transient
         # error can't accumulate toward the latch across a healthy run.
         self._inference_failures: int = 0
-        self._last_uncached_cacheable = False
-        self._suppress_ccr = False
 
     def unload(self) -> bool:
         """Unload the model(s) for this compressor instance to free memory.
@@ -1602,8 +1600,6 @@ class KompressCompressor(Transform):
                 )
                 return self._add_ccr_marker(result, ccr_original)
 
-        previous_suppress_ccr = self._suppress_ccr
-        self._suppress_ccr = True
         try:
             outcome = self._compress_uncached(
                 content,
@@ -1614,6 +1610,7 @@ class KompressCompressor(Transform):
                 ccr_original=ccr_original,
                 allow_download=allow_download,
                 _deadline_started_at=t_deadline,
+                emit_ccr=False,
             )
         except _KompressExecutionSaturated:
             return self._passthrough(content, n_words)
@@ -1621,14 +1618,8 @@ class KompressCompressor(Transform):
             self._record_inference_failure(exc)
             cache.record_failure(content)
             return self._passthrough(content, n_words)
-        finally:
-            self._suppress_ccr = previous_suppress_ccr
-
-        if isinstance(outcome, tuple):
-            result, cacheable = outcome
-        else:
-            result, cacheable = outcome, self._last_uncached_cacheable
-        if result.compressed_tokens < result.original_tokens:
+        result, cacheable = outcome
+        if not cacheable and result.compressed_tokens < result.original_tokens:
             cache.record_success(
                 content,
                 result.compressed,
@@ -1669,6 +1660,7 @@ class KompressCompressor(Transform):
         allow_download: bool = True,
         ccr_original: str | None = None,
         _deadline_started_at: float | None = None,
+        emit_ccr: bool = True,
     ) -> tuple[KompressResult, bool]:
         """Compress content using Kompress model.
 
@@ -1694,7 +1686,6 @@ class KompressCompressor(Transform):
             KompressResult with compressed text.
         """
         t_deadline = time.perf_counter() if _deadline_started_at is None else _deadline_started_at
-        self._last_uncached_cacheable = False
         words = content.split()
         n_words = len(words)
 
@@ -1712,6 +1703,7 @@ class KompressCompressor(Transform):
         if deadline_s is None:
             deadline_s = _request_deadline_seconds()
             self._deadline_s = deadline_s
+        partial_failure = False
 
         try:
             model, tokenizer, backend = _load_kompress(
@@ -1720,7 +1712,7 @@ class KompressCompressor(Transform):
             is_onnx = backend.startswith("onnx")
             device_type = _model_device_type(model, backend)
 
-            if self._should_batch_single_content(model, backend) and not self._suppress_ccr:
+            if self._should_batch_single_content(model, backend):
                 batch_result = self.compress_batch(
                     [content],
                     context=context,
@@ -1730,6 +1722,7 @@ class KompressCompressor(Transform):
                     batch_size=_batch_size(),
                     ccr_originals=[ccr_original],
                     _deadline_started_at=t_deadline,
+                    _emit_ccr=emit_ccr,
                 )
                 if batch_result:
                     return batch_result[0], False
@@ -1754,7 +1747,6 @@ class KompressCompressor(Transform):
                             device_type=device_type,
                             n_words=n_words,
                         )
-                        self._last_uncached_cacheable = True
                         return self._passthrough(content, n_words), True
 
                 if deadline_s and (time.perf_counter() - t_deadline) > deadline_s:
@@ -1798,7 +1790,7 @@ class KompressCompressor(Transform):
                 if deadline_s:
                     request_remaining = deadline_s - (time.perf_counter() - t_deadline)
                     if request_remaining <= 0:
-                        self._last_uncached_cacheable = True
+                        partial_failure = True
                         kept_ids.update(range(chunk_start, n_words))
                         logger.warning(
                             "Kompress hit %.1fs deadline before acquire after %d/%d words "
@@ -1910,7 +1902,7 @@ class KompressCompressor(Transform):
             )
 
             # CCR marker
-            if self.config.enable_ccr and ratio < 0.8 and not self._suppress_ccr:
+            if emit_ccr and self.config.enable_ccr and ratio < 0.8:
                 ccr_source = ccr_original if ccr_original is not None else content
                 ccr_source_tokens = len(ccr_source.split())
                 cache_key = self._store_in_ccr(ccr_source, compressed, ccr_source_tokens)
@@ -1943,7 +1935,7 @@ class KompressCompressor(Transform):
             # A real inference landed — clear the strike count so only CONSECUTIVE
             # failures can reach the latch.
             self._inference_failures = 0
-            return result, self._last_uncached_cacheable
+            return result, partial_failure
 
         except KompressModelNotCached:
             logger.debug(
@@ -1954,7 +1946,6 @@ class KompressCompressor(Transform):
         except _KompressExecutionSaturated:
             raise
         except Exception as e:
-            self._last_uncached_cacheable = True
             self._record_inference_failure(e)
             return self._passthrough(content, n_words), True
 
@@ -2001,6 +1992,7 @@ class KompressCompressor(Transform):
         *,
         ccr_originals: list[str | None] | None = None,
         _deadline_started_at: float | None = None,
+        _emit_ccr: bool = True,
     ) -> list[KompressResult]:
         """Compress multiple texts. Uses batched inference on GPU, sequential on CPU.
 
@@ -2324,7 +2316,7 @@ class KompressCompressor(Transform):
                 model_used=self.config.model_id,
             )
 
-            if self.config.enable_ccr and comp_ratio < 0.8:
+            if _emit_ccr and self.config.enable_ccr and comp_ratio < 0.8:
                 ccr_source = ccr_sources[text_idx]
                 if ccr_source is None:
                     ccr_source = content

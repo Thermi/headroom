@@ -195,6 +195,7 @@ def test_saturation_fail_open_does_not_hang_request(monkeypatch):
     result = result_holder["result"]
     assert result.compressed == text
     assert result.compression_ratio == 1.0
+    assert kc.get_kompress_cache().lookup(text) is None
     after = kc.get_kompress_execution_stats()["execution_timeout_skips_total"]
     assert after == before + 1
 

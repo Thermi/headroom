@@ -11,6 +11,7 @@ one that leaks.
 from __future__ import annotations
 
 from headroom.transforms import kompress_compressor as kc
+from headroom.cache.kompress_cache import KompressCache
 
 
 def test_compress_bails_at_deadline_keeping_tail_verbatim(monkeypatch):
@@ -80,3 +81,55 @@ def test_compress_partial_run_keeps_processed_head_plus_verbatim_tail(monkeypatc
     # chunk 1 tripped the deadline -> its words kept verbatim (w10..w19 all present)
     for i in range(10, 20):
         assert f"w{i}" in out
+
+
+def test_deadline_partial_result_is_cached_as_failure(monkeypatch):
+    monkeypatch.setenv("HEADROOM_COMPRESSION_DEADLINE_MS", "0")
+    monkeypatch.setenv("HEADROOM_KOMPRESS_CACHE_MAX_ATTEMPTS", "2")
+    monkeypatch.setattr(kc, "_load_kompress", lambda *a, **k: (object(), object(), "onnx"))
+    cache = KompressCache(10, 100_000, 2)
+    monkeypatch.setattr(kc, "get_kompress_cache", lambda: cache)
+    content = " ".join(f"w{i}" for i in range(20))
+    compressor = kc.KompressCompressor()
+    monkeypatch.setattr(compressor, "_should_batch_single_content", lambda *a, **k: False)
+
+    compressor.compress(content)
+
+    entry = cache.lookup(content)
+    assert entry is not None
+    assert entry.compressed is None
+    assert entry.attempts == 1
+
+
+def test_payload_timeout_exhausts_and_bypasses_real_inference(monkeypatch):
+    cache = KompressCache(10, 100_000, 2)
+    monkeypatch.setattr(kc, "get_kompress_cache", lambda: cache)
+    monkeypatch.setattr(kc, "_model_device_type", lambda *a, **k: "cpu")
+    calls = {"inference": 0}
+
+    class _Encoding(dict):
+        def word_ids(self, batch_index=0):
+            return list(range(len(self["input_ids"][0])))
+
+    class _Tokenizer:
+        def __call__(self, chunk_words, **kwargs):
+            n = len(chunk_words)
+            return _Encoding(input_ids=[[0] * n], attention_mask=[[1] * n])
+
+    class _TimeoutModel:
+        def get_keep_mask(self, input_ids, attention_mask):
+            calls["inference"] += 1
+            raise TimeoutError("payload timeout")
+
+    monkeypatch.setattr(kc, "_load_kompress", lambda *a, **k: (_TimeoutModel(), _Tokenizer(), "onnx"))
+    content = " ".join(f"w{i}" for i in range(20))
+    compressor = kc.KompressCompressor()
+    monkeypatch.setattr(compressor, "_should_batch_single_content", lambda *a, **k: False)
+
+    compressor.compress(content)
+    compressor.compress(content)
+    compressor.compress(content)
+
+    assert calls["inference"] == 2
+    entry = cache.lookup(content)
+    assert entry is not None and entry.exhausted

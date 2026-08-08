@@ -373,7 +373,7 @@ class TestKompressResultCache:
                 original_tokens=12,
                 compressed_tokens=3,
                 compression_ratio=0.25,
-            ), True
+            ), False
 
         monkeypatch.setattr(compressor, "_compress_uncached", fake_inference)
 
@@ -420,7 +420,7 @@ class TestKompressResultCache:
                         compressed_tokens=3,
                         compression_ratio=0.25,
                     ),
-                    True,
+                    False,
                 ),
             ]
         )
@@ -445,6 +445,31 @@ class TestKompressResultCache:
 
         assert result.compressed == text
         assert cache.lookup(text) is None
+
+    def test_cache_hit_regenerates_ccr_marker_for_current_original(self, monkeypatch) -> None:
+        cache = KompressCache(max_entries=10, max_bytes=100_000, max_attempts=2)
+        monkeypatch.setattr(kc, "get_kompress_cache", lambda: cache)
+        compressor = kc.KompressCompressor()
+        text = "one two three four five six seven eight nine ten eleven twelve"
+        stored: list[tuple[str, str]] = []
+        monkeypatch.setattr(
+            compressor,
+            "_store_in_ccr",
+            lambda original, compressed, original_tokens: (
+                stored.append((original, compressed)) or "fresh-key"
+            ),
+        )
+        cache.record_success(text, "one two three", 12, 3)
+
+        result = compressor.compress(text, ccr_original="current original")
+
+        assert result.cache_key == "fresh-key"
+        assert "hash=fresh-key" in result.compressed
+        assert stored == [("current original", "one two three")]
+        cached = cache.lookup(text)
+        assert cached is not None
+        assert cached.compressed == "one two three"
+        assert cached.compressed is not None and "fresh-key" not in cached.compressed
 
 
 # ── Transform interface ─────────────────────────────────────────────────
