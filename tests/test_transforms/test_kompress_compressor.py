@@ -695,6 +695,29 @@ class TestKompressCompressorBatch:
         assert result.compressed == content
         assert cache.lookup(content) is None
 
+    def test_batch_generic_model_load_failure_retries_without_cache_entry(self, monkeypatch) -> None:
+        content = "batch model failed " * 20
+        cache = KompressCache(max_entries=10, max_bytes=100_000, max_attempts=2)
+        monkeypatch.setattr(kc, "get_kompress_cache", lambda: cache)
+        compressor = kc.KompressCompressor(kc.KompressConfig(enable_ccr=False))
+        monkeypatch.setattr(compressor, "_should_use_sequential_fallback", lambda: False)
+        loads = 0
+
+        def failing_load(*args, **kwargs):
+            nonlocal loads
+            loads += 1
+            raise RuntimeError("batch model load failed")
+
+        monkeypatch.setattr(kc, "_load_kompress", failing_load)
+
+        first = compressor.compress_batch([content])
+        second = compressor.compress_batch([content])
+
+        assert [result.compressed for result in first] == [content]
+        assert [result.compressed for result in second] == [content]
+        assert loads == 2
+        assert cache.lookup(content) is None
+
     def test_target_ratio_bypasses_cache_but_none_reuses_payload_result(self, monkeypatch) -> None:
         content = "ratio-sensitive " * 20
         cache = KompressCache(max_entries=10, max_bytes=100_000, max_attempts=2)

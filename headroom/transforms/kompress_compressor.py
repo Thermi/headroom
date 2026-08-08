@@ -2218,8 +2218,6 @@ class KompressCompressor(Transform):
             for i in range(n):
                 if results[i] is None:
                     results[i] = self._passthrough(contents[i], len(word_lists[i]))
-                    if ratios[i] is None:
-                        cache.record_failure(contents[i])
             return _restore_batch_order(
                 cached_results,
                 [r for r in results if r is not None],

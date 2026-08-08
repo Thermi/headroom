@@ -16,6 +16,7 @@ import time
 
 import pytest
 
+from headroom.cache.kompress_cache import reset_kompress_cache
 import headroom.transforms.kompress_compressor as kc
 from headroom.transforms.kompress_compressor import (
     KOMPRESS_ACQUIRE_TIMEOUT_ENV,
@@ -78,6 +79,7 @@ class FakeModel:
 
 @pytest.fixture(autouse=True)
 def _reset_module_state(monkeypatch):
+    reset_kompress_cache()
     kc._execution_semaphores.clear()
     monkeypatch.setattr(kc, "_giveup_warned", False)
     for env in (
@@ -89,6 +91,7 @@ def _reset_module_state(monkeypatch):
     ):
         monkeypatch.delenv(env, raising=False)
     yield
+    reset_kompress_cache()
     kc._execution_semaphores.clear()
 
 
@@ -285,7 +288,7 @@ def test_execution_wait_budget(monkeypatch):
     assert kc._execution_wait_budget_seconds() == 3.0
 
     monkeypatch.setenv(KOMPRESS_EXECUTION_SEMAPHORE_WAIT_MS_ENV, "-1")
-    assert kc._execution_wait_budget_seconds() == 0.0
+    assert kc._execution_wait_budget_seconds() is None
 
 
 def test_request_deadline_caps_default_wait_single(monkeypatch):
