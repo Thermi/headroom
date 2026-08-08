@@ -158,3 +158,12 @@ def test_provider_exception_falls_back_to_builtin():
     # Falls back to the built-in fold rather than crashing or passing through raw.
     out, kind = _compact(GREP)
     assert kind == "search" and search_unheading(out) == GREP
+
+
+def test_malformed_provider_tuple_is_ignored():
+    """A malformed provider result must not leak a non-string into compression."""
+    set_lossless_provider(lambda content: (("not", "text"), "custom"))
+
+    out, kind = _compact(GREP)
+    assert kind == "search"
+    assert search_unheading(out) == GREP

@@ -5521,7 +5521,18 @@ class ContentRouter(Transform):
             try:
                 # A registered provider is authoritative for excluded-tool
                 # compaction; fall back to the built-in folds only if it raises.
-                return provider(content)
+                supplied = provider(content)
+                if supplied is None:
+                    return None
+                if (
+                    isinstance(supplied, tuple | list)
+                    and len(supplied) == 2
+                    and isinstance(supplied[0], str)
+                    and isinstance(supplied[1], str)
+                    and supplied[0].strip()
+                ):
+                    return supplied[0], supplied[1]
+                logger.debug("lossless provider returned malformed excluded output")
             except Exception:  # noqa: BLE001
                 logger.debug(
                     "lossless provider failed; using built-in compaction",
