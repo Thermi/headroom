@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import builtins
+import sys
 from dataclasses import dataclass
 from types import SimpleNamespace
 
@@ -92,6 +93,31 @@ def test_embedding_numpy_and_model_error_paths(monkeypatch) -> None:
     monkeypatch.setattr(EmbeddingScorer, "is_available", classmethod(lambda cls: False))
     with pytest.raises(RuntimeError, match="requires fastembed"):
         EmbeddingScorer()._get_model()
+
+
+def test_embedding_model_uses_cpu_provider(monkeypatch) -> None:
+    calls = []
+
+    class FakeTextEmbedding:
+        def __init__(self, **kwargs):
+            calls.append(kwargs)
+
+    monkeypatch.setattr(EmbeddingScorer, "is_available", classmethod(lambda cls: True))
+    monkeypatch.setitem(
+        sys.modules,
+        "fastembed",
+        SimpleNamespace(TextEmbedding=FakeTextEmbedding),
+    )
+
+    EmbeddingScorer()._get_model()
+
+    assert calls == [
+        {
+            "model_name": "BAAI/bge-small-en-v1.5",
+            "revision": embedding._DEFAULT_MODEL_PINNED_REVISION,
+            "providers": ["CPUExecutionProvider"],
+        }
+    ]
 
 
 def test_embedding_score_empty_and_batch_shortcuts() -> None:

@@ -174,9 +174,16 @@ class EmbeddingScorer(RelevanceScorer):
             revision = _pinned_revision(self.model_name)
             if revision is not None:
                 # fastembed forwards **kwargs to snapshot_download(revision=...).
-                self._model = TextEmbedding(model_name=self.model_name, revision=revision)
+                self._model = TextEmbedding(
+                    model_name=self.model_name,
+                    revision=revision,
+                    providers=["CPUExecutionProvider"],
+                )
             else:
-                self._model = TextEmbedding(model_name=self.model_name)
+                self._model = TextEmbedding(
+                    model_name=self.model_name,
+                    providers=["CPUExecutionProvider"],
+                )
         return self._model
 
     def _encode(self, texts: list[str]):
