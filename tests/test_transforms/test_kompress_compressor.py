@@ -523,6 +523,149 @@ class TestKompressCompressorBatch:
     tests that require the model to be downloaded.
     """
 
+    def test_batch_prepass_reuses_cache_preserves_order_and_regenerates_ccr(
+        self, monkeypatch
+    ) -> None:
+        cache = KompressCache(max_entries=10, max_bytes=100_000, max_attempts=2)
+        monkeypatch.setattr(kc, "get_kompress_cache", lambda: cache)
+        compressor = kc.KompressCompressor()
+        cached = "cached " * 20
+        fresh = "fresh " * 20
+        cache.record_success(cached, "cached", 20, 1)
+        stored: list[str] = []
+        inference_calls = 0
+
+        class FakeEncoding(dict):
+            def __init__(self, batch_words):
+                input_ids = [[1] * len(words) for words in batch_words]
+                super().__init__(input_ids=input_ids, attention_mask=input_ids)
+                self.batch_words = batch_words
+
+            def word_ids(self, batch_index=0):
+                return list(range(len(self.batch_words[batch_index])))
+
+        class FakeTokenizer:
+            def __call__(self, batch_words, **kwargs):
+                return FakeEncoding(batch_words)
+
+        class FakeModel:
+            def get_scores(self, input_ids, attention_mask):
+                nonlocal inference_calls
+                inference_calls += 1
+                return [[1.0] + [0.0] * (len(row) - 1) for row in input_ids]
+
+        monkeypatch.setattr(compressor, "_should_use_sequential_fallback", lambda: False)
+        monkeypatch.setattr(
+            kc,
+            "_load_kompress",
+            lambda *args, **kwargs: (FakeModel(), FakeTokenizer(), "onnx"),
+        )
+        monkeypatch.setattr(
+            compressor,
+            "_store_in_ccr",
+            lambda original, compressed, original_tokens: stored.append(original) or "key",
+        )
+
+        results = compressor.compress_batch([fresh, cached], batch_size=32)
+
+        assert [result.original for result in results] == [fresh, cached]
+        assert [
+            result.compressed.startswith(prefix)
+            for result, prefix in zip(results, ("fresh", "cached"), strict=True)
+        ] == [True, True]
+        assert [result.cache_key for result in results] == ["key", "key"]
+        assert sorted(stored) == sorted([fresh, cached])
+        assert inference_calls == 1
+        assert cache.stats()["hits"] == 1
+
+    def test_batch_failure_records_payloads_but_saturation_does_not(self, monkeypatch) -> None:
+        cache = KompressCache(max_entries=10, max_bytes=100_000, max_attempts=2)
+        monkeypatch.setattr(kc, "get_kompress_cache", lambda: cache)
+        compressor = kc.KompressCompressor()
+        contents = ["failure " * 20, "saturated " * 20]
+        monkeypatch.setattr(compressor, "_should_use_sequential_fallback", lambda: False)
+
+        class BatchEncoding(dict):
+            def __init__(self, batch_words):
+                input_ids = [[1] * len(words) for words in batch_words]
+                super().__init__(input_ids=input_ids, attention_mask=input_ids)
+                self.batch_words = batch_words
+
+            def word_ids(self, batch_index=0):
+                return list(range(len(self.batch_words[batch_index])))
+
+        class BatchTokenizer:
+            def __call__(self, batch_words, **kwargs):
+                return BatchEncoding(batch_words)
+
+        class FailureModel:
+            def get_scores(self, input_ids, attention_mask):
+                raise TimeoutError("batch timeout")
+
+        monkeypatch.setattr(
+            kc,
+            "_load_kompress",
+            lambda *args, **kwargs: (FailureModel(), BatchTokenizer(), "onnx"),
+        )
+
+        results = compressor.compress_batch(contents)
+
+        assert [result.compressed for result in results] == contents
+        for content in contents:
+            failure_entry = cache.lookup(content)
+            assert failure_entry is not None
+            assert failure_entry.attempts == 1
+
+        cache = KompressCache(max_entries=10, max_bytes=100_000, max_attempts=2)
+        monkeypatch.setattr(kc, "get_kompress_cache", lambda: cache)
+        class SaturationModel:
+            def get_scores(self, input_ids, attention_mask):
+                return [[1.0] + [0.0] * (len(row) - 1) for row in input_ids]
+
+        monkeypatch.setattr(
+            kc,
+            "_load_kompress",
+            lambda *args, **kwargs: (SaturationModel(), BatchTokenizer(), "onnx"),
+        )
+        monkeypatch.setattr(
+            kc,
+            "_acquire_execution_slot",
+            lambda *args, **kwargs: (None, 0.0),
+        )
+
+        compressor.compress_batch(contents)
+
+        assert cache.lookup(contents[0]) is None
+        assert cache.lookup(contents[1]) is None
+
+    def test_execution_stats_include_cache_counters_without_payload_data(self, monkeypatch) -> None:
+        cache = KompressCache(max_entries=7, max_bytes=1234, max_attempts=2)
+        monkeypatch.setattr(kc, "get_kompress_cache", lambda: cache)
+        cache.record_failure("secret payload")
+        cache.lookup("secret payload")
+
+        stats = kc.get_kompress_execution_stats()
+
+        assert stats["cache_hits_total"] == 1
+        assert stats["cache_failures_total"] == 1
+        assert stats["cache_max_entries"] == 7
+        assert stats["cache_max_bytes"] == 1234
+        assert "secret payload" not in str(stats)
+        assert "digest" not in stats
+
+    def test_batch_degraded_fast_path_bypasses_result_cache(self, monkeypatch) -> None:
+        content = "degraded " * 20
+        cache = KompressCache(max_entries=10, max_bytes=100_000, max_attempts=2)
+        cache.record_success(content, "compressed", 20, 1)
+        monkeypatch.setattr(kc, "get_kompress_cache", lambda: cache)
+        compressor = kc.KompressCompressor()
+        compressor._degraded_reason = "model unavailable"
+
+        [result] = compressor.compress_batch([content])
+
+        assert result.compressed == content
+        assert cache.stats()["hits"] == 0
+
     def test_empty_batch_returns_empty_list(self) -> None:
         from headroom.transforms.kompress_compressor import KompressCompressor
 

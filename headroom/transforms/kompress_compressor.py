@@ -226,15 +226,43 @@ def _acquire_execution_slot(
 
 
 def get_kompress_execution_stats() -> dict[str, int | float]:
-    """Return execution-acquire observability counters."""
+    """Return execution-acquire and cache observability counters."""
     budget = _execution_wait_budget_seconds()
     timeout_ms = -1 if budget is None else int(budget * 1000)
     with _execution_metrics_lock:
-        return {
+        stats: dict[str, int | float] = {
             "execution_acquire_timeout_ms": timeout_ms,
             "execution_timeout_skips_total": _execution_skip_counters["timeout"],
             "execution_wait_seconds_total": _execution_wait_seconds_total["timeout"],
         }
+    cache = get_kompress_cache()
+    cache_stats = cache.stats()
+    stats.update(
+        {
+            "cache_hits_total": cache_stats["hits"],
+            "cache_misses_total": cache_stats["misses"],
+            "cache_failures_total": cache_stats["failures"],
+            "cache_retries_total": cache_stats["retries"],
+            "cache_evictions_total": cache_stats["evictions"],
+            "cache_entries": cache_stats["entries"],
+            "cache_bytes": cache_stats["bytes"],
+            "cache_max_entries": cache.max_entries,
+            "cache_max_bytes": cache.max_bytes,
+        }
+    )
+    return stats
+
+
+def _restore_batch_order(
+    cached_results: list[KompressResult | None],
+    active_results: list[KompressResult],
+    active_indices: list[int],
+) -> list[KompressResult]:
+    """Merge pre-pass results and active results in their original order."""
+    merged = list(cached_results)
+    for index, result in zip(active_indices, active_results, strict=True):
+        merged[index] = result
+    return [result for result in merged if result is not None]
 
 
 def _selected_backend() -> KompressBackend:
@@ -2079,8 +2107,41 @@ class KompressCompressor(Transform):
         else:
             ccr_sources = [None] * n
 
-        if getattr(self, "_degraded_reason", None) is not None:
-            return [self._passthrough(c, len(c.split())) for c in contents]
+        if self._degraded_reason is not None:
+            return [self._passthrough(content, len(content.split())) for content in contents]
+
+        cache = get_kompress_cache()
+        cached_results: list[KompressResult | None] = [None] * n
+        active_indices: list[int] = []
+        for i, content in enumerate(contents):
+            if len(content.split()) < 10:
+                active_indices.append(i)
+                continue
+            cached = cache.lookup(content)
+            if cached is not None and cached.exhausted:
+                cached_results[i] = self._passthrough(content, len(content.split()))
+            elif cached is not None and cached.compressed is not None:
+                cached_result = KompressResult(
+                    compressed=cached.compressed,
+                    original=content,
+                    original_tokens=cached.original_tokens or len(content.split()),
+                    compressed_tokens=cached.compressed_tokens
+                    or len(cached.compressed.split()),
+                    compression_ratio=(cached.compressed_tokens or len(content.split()))
+                    / len(content.split()),
+                    model_used=self.config.model_id,
+                )
+                cached_results[i] = self._add_ccr_marker(cached_result, ccr_sources[i])
+            else:
+                active_indices.append(i)
+
+        if not active_indices:
+            return [result for result in cached_results if result is not None]
+
+        contents = [contents[i] for i in active_indices]
+        ratios = [ratios[i] for i in active_indices]
+        ccr_sources = [ccr_sources[i] for i in active_indices]
+        n = len(contents)
 
         # Fast path: on backends where batch-dim parallelism does NOT help
         # (ONNX CPU, PyTorch CPU), fall back to sequential `compress()`
@@ -2088,7 +2149,7 @@ class KompressCompressor(Transform):
         # per-item slowdown measured on ONNX CPU (~0.7-0.9x vs sequential).
         # GPU users still benefit from the batched forward pass below.
         if self._should_use_sequential_fallback():
-            return [
+            active_results = [
                 self.compress(
                     content,
                     context=context,
@@ -2100,6 +2161,7 @@ class KompressCompressor(Transform):
                 )
                 for content, r, ccr_source in zip(contents, ratios, ccr_sources, strict=True)
             ]
+            return _restore_batch_order(cached_results, active_results, active_indices)
 
         results: list[KompressResult | None] = [None] * n
         word_lists: list[list[str]] = [c.split() for c in contents]
@@ -2127,7 +2189,12 @@ class KompressCompressor(Transform):
             for i in range(n):
                 if results[i] is None:
                     results[i] = self._passthrough(contents[i], len(word_lists[i]))
-            return [r for r in results if r is not None]
+                    cache.record_failure(contents[i])
+            return _restore_batch_order(
+                cached_results,
+                [r for r in results if r is not None],
+                active_indices,
+            )
 
         is_onnx = backend.startswith("onnx")
         device_type = _model_device_type(model, backend)
@@ -2142,7 +2209,7 @@ class KompressCompressor(Transform):
         budget = _time_budget_seconds()
         deadline = time.monotonic() + budget if budget is not None else None
 
-        def _bail_remaining(reason: str, batch_start: int) -> None:
+        def _bail_remaining(reason: str, batch_start: int, cache_failure: bool = True) -> None:
             # A text with ANY unprocessed chunk must pass through whole —
             # compressing from partial chunk coverage would silently drop the
             # words of the chunks that never ran.
@@ -2157,6 +2224,8 @@ class KompressCompressor(Transform):
                     results[text_idx] = self._passthrough(
                         contents[text_idx], len(word_lists[text_idx])
                     )
+                    if cache_failure:
+                        cache.record_failure(contents[text_idx])
                     kept_ids_per_text.pop(text_idx, None)
 
         for batch_start in range(0, len(chunk_queue), batch_size):
@@ -2222,7 +2291,9 @@ class KompressCompressor(Transform):
                         "passing through remaining batch inputs",
                         wait_ms,
                     )
-                    _bail_remaining("model busy (semaphore acquire timed out)", batch_start)
+                    _bail_remaining(
+                        "model busy (semaphore acquire timed out)", batch_start, cache_failure=False
+                    )
                     break
 
                 with contextlib.ExitStack() as stack:
@@ -2289,6 +2360,7 @@ class KompressCompressor(Transform):
                         results[text_idx] = self._passthrough(
                             contents[text_idx], len(word_lists[text_idx])
                         )
+                        cache.record_failure(contents[text_idx])
                         kept_ids_per_text.pop(text_idx, None)
 
         # Reconstruct compressed text for each non-passthrough result.
@@ -2316,6 +2388,9 @@ class KompressCompressor(Transform):
                 compression_ratio=comp_ratio,
                 model_used=self.config.model_id,
             )
+
+            if compressed_count < n_words:
+                cache.record_success(content, compressed, n_words, compressed_count)
 
             if _emit_ccr and self.config.enable_ccr and comp_ratio < 0.8:
                 ccr_source = ccr_sources[text_idx]
@@ -2360,7 +2435,7 @@ class KompressCompressor(Transform):
                 inference_ms,
                 total_saved,
             )
-        return final
+        return _restore_batch_order(cached_results, final, active_indices)
 
     def _should_batch_single_content(self, model: Any, backend: str) -> bool:
         if backend != "pytorch":
