@@ -12,6 +12,9 @@ import logging
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+from headroom.cache.kompress_cache import KompressCache
+import headroom.transforms.kompress_compressor as kc
+
 # ── Import safety (the whole point of the fix) ─────────────────────────
 
 
@@ -351,6 +354,97 @@ class TestKompressCompressorPassthrough:
             result = compressor.compress(long_text)
             assert result.compressed == long_text
             assert result.compression_ratio == 1.0
+
+
+class TestKompressResultCache:
+    def test_identical_section_hits_without_second_inference(self, monkeypatch) -> None:
+        cache = KompressCache(max_entries=10, max_bytes=100_000, max_attempts=2)
+        monkeypatch.setattr(kc, "get_kompress_cache", lambda: cache)
+        compressor = kc.KompressCompressor(kc.KompressConfig(enable_ccr=False))
+        text = "one two three four five six seven eight nine ten eleven twelve"
+        calls = 0
+
+        def fake_inference(*args, **kwargs):
+            nonlocal calls
+            calls += 1
+            return kc.KompressResult(
+                compressed="one two three",
+                original=text,
+                original_tokens=12,
+                compressed_tokens=3,
+                compression_ratio=0.25,
+            ), True
+
+        monkeypatch.setattr(compressor, "_compress_uncached", fake_inference)
+
+        first = compressor.compress(text)
+        second = compressor.compress(text)
+
+        assert first.compressed == second.compressed == "one two three"
+        assert calls == 1
+
+    def test_exhausted_payload_failure_bypasses_inference(self, monkeypatch) -> None:
+        cache = KompressCache(max_entries=10, max_bytes=100_000, max_attempts=2)
+        monkeypatch.setattr(kc, "get_kompress_cache", lambda: cache)
+        compressor = kc.KompressCompressor(kc.KompressConfig(enable_ccr=False))
+        text = "one two three four five six seven eight nine ten eleven twelve"
+        calls = 0
+
+        def failing_inference(*args, **kwargs):
+            nonlocal calls
+            calls += 1
+            raise TimeoutError("payload too large")
+
+        monkeypatch.setattr(compressor, "_compress_uncached", failing_inference)
+
+        compressor.compress(text)
+        compressor.compress(text)
+        result = compressor.compress(text)
+
+        assert result.compressed == text
+        assert calls == 2
+
+    def test_success_replaces_cached_failure(self, monkeypatch) -> None:
+        cache = KompressCache(max_entries=10, max_bytes=100_000, max_attempts=3)
+        monkeypatch.setattr(kc, "get_kompress_cache", lambda: cache)
+        compressor = kc.KompressCompressor(kc.KompressConfig(enable_ccr=False))
+        text = "one two three four five six seven eight nine ten eleven twelve"
+        outcomes = iter(
+            [
+                (compressor._passthrough(text, 12), True),
+                (
+                    kc.KompressResult(
+                        compressed="one two three",
+                        original=text,
+                        original_tokens=12,
+                        compressed_tokens=3,
+                        compression_ratio=0.25,
+                    ),
+                    True,
+                ),
+            ]
+        )
+        monkeypatch.setattr(compressor, "_compress_uncached", lambda *args, **kwargs: next(outcomes))
+
+        assert compressor.compress(text).compressed == text
+        assert compressor.compress(text).compressed == "one two three"
+        assert compressor.compress(text).compressed == "one two three"
+
+    def test_execution_saturation_is_not_cached(self, monkeypatch) -> None:
+        cache = KompressCache(max_entries=10, max_bytes=100_000, max_attempts=2)
+        monkeypatch.setattr(kc, "get_kompress_cache", lambda: cache)
+        compressor = kc.KompressCompressor(kc.KompressConfig(enable_ccr=False))
+        text = "one two three four five six seven eight nine ten eleven twelve"
+        monkeypatch.setattr(
+            compressor,
+            "_compress_uncached",
+            lambda *args, **kwargs: (_ for _ in ()).throw(kc._KompressExecutionSaturated()),
+        )
+
+        result = compressor.compress(text)
+
+        assert result.compressed == text
+        assert cache.lookup(text) is None
 
 
 # ── Transform interface ─────────────────────────────────────────────────

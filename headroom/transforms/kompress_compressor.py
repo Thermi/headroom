@@ -34,6 +34,7 @@ from ..onnx_runtime import (
     trim_process_heap,
 )
 from ..tokenizer import Tokenizer
+from ..cache.kompress_cache import get_kompress_cache
 from .base import Transform
 
 logger = logging.getLogger(__name__)
@@ -142,6 +143,10 @@ class KompressModelNotCached(RuntimeError):
     defer the download to first use instead of blocking the proxy startup path
     on a network fetch.
     """
+
+
+class _KompressExecutionSaturated(RuntimeError):
+    """The process-wide inference execution slot was unavailable."""
 
 
 # Model cache: model_id -> (model, tokenizer, backend)
@@ -1083,7 +1088,9 @@ def _load_kompress(
         return _load_kompress_onnx(model_id, use_coreml=False, allow_download=allow_download)
 
     if backend == "onnx_gpu":
-        return _load_kompress_onnx(model_id, use_coreml=False, use_gpu=True)
+        return _load_kompress_onnx(
+            model_id, use_coreml=False, use_gpu=True, allow_download=allow_download
+        )
 
     if backend == "onnx_coreml":
         return _load_kompress_onnx(model_id, use_coreml=True, allow_download=allow_download)
@@ -1441,6 +1448,8 @@ class KompressCompressor(Transform):
         # Consecutive inference failures — reset by any success, so a transient
         # error can't accumulate toward the latch across a healthy run.
         self._inference_failures: int = 0
+        self._last_uncached_cacheable = False
+        self._suppress_ccr = False
 
     def unload(self) -> bool:
         """Unload the model(s) for this compressor instance to free memory.
@@ -1572,6 +1581,95 @@ class KompressCompressor(Transform):
         ccr_original: str | None = None,
         _deadline_started_at: float | None = None,
     ) -> KompressResult:
+        t_deadline = time.perf_counter() if _deadline_started_at is None else _deadline_started_at
+        n_words = len(content.split())
+        if n_words < 10 or self._degraded_reason is not None:
+            return self._passthrough(content, n_words)
+
+        cache = get_kompress_cache()
+        cached = cache.lookup(content)
+        if cached is not None:
+            if cached.exhausted:
+                return self._passthrough(content, n_words)
+            if cached.compressed is not None:
+                result = KompressResult(
+                    compressed=cached.compressed,
+                    original=content,
+                    original_tokens=cached.original_tokens or n_words,
+                    compressed_tokens=cached.compressed_tokens or len(cached.compressed.split()),
+                    compression_ratio=(cached.compressed_tokens or n_words) / n_words,
+                    model_used=self.config.model_id,
+                )
+                return self._add_ccr_marker(result, ccr_original)
+
+        previous_suppress_ccr = self._suppress_ccr
+        self._suppress_ccr = True
+        try:
+            outcome = self._compress_uncached(
+                content,
+                context=context,
+                content_type=content_type,
+                question=question,
+                target_ratio=target_ratio,
+                ccr_original=ccr_original,
+                allow_download=allow_download,
+                _deadline_started_at=t_deadline,
+            )
+        except _KompressExecutionSaturated:
+            return self._passthrough(content, n_words)
+        except Exception as exc:
+            self._record_inference_failure(exc)
+            cache.record_failure(content)
+            return self._passthrough(content, n_words)
+        finally:
+            self._suppress_ccr = previous_suppress_ccr
+
+        if isinstance(outcome, tuple):
+            result, cacheable = outcome
+        else:
+            result, cacheable = outcome, self._last_uncached_cacheable
+        if result.compressed_tokens < result.original_tokens:
+            cache.record_success(
+                content,
+                result.compressed,
+                result.original_tokens,
+                result.compressed_tokens,
+            )
+            return self._add_ccr_marker(result, ccr_original)
+        if cacheable:
+            cache.record_failure(content)
+        return result
+
+    def _add_ccr_marker(
+        self, result: KompressResult, ccr_original: str | None
+    ) -> KompressResult:
+        if self.config.enable_ccr and result.compression_ratio < 0.8:
+            ccr_source = ccr_original if ccr_original is not None else result.original
+            ccr_source_tokens = len(ccr_source.split())
+            cache_key = self._store_in_ccr(ccr_source, result.compressed, ccr_source_tokens)
+            if cache_key:
+                result.cache_key = cache_key
+                source_lines = ccr_source.count("\n") + 1
+                line_word = "line" if source_lines == 1 else "lines"
+                result.compressed += (
+                    f"\n[{result.original_tokens} items compressed to {result.compressed_tokens}"
+                    f" (from {source_lines} source {line_word})."
+                    f" Retrieve more: hash={cache_key}]"
+                )
+        return result
+
+    def _compress_uncached(
+        self,
+        content: str,
+        context: str = "",
+        content_type: str | None = None,
+        question: str | None = None,
+        target_ratio: float | None = None,
+        *,
+        allow_download: bool = True,
+        ccr_original: str | None = None,
+        _deadline_started_at: float | None = None,
+    ) -> tuple[KompressResult, bool]:
         """Compress content using Kompress model.
 
         Args:
@@ -1596,11 +1694,12 @@ class KompressCompressor(Transform):
             KompressResult with compressed text.
         """
         t_deadline = time.perf_counter() if _deadline_started_at is None else _deadline_started_at
+        self._last_uncached_cacheable = False
         words = content.split()
         n_words = len(words)
 
         if n_words < 10 or self._degraded_reason is not None:
-            return self._passthrough(content, n_words)
+            return self._passthrough(content, n_words), False
 
         # Cooperative wall-clock budget (#1171): kompress ONNX inference is
         # O(tokens) and non-preemptible once the request's asyncio timeout fires,
@@ -1621,7 +1720,7 @@ class KompressCompressor(Transform):
             is_onnx = backend.startswith("onnx")
             device_type = _model_device_type(model, backend)
 
-            if self._should_batch_single_content(model, backend):
+            if self._should_batch_single_content(model, backend) and not self._suppress_ccr:
                 batch_result = self.compress_batch(
                     [content],
                     context=context,
@@ -1633,7 +1732,7 @@ class KompressCompressor(Transform):
                     _deadline_started_at=t_deadline,
                 )
                 if batch_result:
-                    return batch_result[0]
+                    return batch_result[0], False
 
             max_chunk_words = self.config.chunk_words
             kept_ids: set[int] = set()
@@ -1655,7 +1754,8 @@ class KompressCompressor(Transform):
                             device_type=device_type,
                             n_words=n_words,
                         )
-                        return self._passthrough(content, n_words)
+                        self._last_uncached_cacheable = True
+                        return self._passthrough(content, n_words), True
 
                 if deadline_s and (time.perf_counter() - t_deadline) > deadline_s:
                     # Keep everything from here on verbatim and stop: a partial
@@ -1698,6 +1798,7 @@ class KompressCompressor(Transform):
                 if deadline_s:
                     request_remaining = deadline_s - (time.perf_counter() - t_deadline)
                     if request_remaining <= 0:
+                        self._last_uncached_cacheable = True
                         kept_ids.update(range(chunk_start, n_words))
                         logger.warning(
                             "Kompress hit %.1fs deadline before acquire after %d/%d words "
@@ -1735,7 +1836,7 @@ class KompressCompressor(Transform):
                         backend,
                         device_type,
                     )
-                    return self._passthrough(content, n_words)
+                    raise _KompressExecutionSaturated()
 
                 with contextlib.ExitStack() as stack:
                     stack.callback(semaphore.release)
@@ -1792,7 +1893,7 @@ class KompressCompressor(Transform):
                         chunk_count,
                         inference_ms,
                     )
-                return self._passthrough(content, n_words)
+                return self._passthrough(content, n_words), False
 
             compressed_words = [words[w] for w in sorted(kept_ids) if w < n_words]
             compressed = " ".join(compressed_words)
@@ -1809,7 +1910,7 @@ class KompressCompressor(Transform):
             )
 
             # CCR marker
-            if self.config.enable_ccr and ratio < 0.8:
+            if self.config.enable_ccr and ratio < 0.8 and not self._suppress_ccr:
                 ccr_source = ccr_original if ccr_original is not None else content
                 ccr_source_tokens = len(ccr_source.split())
                 cache_key = self._store_in_ccr(ccr_source, compressed, ccr_source_tokens)
@@ -1842,17 +1943,20 @@ class KompressCompressor(Transform):
             # A real inference landed — clear the strike count so only CONSECUTIVE
             # failures can reach the latch.
             self._inference_failures = 0
-            return result
+            return result, self._last_uncached_cacheable
 
         except KompressModelNotCached:
             logger.debug(
                 "Kompress model %s not cached; passing through without compression",
                 self.config.model_id,
             )
-            return self._passthrough(content, n_words)
+            return self._passthrough(content, n_words), False
+        except _KompressExecutionSaturated:
+            raise
         except Exception as e:
+            self._last_uncached_cacheable = True
             self._record_inference_failure(e)
-            return self._passthrough(content, n_words)
+            return self._passthrough(content, n_words), True
 
     def _record_inference_failure(self, exc: BaseException) -> None:
         """Log a failed inference, and latch to degraded after repeated failures.
