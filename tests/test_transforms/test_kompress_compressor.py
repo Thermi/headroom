@@ -469,6 +469,36 @@ class TestKompressResultCache:
         assert owner_result[0].compressed == "one two three"
         assert cache._inflight == {}
 
+    def test_single_flight_retries_use_remaining_deadline(self, monkeypatch) -> None:
+        cache = KompressCache(max_entries=10, max_bytes=100_000, max_attempts=2)
+        text = "one two three four five six seven eight nine ten eleven twelve"
+        cache.record_failure(text)
+        monkeypatch.setattr(kc, "get_kompress_cache", lambda: cache)
+        compressor = kc.KompressCompressor(kc.KompressConfig(enable_ccr=False))
+        remaining = iter((0.05, 0.0))
+        deadline_checks: list[float] = []
+        waits: list[float] = []
+
+        def remaining_timeout(_):
+            timeout = next(remaining)
+            deadline_checks.append(timeout)
+            return timeout
+
+        monkeypatch.setattr(kc, "_single_flight_wait_timeout_seconds", remaining_timeout)
+
+        def acquire(content, namespace, *, timeout_seconds):
+            waits.append(timeout_seconds)
+            return False if len(waits) == 1 else None
+
+        monkeypatch.setattr(cache, "acquire_inference", acquire)
+
+        result = compressor.compress(text)
+
+        assert result.compressed == text
+        assert deadline_checks == [0.05, 0.0]
+        assert waits == [0.05]
+        assert cache.stats()["failures"] == 1
+
     def test_effective_configuration_namespaces_cached_results(self, monkeypatch) -> None:
         cache = KompressCache(max_entries=10, max_bytes=100_000, max_attempts=2)
         monkeypatch.setattr(kc, "get_kompress_cache", lambda: cache)
@@ -924,6 +954,78 @@ class TestKompressCompressorBatch:
         assert all(batch[0].compressed.startswith("one") for batch in results)
         assert calls == 1
         assert cache._inflight == {}
+
+    def test_batch_size_zero_releases_gpu_claims(self, monkeypatch) -> None:
+        import pytest
+
+        cache = KompressCache(max_entries=10, max_bytes=100_000, max_attempts=2)
+        monkeypatch.setattr(kc, "get_kompress_cache", lambda: cache)
+        text = "one two three four five six seven eight nine ten eleven twelve"
+
+        class BatchEncoding(dict):
+            def __init__(self, batch_words):
+                input_ids = [[1] * len(words) for words in batch_words]
+                super().__init__(input_ids=input_ids, attention_mask=input_ids)
+                self.batch_words = batch_words
+
+            def word_ids(self, batch_index=0):
+                return list(range(len(self.batch_words[batch_index])))
+
+        class BatchTokenizer:
+            def __call__(self, batch_words, **kwargs):
+                return BatchEncoding(batch_words)
+
+        class BatchModel:
+            def get_scores(self, input_ids, attention_mask):
+                return [[1.0] + [0.0] * (len(row) - 1) for row in input_ids]
+
+        monkeypatch.setattr(
+            kc,
+            "_load_kompress",
+            lambda *args, **kwargs: (BatchModel(), BatchTokenizer(), "onnx_gpu"),
+        )
+        compressor = kc.KompressCompressor(kc.KompressConfig(enable_ccr=False))
+        monkeypatch.setattr(compressor, "_should_use_sequential_fallback", lambda: False)
+
+        with pytest.raises(ValueError, match="batch_size"):
+            compressor.compress_batch([text], batch_size=0)
+
+        assert cache._inflight == {}
+        [result] = compressor.compress_batch([text], batch_size=32)
+        assert result.compressed.startswith("one")
+        assert cache._inflight == {}
+
+    def test_gpu_batch_retries_use_remaining_deadline(self, monkeypatch) -> None:
+        cache = KompressCache(max_entries=10, max_bytes=100_000, max_attempts=2)
+        text = "one two three four five six seven eight nine ten eleven twelve"
+        cache.record_failure(text)
+        monkeypatch.setattr(kc, "get_kompress_cache", lambda: cache)
+        monkeypatch.setattr(kc, "_load_kompress", lambda *args, **kwargs: (object(), object(), "onnx_gpu"))
+        compressor = kc.KompressCompressor(kc.KompressConfig(enable_ccr=False))
+        monkeypatch.setattr(compressor, "_should_use_sequential_fallback", lambda: False)
+        remaining = iter((0.05, 0.0))
+        deadline_checks: list[float] = []
+        waits: list[float] = []
+
+        def remaining_timeout(_):
+            timeout = next(remaining)
+            deadline_checks.append(timeout)
+            return timeout
+
+        monkeypatch.setattr(kc, "_single_flight_wait_timeout_seconds", remaining_timeout)
+
+        def acquire(content, namespace, *, timeout_seconds):
+            waits.append(timeout_seconds)
+            return False if len(waits) == 1 else None
+
+        monkeypatch.setattr(cache, "acquire_inference", acquire)
+
+        [result] = compressor.compress_batch([text])
+
+        assert result.compressed == text
+        assert deadline_checks == [0.05, 0.0]
+        assert waits == [0.05]
+        assert cache.stats()["failures"] == 1
 
     def test_batch_preserves_cached_long_result_when_other_input_is_short(self, monkeypatch) -> None:
         cache = KompressCache(max_entries=10, max_bytes=100_000, max_attempts=2)

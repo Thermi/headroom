@@ -1652,7 +1652,7 @@ class KompressCompressor(Transform):
         cache_namespace = self._cache_namespace()
         cache_owner = False
         if cache_enabled:
-            cache_wait_timeout = _single_flight_wait_timeout_seconds(t_deadline)
+            waited_for_owner = False
             while True:
                 cached = cache.lookup(content, cache_namespace)
                 if cached is not None:
@@ -1669,6 +1669,9 @@ class KompressCompressor(Transform):
                             model_used=self.config.model_id,
                         )
                         return self._add_ccr_marker(result, ccr_original)
+                cache_wait_timeout = _single_flight_wait_timeout_seconds(t_deadline)
+                if waited_for_owner and cache_wait_timeout <= 0:
+                    return self._passthrough(content, n_words)
                 claim = cache.acquire_inference(
                     content,
                     cache_namespace,
@@ -1679,6 +1682,7 @@ class KompressCompressor(Transform):
                 if claim:
                     cache_owner = True
                     break
+                waited_for_owner = True
 
         try:
             try:
@@ -2102,6 +2106,50 @@ class KompressCompressor(Transform):
         _batch_outcomes: list[_CacheOutcome] | None = None,
         _record_cache: bool = True,
     ) -> list[KompressResult]:
+        """Compress a batch and always release claims owned by this call."""
+        if batch_size <= 0:
+            raise ValueError("batch_size must be positive")
+        if not contents:
+            return []
+
+        cache = get_kompress_cache()
+        cache_namespace = self._cache_namespace()
+        claimed_contents: set[str] = set()
+        try:
+            return self._compress_batch_impl(
+                contents,
+                context=context,
+                content_type=content_type,
+                question=question,
+                target_ratio=target_ratio,
+                batch_size=batch_size,
+                ccr_originals=ccr_originals,
+                _deadline_started_at=_deadline_started_at,
+                _emit_ccr=_emit_ccr,
+                _batch_outcomes=_batch_outcomes,
+                _record_cache=_record_cache,
+                _claimed_contents=claimed_contents,
+            )
+        finally:
+            for content in tuple(claimed_contents):
+                cache.release_inference(content, cache_namespace)
+
+    def _compress_batch_impl(
+        self,
+        contents: list[str],
+        context: str = "",
+        content_type: str | None = None,
+        question: str | None = None,
+        target_ratio: float | list[float | None] | None = None,
+        batch_size: int = 32,
+        *,
+        ccr_originals: list[str | None] | None = None,
+        _deadline_started_at: float | None = None,
+        _emit_ccr: bool = True,
+        _batch_outcomes: list[_CacheOutcome] | None = None,
+        _record_cache: bool = True,
+        _claimed_contents: set[str] | None = None,
+    ) -> list[KompressResult]:
         """Compress multiple texts. Uses batched inference on GPU, sequential on CPU.
 
         On GPU (PyTorch + CUDA / MPS), runs a single batched forward pass per
@@ -2315,7 +2363,7 @@ class KompressCompressor(Transform):
         is_onnx = backend.startswith("onnx")
         device_type = _model_device_type(model, backend)
         kept_ids_per_text: dict[int, set[int]] = {i: set() for i in range(n) if results[i] is None}
-        claimed_contents: set[str] = set()
+        claimed_contents = _claimed_contents if _claimed_contents is not None else set()
 
         def release_claim(content: str) -> None:
             if content in claimed_contents:
@@ -2326,12 +2374,12 @@ class KompressCompressor(Transform):
         # its own single-flight claim. Only the actual GPU/MPS batch path claims
         # misses here, after model selection has ruled out that fallback.
         if record_cache and not use_sequential_fallback:
-            cache_wait_timeout = _single_flight_wait_timeout_seconds(t_deadline)
             for text_idx, content in enumerate(contents):
                 if results[text_idx] is not None or ratios[text_idx] is not None:
                     continue
                 if content in claimed_contents:
                     continue
+                waited_for_owner = False
                 while True:
                     cached = cache.lookup(content, cache_namespace)
                     if cached is not None and cached.exhausted:
@@ -2355,6 +2403,12 @@ class KompressCompressor(Transform):
                         kept_ids_per_text.pop(text_idx, None)
                         break
 
+                    cache_wait_timeout = _single_flight_wait_timeout_seconds(t_deadline)
+                    if waited_for_owner and cache_wait_timeout <= 0:
+                        results[text_idx] = self._passthrough(content, len(word_lists[text_idx]))
+                        set_outcome(text_idx, "skip")
+                        kept_ids_per_text.pop(text_idx, None)
+                        break
                     claim = cache.acquire_inference(
                         content,
                         cache_namespace,
@@ -2368,6 +2422,7 @@ class KompressCompressor(Transform):
                         set_outcome(text_idx, "skip")
                         kept_ids_per_text.pop(text_idx, None)
                         break
+                    waited_for_owner = True
 
             chunk_queue = [
                 chunk for chunk in chunk_queue if results[chunk[0]] is None
