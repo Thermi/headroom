@@ -9,6 +9,7 @@ Covers:
 """
 
 import logging
+import threading
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -384,6 +385,75 @@ class TestKompressResultCache:
 
         assert first.compressed == second.compressed == "one two three"
         assert calls == 1
+
+    def test_concurrent_same_payload_uses_single_flight(self, monkeypatch) -> None:
+        cache = KompressCache(max_entries=10, max_bytes=100_000, max_attempts=2)
+        monkeypatch.setattr(kc, "get_kompress_cache", lambda: cache)
+        compressor = kc.KompressCompressor(kc.KompressConfig(enable_ccr=False))
+        text = "one two three four five six seven eight nine ten eleven twelve"
+        inference_started = threading.Event()
+        release_inference = threading.Event()
+        calls = 0
+
+        def fake_inference(*args, **kwargs):
+            nonlocal calls
+            calls += 1
+            inference_started.set()
+            assert release_inference.wait(timeout=1)
+            return kc.KompressResult(
+                compressed="one two three",
+                original=text,
+                original_tokens=12,
+                compressed_tokens=3,
+                compression_ratio=0.25,
+            ), "success"
+
+        monkeypatch.setattr(compressor, "_compress_uncached", fake_inference)
+        results: list[kc.KompressResult] = []
+
+        first_thread = threading.Thread(target=lambda: results.append(compressor.compress(text)))
+        second_thread = threading.Thread(target=lambda: results.append(compressor.compress(text)))
+        first_thread.start()
+        assert inference_started.wait(timeout=1)
+        second_thread.start()
+        second_thread.join(timeout=0.05)
+        assert second_thread.is_alive()
+        release_inference.set()
+        first_thread.join(timeout=1)
+        second_thread.join(timeout=1)
+
+        assert not first_thread.is_alive()
+        assert not second_thread.is_alive()
+        assert [result.compressed for result in results] == ["one two three"] * 2
+        assert calls == 1
+
+    def test_effective_configuration_namespaces_cached_results(self, monkeypatch) -> None:
+        cache = KompressCache(max_entries=10, max_bytes=100_000, max_attempts=2)
+        monkeypatch.setattr(kc, "get_kompress_cache", lambda: cache)
+        text = "one two three four five six seven eight nine ten eleven twelve"
+        first = kc.KompressCompressor(kc.KompressConfig(model_id="model-a", enable_ccr=False))
+        second = kc.KompressCompressor(kc.KompressConfig(model_id="model-b", enable_ccr=False))
+        calls: list[str] = []
+
+        def fake_inference(compressor):
+            def run(*args, **kwargs):
+                calls.append(compressor.config.model_id)
+                return kc.KompressResult(
+                    compressed=compressor.config.model_id,
+                    original=text,
+                    original_tokens=12,
+                    compressed_tokens=1,
+                    compression_ratio=1 / 12,
+                ), "success"
+
+            return run
+
+        monkeypatch.setattr(first, "_compress_uncached", fake_inference(first))
+        monkeypatch.setattr(second, "_compress_uncached", fake_inference(second))
+
+        assert first.compress(text).compressed == "model-a"
+        assert second.compress(text).compressed == "model-b"
+        assert calls == ["model-a", "model-b"]
 
     def test_exhausted_payload_failure_bypasses_inference(self, monkeypatch) -> None:
         cache = KompressCache(max_entries=10, max_bytes=100_000, max_attempts=2)

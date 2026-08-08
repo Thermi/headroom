@@ -1483,6 +1483,22 @@ class KompressCompressor(Transform):
         # error can't accumulate toward the latch across a healthy run.
         self._inference_failures: int = 0
 
+    def _cache_namespace(self) -> str:
+        """Return the stable namespace for this compressor's raw outputs."""
+        backend = _selected_backend()
+        onnx_filename = os.environ.get(KOMPRESS_ONNX_FILENAME_ENV, "")
+        settings = (
+            self.config.model_id,
+            self.config.chunk_words,
+            self.config.score_threshold,
+            self.config.device,
+            backend,
+            onnx_filename,
+        )
+        if settings == (HF_MODEL_ID, 350, 0.5, "auto", "auto", ""):
+            return ""
+        return repr(settings)
+
     def unload(self) -> bool:
         """Unload the model(s) for this compressor instance to free memory.
 
@@ -1620,59 +1636,70 @@ class KompressCompressor(Transform):
 
         cache = get_kompress_cache()
         cache_enabled = target_ratio is None and _kompress_result_cache_enabled()
+        cache_namespace = self._cache_namespace()
+        cache_owner = False
         if cache_enabled:
-            cached = cache.lookup(content)
-            if cached is not None:
-                if cached.exhausted:
-                    return self._passthrough(content, n_words)
-                if cached.compressed is not None:
-                    result = KompressResult(
-                        compressed=cached.compressed,
-                        original=content,
-                        original_tokens=cached.original_tokens or n_words,
-                        compressed_tokens=cached.compressed_tokens
-                        or len(cached.compressed.split()),
-                        compression_ratio=(cached.compressed_tokens or n_words) / n_words,
-                        model_used=self.config.model_id,
-                    )
-                    return self._add_ccr_marker(result, ccr_original)
+            while True:
+                cached = cache.lookup(content, cache_namespace)
+                if cached is not None:
+                    if cached.exhausted:
+                        return self._passthrough(content, n_words)
+                    if cached.compressed is not None:
+                        result = KompressResult(
+                            compressed=cached.compressed,
+                            original=content,
+                            original_tokens=cached.original_tokens or n_words,
+                            compressed_tokens=cached.compressed_tokens
+                            or len(cached.compressed.split()),
+                            compression_ratio=(cached.compressed_tokens or n_words) / n_words,
+                            model_used=self.config.model_id,
+                        )
+                        return self._add_ccr_marker(result, ccr_original)
+                if cache.acquire_inference(content, cache_namespace):
+                    cache_owner = True
+                    break
 
         try:
-            outcome = self._compress_uncached(
-                content,
-                context=context,
-                content_type=content_type,
-                question=question,
-                target_ratio=target_ratio,
-                ccr_original=ccr_original,
-                allow_download=allow_download,
-                _deadline_started_at=t_deadline,
-                emit_ccr=False,
-            )
-        except _KompressExecutionSaturated:
-            return self._passthrough(content, n_words)
-        except Exception as exc:
-            self._record_inference_failure(exc)
+            try:
+                outcome = self._compress_uncached(
+                    content,
+                    context=context,
+                    content_type=content_type,
+                    question=question,
+                    target_ratio=target_ratio,
+                    ccr_original=ccr_original,
+                    allow_download=allow_download,
+                    _deadline_started_at=t_deadline,
+                    emit_ccr=False,
+                )
+            except _KompressExecutionSaturated:
+                return self._passthrough(content, n_words)
+            except Exception as exc:
+                self._record_inference_failure(exc)
+                if cache_enabled:
+                    cache.record_failure(content, cache_namespace)
+                return self._passthrough(content, n_words)
+            result, cache_outcome = outcome
             if cache_enabled:
-                cache.record_failure(content)
-            return self._passthrough(content, n_words)
-        result, cache_outcome = outcome
-        if cache_enabled:
-            if cache_outcome == "success":
-                if result.compressed_tokens < result.original_tokens:
-                    cache.record_success(
-                        content,
-                        result.compressed,
-                        result.original_tokens,
-                        result.compressed_tokens,
-                    )
-                else:
-                    cache.discard(content)
-            elif cache_outcome == "failure":
-                cache.record_failure(content)
-        if cache_outcome == "success" and result.compressed_tokens < result.original_tokens:
-            return self._add_ccr_marker(result, ccr_original)
-        return result
+                if cache_outcome == "success":
+                    if result.compressed_tokens < result.original_tokens:
+                        cache.record_success(
+                            content,
+                            result.compressed,
+                            result.original_tokens,
+                            result.compressed_tokens,
+                            cache_namespace,
+                        )
+                    else:
+                        cache.discard(content, cache_namespace)
+                elif cache_outcome == "failure":
+                    cache.record_failure(content, cache_namespace)
+            if cache_outcome == "success" and result.compressed_tokens < result.original_tokens:
+                return self._add_ccr_marker(result, ccr_original)
+            return result
+        finally:
+            if cache_owner:
+                cache.release_inference(content, cache_namespace)
 
     def _add_ccr_marker(
         self, result: KompressResult, ccr_original: str | None
@@ -2145,6 +2172,7 @@ class KompressCompressor(Transform):
 
         cache = get_kompress_cache()
         cache_enabled = _kompress_result_cache_enabled()
+        cache_namespace = self._cache_namespace()
         record_cache = _record_cache and cache_enabled
         cached_results: list[KompressResult | None] = [None] * n
         active_indices: list[int] = []
@@ -2161,7 +2189,7 @@ class KompressCompressor(Transform):
             if not cache_enabled:
                 active_indices.append(i)
                 continue
-            cached = cache.lookup(content)
+            cached = cache.lookup(content, cache_namespace)
             if cached is not None and cached.exhausted:
                 cached_results[i] = self._passthrough(content, len(content.split()))
             elif cached is not None and cached.compressed is not None:
@@ -2293,7 +2321,7 @@ class KompressCompressor(Transform):
                     if cache_failure and ratios[text_idx] is None:
                         set_outcome(text_idx, "failure")
                         if record_cache:
-                            cache.record_failure(contents[text_idx])
+                            cache.record_failure(contents[text_idx], cache_namespace)
                     else:
                         set_outcome(text_idx, "skip")
                     kept_ids_per_text.pop(text_idx, None)
@@ -2433,7 +2461,7 @@ class KompressCompressor(Transform):
                         if ratios[text_idx] is None:
                             set_outcome(text_idx, "failure")
                             if record_cache:
-                                cache.record_failure(contents[text_idx])
+                                cache.record_failure(contents[text_idx], cache_namespace)
                         else:
                             set_outcome(text_idx, "skip")
                         kept_ids_per_text.pop(text_idx, None)
@@ -2451,7 +2479,7 @@ class KompressCompressor(Transform):
                 if ratios[text_idx] is None:
                     set_outcome(text_idx, "success")
                     if record_cache:
-                        cache.discard(content)
+                        cache.discard(content, cache_namespace)
                 else:
                     set_outcome(text_idx, "skip")
                 continue
@@ -2474,10 +2502,16 @@ class KompressCompressor(Transform):
                 set_outcome(text_idx, "success")
                 if compressed_count < n_words:
                     if record_cache:
-                        cache.record_success(content, compressed, n_words, compressed_count)
+                        cache.record_success(
+                            content,
+                            compressed,
+                            n_words,
+                            compressed_count,
+                            cache_namespace,
+                        )
                 else:
                     if record_cache:
-                        cache.discard(content)
+                        cache.discard(content, cache_namespace)
             else:
                 set_outcome(text_idx, "skip")
 

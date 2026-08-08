@@ -17,6 +17,16 @@ def test_key_uses_full_sha256_and_input_byte_length():
     assert len(entry.digest) == 32
 
 
+def test_configuration_namespaces_keep_same_payload_entries_separate():
+    cache = KompressCache(max_entries=10, max_bytes=10_000, max_attempts=3)
+    content = "same payload"
+
+    cache.record_success(content, "model-a result", 2, 1, namespace="model-a")
+
+    assert cache.lookup(content, namespace="model-a") is not None
+    assert cache.lookup(content, namespace="model-b") is None
+
+
 def test_identity_pair_keeps_forced_digest_collision_entries_separate(monkeypatch):
     digest = b"forced-collision".ljust(32, b"\0")
     monkeypatch.setattr(
@@ -37,7 +47,7 @@ def test_identity_pair_keeps_forced_digest_collision_entries_separate(monkeypatc
     assert second_entry is not None
     assert first_entry.compressed == "first result"
     assert second_entry.compressed == "second result"
-    assert set(cache._entries) == {(digest, 2), (digest, 3)}
+    assert set(cache._entries) == {("", digest, 2), ("", digest, 3)}
 
 
 def test_different_content_does_not_hit():
@@ -158,6 +168,64 @@ def test_stats_count_misses_failures_and_retries():
     assert stats["misses"] == 1
     assert stats["failures"] == 2
     assert stats["retries"] == 1
+
+
+def test_late_failure_cannot_replace_success_for_same_payload():
+    cache = KompressCache(max_entries=10, max_bytes=10_000, max_attempts=3)
+    content = "same payload"
+    failure_started = threading.Event()
+    allow_failure_commit = threading.Event()
+
+    def slow_failure() -> None:
+        failure_started.set()
+        assert allow_failure_commit.wait(timeout=1)
+        cache.record_failure(content)
+
+    def fast_success() -> None:
+        assert failure_started.wait(timeout=1)
+        cache.record_success(content, "successful result", 2, 1)
+        allow_failure_commit.set()
+
+    failure_thread = threading.Thread(target=slow_failure)
+    success_thread = threading.Thread(target=fast_success)
+    failure_thread.start()
+    success_thread.start()
+    failure_thread.join(timeout=1)
+    success_thread.join(timeout=1)
+
+    assert not failure_thread.is_alive()
+    assert not success_thread.is_alive()
+    entry = cache.lookup(content)
+    assert entry is not None
+    assert entry.compressed == "successful result"
+    assert entry.exhausted is False
+
+
+def test_single_flight_waiter_observes_owner_result():
+    cache = KompressCache(max_entries=10, max_bytes=10_000, max_attempts=3)
+    content = "same payload"
+    assert cache.acquire_inference(content) is True
+
+    waiter_finished = threading.Event()
+    waiter_result: list[bool] = []
+
+    def waiter() -> None:
+        waiter_result.append(cache.acquire_inference(content))
+        waiter_finished.set()
+
+    waiter_thread = threading.Thread(target=waiter)
+    waiter_thread.start()
+    assert not waiter_finished.wait(timeout=0.05)
+
+    cache.record_success(content, "successful result", 2, 1)
+    cache.release_inference(content)
+
+    assert waiter_finished.wait(timeout=1)
+    waiter_thread.join(timeout=1)
+    assert waiter_result == [False]
+    entry = cache.lookup(content)
+    assert entry is not None
+    assert entry.compressed == "successful result"
 
 
 def test_invalid_environment_limits_use_positive_defaults(monkeypatch):

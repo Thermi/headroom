@@ -12,6 +12,7 @@ _DEFAULT_MAX_BYTES = 64 * 1024 * 1024
 _DEFAULT_MAX_ATTEMPTS = 3
 _MAX_LIMIT = 1_000_000_000
 _FIXED_ENTRY_BYTES = 8
+_CacheKey = tuple[str, bytes, int]
 
 
 @dataclass
@@ -43,7 +44,7 @@ class KompressCache:
         self.max_entries = max(1, max_entries)
         self.max_bytes = max(1, max_bytes)
         self.max_attempts = max(1, max_attempts)
-        self._entries: dict[tuple[bytes, int], KompressCacheEntry] = {}
+        self._entries: dict[_CacheKey, KompressCacheEntry] = {}
         self._entry_bytes = 0
         self._sequence = 0
         self._hits = 0
@@ -52,6 +53,9 @@ class KompressCache:
         self._retries = 0
         self._evictions = 0
         self._lock = threading.RLock()
+        # Only currently running inferences are tracked, so coordination stays
+        # bounded even when callers submit an unbounded stream of unique payloads.
+        self._inflight: dict[_CacheKey, threading.Event] = {}
 
     @classmethod
     def from_environment(cls) -> KompressCache:
@@ -65,6 +69,11 @@ class KompressCache:
     def _identity(content: str) -> tuple[bytes, int]:
         encoded = content.encode("utf-8")
         return hashlib.sha256(encoded).digest(), len(encoded)
+
+    @classmethod
+    def _key(cls, content: str, namespace: str) -> _CacheKey:
+        digest, input_bytes = cls._identity(content)
+        return namespace, digest, input_bytes
 
     @staticmethod
     def _estimate(entry: KompressCacheEntry) -> int:
@@ -89,12 +98,13 @@ class KompressCache:
                 self._entries.values(),
                 key=lambda entry: (entry.access_count, entry.created_sequence),
             )
-            del self._entries[(victim.digest, victim.input_bytes)]
+            victim_key = next(key for key, entry in self._entries.items() if entry is victim)
+            del self._entries[victim_key]
             self._entry_bytes -= self._estimate(victim)
             self._evictions += 1
 
-    def lookup(self, content: str) -> KompressCacheEntry | None:
-        key = self._identity(content)
+    def lookup(self, content: str, namespace: str = "") -> KompressCacheEntry | None:
+        key = self._key(content, namespace)
         with self._lock:
             entry = self._entries.get(key)
             if entry is None:
@@ -111,9 +121,10 @@ class KompressCache:
         compressed: str,
         original_tokens: int,
         compressed_tokens: int,
+        namespace: str = "",
     ) -> None:
-        digest, input_bytes = self._identity(content)
-        key = (digest, input_bytes)
+        key = self._key(content, namespace)
+        _, digest, input_bytes = key
         entry = KompressCacheEntry(
             digest=digest,
             input_bytes=input_bytes,
@@ -138,10 +149,15 @@ class KompressCache:
             self._entry_bytes += self._estimate(entry)
             self._evict_until_within_limits()
 
-    def record_failure(self, content: str) -> KompressCacheEntry:
-        digest, input_bytes = self._identity(content)
-        key = (digest, input_bytes)
+    def record_failure(self, content: str, namespace: str = "") -> KompressCacheEntry:
+        key = self._key(content, namespace)
+        _, digest, input_bytes = key
         with self._lock:
+            previous = self._entries.get(key)
+            if previous is not None and previous.compressed is not None:
+                # A late failure from a duplicate inference must not erase a
+                # successful result that another caller already published.
+                return self._detached(previous)
             previous = self._entries.pop(key, None)
             if previous is not None:
                 self._entry_bytes -= self._estimate(previous)
@@ -164,13 +180,37 @@ class KompressCache:
                 self._evict_until_within_limits()
             return self._detached(entry)
 
-    def discard(self, content: str) -> None:
+    def discard(self, content: str, namespace: str = "") -> None:
         """Remove the entry for exactly this content, if one exists."""
-        key = self._identity(content)
+        key = self._key(content, namespace)
         with self._lock:
             previous = self._entries.pop(key, None)
             if previous is not None:
                 self._entry_bytes -= self._estimate(previous)
+
+    def acquire_inference(self, content: str, namespace: str = "") -> bool:
+        """Claim an uncached key or wait for its current inference to finish.
+
+        The cache lock is released before waiting or inference. A waiter returns
+        ``False`` and must perform a fresh lookup before deciding whether it
+        needs to retry; this preserves retryable-failure and fail-open behavior.
+        """
+        key = self._key(content, namespace)
+        with self._lock:
+            event = self._inflight.get(key)
+            if event is None:
+                self._inflight[key] = threading.Event()
+                return True
+        event.wait()
+        return False
+
+    def release_inference(self, content: str, namespace: str = "") -> None:
+        """Release the single-flight claim for a key and wake its waiters."""
+        key = self._key(content, namespace)
+        with self._lock:
+            event = self._inflight.pop(key, None)
+        if event is not None:
+            event.set()
 
     def stats(self) -> dict[str, int]:
         with self._lock:

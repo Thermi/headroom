@@ -124,11 +124,12 @@ def test_partial_deadline_result_retries_instead_of_success_cache_hit(monkeypatc
     compressor.config.chunk_words = 10
     monkeypatch.setattr(compressor, "_should_batch_single_content", lambda *a, **k: False)
     content = " ".join(f"w{i}" for i in range(20))
+    namespace = compressor._cache_namespace()
 
     first = compressor.compress(content, _deadline_started_at=0.0)
-    first_entry = cache.lookup(content)
+    first_entry = cache.lookup(content, namespace)
     second = compressor.compress(content, _deadline_started_at=0.0)
-    second_entry = cache.lookup(content)
+    second_entry = cache.lookup(content, namespace)
 
     assert first.compressed_tokens < first.original_tokens
     assert first_entry is not None and first_entry.compressed is None
