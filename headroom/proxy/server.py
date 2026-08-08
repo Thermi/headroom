@@ -5302,8 +5302,6 @@ def create_app(config: ProxyConfig | None = None) -> FastAPI:
     async def compress_messages(request: Request):
         return await proxy.handle_compress(request)
 
-    register_provider_routes(app, proxy)
-
     # ------------------------------------------------------------------
     # MCP (Model Context Protocol) endpoint — lets MCP-compatible hosts
     # (Claude Code, Cursor, Codex, etc.) call headroom_retrieve and
@@ -5314,6 +5312,11 @@ def create_app(config: ProxyConfig | None = None) -> FastAPI:
     #   /v1/mcp  — GET  (SSE stream, session establishment)
     #              POST (JSON-RPC messages)
     #              DELETE (session teardown)
+    #
+    # Registered BEFORE register_provider_routes' ``/{path:path}``
+    # catch-all passthrough so a request to /v1/mcp is not tunneled
+    # upstream (which returned OpenRouter's HTML 404 instead of an MCP
+    # stream. Starlette matches routes in registration order).
     #
     # Requires the ``mcp`` and ``httpx`` packages.
     # ------------------------------------------------------------------
@@ -5382,6 +5385,10 @@ def create_app(config: ProxyConfig | None = None) -> FastAPI:
             return _TransportHandledResponse()
 
         logger.info("MCP Streamable HTTP endpoint: /v1/mcp")
+
+    # Provider routes (including the ``/{path:path}`` catch-all passthrough).
+    # Must be registered AFTER the /v1/mcp route above so it does not shadow it.
+    register_provider_routes(app, proxy)
 
     app.middleware_stack = _record_headroom_stack_asgi
     return app
