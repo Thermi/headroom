@@ -121,7 +121,7 @@ _DEFAULT_TIME_BUDGET_SECONDS = 20.0
 _DEFAULT_CANARY_THRESHOLD_SECONDS = 5.0
 
 KompressBackend = Literal["auto", "onnx", "onnx_cpu", "onnx_coreml", "onnx_gpu", "pytorch", "pytorch_mps"]
-_BatchCacheOutcome = Literal["success", "failure", "skip"]
+_CacheOutcome = Literal["success", "failure", "skip"]
 
 # HuggingFace local-lookup errors that mean "asset not in cache" rather than a
 # genuine failure. Caught when loading cache-only so startup can defer instead.
@@ -1650,9 +1650,9 @@ class KompressCompressor(Transform):
             if target_ratio is None:
                 cache.record_failure(content)
             return self._passthrough(content, n_words)
-        result, cacheable = outcome
+        result, cache_outcome = outcome
         if target_ratio is None:
-            if not cacheable:
+            if cache_outcome == "success":
                 if result.compressed_tokens < result.original_tokens:
                     cache.record_success(
                         content,
@@ -1662,9 +1662,9 @@ class KompressCompressor(Transform):
                     )
                 else:
                     cache.discard(content)
-            else:
+            elif cache_outcome == "failure":
                 cache.record_failure(content)
-        if not cacheable and result.compressed_tokens < result.original_tokens:
+        if cache_outcome == "success" and result.compressed_tokens < result.original_tokens:
             return self._add_ccr_marker(result, ccr_original)
         return result
 
@@ -1698,7 +1698,7 @@ class KompressCompressor(Transform):
         ccr_original: str | None = None,
         _deadline_started_at: float | None = None,
         emit_ccr: bool = True,
-    ) -> tuple[KompressResult, bool]:
+    ) -> tuple[KompressResult, _CacheOutcome]:
         """Compress content using Kompress model.
 
         Args:
@@ -1727,7 +1727,7 @@ class KompressCompressor(Transform):
         n_words = len(words)
 
         if n_words < 10 or self._degraded_reason is not None:
-            return self._passthrough(content, n_words), False
+            return self._passthrough(content, n_words), "skip"
 
         # Cooperative wall-clock budget (#1171): kompress ONNX inference is
         # O(tokens) and non-preemptible once the request's asyncio timeout fires,
@@ -1751,17 +1751,17 @@ class KompressCompressor(Transform):
                 "Kompress model %s not cached; passing through without compression",
                 self.config.model_id,
             )
-            return self._passthrough(content, n_words), False
+            return self._passthrough(content, n_words), "skip"
         except Exception as e:
             self._record_inference_failure(e)
-            return self._passthrough(content, n_words), False
+            return self._passthrough(content, n_words), "skip"
 
         try:
             is_onnx = backend.startswith("onnx")
             device_type = _model_device_type(model, backend)
 
             if self._should_batch_single_content(model, backend):
-                batch_outcomes: list[_BatchCacheOutcome] = []
+                batch_outcomes: list[_CacheOutcome] = []
                 batch_result = self.compress_batch(
                     [content],
                     context=context,
@@ -1776,7 +1776,7 @@ class KompressCompressor(Transform):
                     _record_cache=False,
                 )
                 if batch_result:
-                    return batch_result[0], batch_outcomes[0] == "failure"
+                    return batch_result[0], batch_outcomes[0]
 
             max_chunk_words = self.config.chunk_words
             kept_ids: set[int] = set()
@@ -1798,7 +1798,7 @@ class KompressCompressor(Transform):
                             device_type=device_type,
                             n_words=n_words,
                         )
-                        return self._passthrough(content, n_words), True
+                        return self._passthrough(content, n_words), "failure"
 
                 if deadline_s and (time.perf_counter() - t_deadline) > deadline_s:
                     # Keep everything from here on verbatim and stop: a partial
@@ -1937,7 +1937,7 @@ class KompressCompressor(Transform):
                         chunk_count,
                         inference_ms,
                     )
-                return self._passthrough(content, n_words), False
+                return self._passthrough(content, n_words), "success"
 
             compressed_words = [words[w] for w in sorted(kept_ids) if w < n_words]
             compressed = " ".join(compressed_words)
@@ -1987,19 +1987,19 @@ class KompressCompressor(Transform):
             # A real inference landed — clear the strike count so only CONSECUTIVE
             # failures can reach the latch.
             self._inference_failures = 0
-            return result, partial_failure
+            return result, "failure" if partial_failure else "success"
 
         except KompressModelNotCached:
             logger.debug(
                 "Kompress model %s not cached; passing through without compression",
                 self.config.model_id,
             )
-            return self._passthrough(content, n_words), False
+            return self._passthrough(content, n_words), "skip"
         except _KompressExecutionSaturated:
             raise
         except Exception as e:
             self._record_inference_failure(e)
-            return self._passthrough(content, n_words), True
+            return self._passthrough(content, n_words), "failure"
 
     def _record_inference_failure(self, exc: BaseException) -> None:
         """Log a failed inference, and latch to degraded after repeated failures.
@@ -2045,7 +2045,7 @@ class KompressCompressor(Transform):
         ccr_originals: list[str | None] | None = None,
         _deadline_started_at: float | None = None,
         _emit_ccr: bool = True,
-        _batch_outcomes: list[_BatchCacheOutcome] | None = None,
+        _batch_outcomes: list[_CacheOutcome] | None = None,
         _record_cache: bool = True,
     ) -> list[KompressResult]:
         """Compress multiple texts. Uses batched inference on GPU, sequential on CPU.
@@ -2142,7 +2142,7 @@ class KompressCompressor(Transform):
         active_indices: list[int] = []
         original_indices = list(range(n))
 
-        def set_outcome(index: int, outcome: _BatchCacheOutcome) -> None:
+        def set_outcome(index: int, outcome: _CacheOutcome) -> None:
             if _batch_outcomes is not None:
                 _batch_outcomes[original_indices[index]] = outcome
 

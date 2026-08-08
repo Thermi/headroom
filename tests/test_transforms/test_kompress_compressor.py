@@ -375,7 +375,7 @@ class TestKompressResultCache:
                 original_tokens=12,
                 compressed_tokens=3,
                 compression_ratio=0.25,
-            ), False
+            ), "success"
 
         monkeypatch.setattr(compressor, "_compress_uncached", fake_inference)
 
@@ -473,6 +473,73 @@ class TestKompressResultCache:
         assert loads == 2
         assert cache.lookup(text) is None
 
+    def test_model_load_failure_preserves_existing_retryable_failure(self, monkeypatch) -> None:
+        cache = KompressCache(max_entries=10, max_bytes=100_000, max_attempts=3)
+        monkeypatch.setattr(kc, "get_kompress_cache", lambda: cache)
+        compressor = kc.KompressCompressor(kc.KompressConfig(enable_ccr=False))
+        text = "one two three four five six seven eight nine ten eleven twelve"
+        cache.record_failure(text)
+        monkeypatch.setattr(
+            kc,
+            "_load_kompress",
+            lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("model load failed")),
+        )
+
+        result = compressor.compress(text)
+
+        assert result.compressed == text
+        entry = cache.lookup(text)
+        assert entry is not None
+        assert entry.attempts == 1
+
+    def test_delegated_batch_saturation_preserves_existing_retryable_failure(
+        self, monkeypatch
+    ) -> None:
+        cache = KompressCache(max_entries=10, max_bytes=100_000, max_attempts=3)
+        monkeypatch.setattr(kc, "get_kompress_cache", lambda: cache)
+        compressor = kc.KompressCompressor(kc.KompressConfig(enable_ccr=False))
+        text = "one two three four five six seven eight nine ten eleven twelve"
+        cache.record_failure(text)
+
+        class BatchEncoding(dict):
+            def __init__(self, batch_words):
+                input_ids = [[1] * len(words) for words in batch_words]
+                super().__init__(input_ids=input_ids, attention_mask=input_ids)
+                self.batch_words = batch_words
+
+            def word_ids(self, batch_index=0):
+                return list(range(len(self.batch_words[batch_index])))
+
+        class BatchTokenizer:
+            def __call__(self, batch_words, **kwargs):
+                return BatchEncoding(batch_words)
+
+        class BatchModel:
+            def get_scores(self, input_ids, attention_mask):
+                return [[0.0] * len(row) for row in input_ids]
+
+        monkeypatch.setattr(
+            kc,
+            "_load_kompress",
+            lambda *args, **kwargs: (BatchModel(), BatchTokenizer(), "onnx_gpu"),
+        )
+        monkeypatch.setattr(compressor, "_should_batch_single_content", lambda *args, **kwargs: True)
+        monkeypatch.setattr(compressor, "_should_use_sequential_fallback", lambda: False)
+        monkeypatch.setenv("HEADROOM_KOMPRESS_EXECUTION_TIMEOUT_MS", "0")
+        monkeypatch.setenv("HEADROOM_KOMPRESS_MAX_CONCURRENT", "1")
+        monkeypatch.setattr(kc, "_execution_semaphores", {})
+        semaphore = kc._execution_semaphore("onnx_gpu", "onnx_gpu")
+        assert semaphore.acquire(blocking=False)
+        try:
+            result = compressor.compress(text)
+        finally:
+            semaphore.release()
+
+        assert result.compressed == text
+        entry = cache.lookup(text)
+        assert entry is not None
+        assert entry.attempts == 1
+
     def test_success_replaces_cached_failure(self, monkeypatch) -> None:
         cache = KompressCache(max_entries=10, max_bytes=100_000, max_attempts=3)
         monkeypatch.setattr(kc, "get_kompress_cache", lambda: cache)
@@ -480,7 +547,7 @@ class TestKompressResultCache:
         text = "one two three four five six seven eight nine ten eleven twelve"
         outcomes = iter(
             [
-                (compressor._passthrough(text, 12), True),
+                (compressor._passthrough(text, 12), "failure"),
                 (
                     kc.KompressResult(
                         compressed="one two three",
@@ -489,7 +556,7 @@ class TestKompressResultCache:
                         compressed_tokens=3,
                         compression_ratio=0.25,
                     ),
-                    False,
+                    "success",
                 ),
             ]
         )
@@ -511,7 +578,7 @@ class TestKompressResultCache:
             calls += 1
             if calls in {1, 3}:
                 raise TimeoutError("transient inference failure")
-            return compressor._passthrough(text, 12), False
+            return compressor._passthrough(text, 12), "success"
 
         monkeypatch.setattr(compressor, "_compress_uncached", outcomes)
 
@@ -876,7 +943,7 @@ class TestKompressCompressorBatch:
                     compressed_tokens=2,
                     compression_ratio=0.1,
                 ),
-                False,
+                "success",
             )
 
         monkeypatch.setattr(compressor, "_compress_uncached", fake_uncached)
