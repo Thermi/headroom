@@ -1762,6 +1762,7 @@ class KompressCompressor(Transform):
                         n_words,
                         chunk_count,
                     )
+                    partial_failure = True
                     break
                 chunk_count += 1
                 chunk_words = words[chunk_start : chunk_start + max_chunk_words]

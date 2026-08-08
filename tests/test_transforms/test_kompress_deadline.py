@@ -83,6 +83,62 @@ def test_compress_partial_run_keeps_processed_head_plus_verbatim_tail(monkeypatc
         assert f"w{i}" in out
 
 
+def test_partial_deadline_result_retries_instead_of_success_cache_hit(monkeypatch):
+    cache = KompressCache(10, 100_000, 2)
+    monkeypatch.setattr(kc, "get_kompress_cache", lambda: cache)
+    monkeypatch.setattr(kc, "_model_device_type", lambda *a, **k: "cpu")
+    monkeypatch.setenv("HEADROOM_COMPRESSION_DEADLINE_MS", "20000")
+    state = {"chunks_done": 0, "loads": 0}
+
+    class _Encoding(dict):
+        def word_ids(self, batch_index=0):
+            return self["_word_ids"]
+
+    class _Tokenizer:
+        def __call__(self, chunk_words, **kwargs):
+            n = len(chunk_words)
+            return _Encoding(
+                input_ids=[[0] * n],
+                attention_mask=[[1] * n],
+                _word_ids=list(range(n)),
+            )
+
+    class _Model:
+        def get_keep_mask(self, input_ids, attention_mask):
+            state["chunks_done"] += 1
+            n = len(input_ids[0])
+            return [[i < n // 2 for i in range(n)]]
+
+    def load_model(*args, **kwargs):
+        state["loads"] += 1
+        state["chunks_done"] = 0
+        return _Model(), _Tokenizer(), "onnx"
+
+    def clock():
+        return 999.0 if state["chunks_done"] >= 1 else 0.0
+
+    monkeypatch.setattr(kc, "_load_kompress", load_model)
+    monkeypatch.setattr(kc.time, "perf_counter", clock)
+
+    compressor = kc.KompressCompressor()
+    compressor.config.chunk_words = 10
+    monkeypatch.setattr(compressor, "_should_batch_single_content", lambda *a, **k: False)
+    content = " ".join(f"w{i}" for i in range(20))
+
+    first = compressor.compress(content, _deadline_started_at=0.0)
+    first_entry = cache.lookup(content)
+    second = compressor.compress(content, _deadline_started_at=0.0)
+    second_entry = cache.lookup(content)
+
+    assert first.compressed_tokens < first.original_tokens
+    assert first_entry is not None and first_entry.compressed is None
+    assert first_entry.attempts == 1
+    assert second.compressed_tokens < second.original_tokens
+    assert second_entry is not None and second_entry.compressed is None
+    assert second_entry.attempts == 2
+    assert state["loads"] == 2
+
+
 def test_deadline_partial_result_is_cached_as_failure(monkeypatch):
     monkeypatch.setenv("HEADROOM_COMPRESSION_DEADLINE_MS", "0")
     monkeypatch.setenv("HEADROOM_KOMPRESS_CACHE_MAX_ATTEMPTS", "2")
