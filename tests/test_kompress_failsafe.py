@@ -16,8 +16,8 @@ import time
 
 import pytest
 
-from headroom.cache.kompress_cache import reset_kompress_cache
 import headroom.transforms.kompress_compressor as kc
+from headroom.cache.kompress_cache import reset_kompress_cache
 from headroom.transforms.kompress_compressor import (
     KOMPRESS_ACQUIRE_TIMEOUT_ENV,
     KOMPRESS_CANARY_THRESHOLD_ENV,
