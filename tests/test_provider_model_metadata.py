@@ -9,7 +9,43 @@ from headroom.providers.model_metadata import (
     ModelMetadataEndpoint,
     handle_model_metadata_endpoint,
     model_metadata_get_endpoint,
+    translate_openrouter_models_response,
 )
+
+
+def test_translate_openrouter_models_response_preserves_catalogue_metadata() -> None:
+    response = translate_openrouter_models_response(
+        {
+            "data": [
+                {
+                    "id": "moonshotai/kimi-k2",
+                    "name": "Kimi K2",
+                    "created": 1750000000,
+                    "context_length": 131072,
+                    "pricing": {"prompt": "0.000001", "completion": "0.000004"},
+                    "reasoning": {"supported": True, "max_tokens": 32768},
+                    "supported_parameters": ["reasoning", "tools"],
+                }
+            ]
+        }
+    )
+
+    assert response == {
+        "object": "list",
+        "data": [
+            {
+                "id": "moonshotai/kimi-k2",
+                "object": "model",
+                "created": 1750000000,
+                "owned_by": "openrouter",
+                "name": "Kimi K2",
+                "context_length": 131072,
+                "pricing": {"prompt": "0.000001", "completion": "0.000004"},
+                "reasoning": {"supported": True, "max_tokens": 32768},
+                "supported_parameters": ["reasoning", "tools"],
+            }
+        ],
+    }
 
 
 def test_model_metadata_endpoints_are_explicit() -> None:
@@ -94,3 +130,67 @@ def test_handle_model_metadata_endpoint_falls_back_to_selected_provider(monkeypa
 
     assert response.json() == {"provider": "anthropic", "sub_path": "models"}
     assert calls == [("https://api.anthropic.test", "models", "anthropic")]
+
+
+def test_handle_model_metadata_endpoint_discovers_openrouter_catalogue(monkeypatch) -> None:
+    async def fake_chatgpt_metadata(http_client, request: Request, upstream_path: str) -> None:
+        return None
+
+    class UpstreamResponse:
+        status_code = 200
+
+        def json(self):
+            return {
+                "data": [
+                    {
+                        "id": "openai/gpt-5",
+                        "name": "GPT-5",
+                        "reasoning": {"supported": True},
+                        "supported_parameters": ["reasoning"],
+                    }
+                ]
+            }
+
+    class HttpClient:
+        async def get(self, url, **kwargs):
+            assert url == "https://openrouter.ai/api/v1/models"
+            return UpstreamResponse()
+
+    class Proxy:
+        http_client = HttpClient()
+
+        async def handle_passthrough(self, *args, **kwargs) -> Response:
+            raise AssertionError("OpenRouter catalogue should not use passthrough")
+
+    monkeypatch.setattr(
+        "headroom.providers.model_metadata.handle_chatgpt_model_metadata",
+        fake_chatgpt_metadata,
+    )
+    app = FastAPI()
+
+    @app.get("/probe")
+    async def probe(request: Request):
+        return await handle_model_metadata_endpoint(
+            Proxy(),
+            request,
+            endpoint=MODEL_METADATA_LIST_ENDPOINT,
+            provider_api_base_url="https://openrouter.ai/api",
+            provider_name="openai",
+        )
+
+    with TestClient(app) as client:
+        response = client.get("/probe")
+
+    assert response.json() == {
+        "object": "list",
+        "data": [
+            {
+                "id": "openai/gpt-5",
+                "name": "GPT-5",
+                "reasoning": {"supported": True},
+                "supported_parameters": ["reasoning"],
+                "object": "model",
+                "owned_by": "openrouter",
+            }
+        ],
+    }
