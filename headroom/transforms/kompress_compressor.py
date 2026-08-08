@@ -25,6 +25,7 @@ import time
 from dataclasses import dataclass
 from typing import Any, Literal
 
+from ..cache.kompress_cache import get_kompress_cache
 from ..config import TransformResult
 from ..onnx_runtime import (
     ONNX_CPU_ARENA_ENV,
@@ -34,7 +35,6 @@ from ..onnx_runtime import (
     trim_process_heap,
 )
 from ..tokenizer import Tokenizer
-from ..cache.kompress_cache import get_kompress_cache
 from .base import Transform
 
 logger = logging.getLogger(__name__)
@@ -2157,6 +2157,14 @@ class KompressCompressor(Transform):
         ratios = [ratios[i] for i in active_indices]
         ccr_sources = [ccr_sources[i] for i in active_indices]
         n = len(contents)
+        word_lists: list[list[str]] = [c.split() for c in contents]
+
+        if all(len(words) < 10 for words in word_lists):
+            active_results = [
+                self._passthrough(content, len(words))
+                for content, words in zip(contents, word_lists, strict=True)
+            ]
+            return _restore_batch_order(cached_results, active_results, active_indices)
 
         # Fast path: on backends where batch-dim parallelism does NOT help
         # (ONNX CPU, PyTorch CPU), fall back to sequential `compress()`
@@ -2179,8 +2187,6 @@ class KompressCompressor(Transform):
             return _restore_batch_order(cached_results, active_results, active_indices)
 
         results: list[KompressResult | None] = [None] * n
-        word_lists: list[list[str]] = [c.split() for c in contents]
-
         # Short texts short-circuit to passthrough — no model call needed.
         max_chunk_words = self.config.chunk_words
         chunk_queue: list[tuple[int, int, list[str], float | None]] = []

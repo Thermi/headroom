@@ -16,6 +16,29 @@ def test_key_uses_full_sha256_and_input_byte_length():
     assert len(entry.digest) == 32
 
 
+def test_identity_pair_keeps_forced_digest_collision_entries_separate(monkeypatch):
+    digest = b"forced-collision".ljust(32, b"\0")
+    monkeypatch.setattr(
+        KompressCache,
+        "_identity",
+        staticmethod(lambda content: (digest, len(content.encode("utf-8")))),
+    )
+    cache = KompressCache(max_entries=10, max_bytes=10_000, max_attempts=3)
+    first = "\N{LATIN SMALL LETTER E WITH ACUTE}"
+    second = "abc"
+
+    cache.record_success(first, "first result", 1, 1)
+    cache.record_success(second, "second result", 1, 1)
+
+    first_entry = cache.lookup(first)
+    second_entry = cache.lookup(second)
+    assert first_entry is not None
+    assert second_entry is not None
+    assert first_entry.compressed == "first result"
+    assert second_entry.compressed == "second result"
+    assert set(cache._entries) == {(digest, 2), (digest, 3)}
+
+
 def test_different_content_does_not_hit():
     cache = KompressCache(max_entries=10, max_bytes=10_000, max_attempts=3)
     cache.record_success("same length", "kept", 2, 1)

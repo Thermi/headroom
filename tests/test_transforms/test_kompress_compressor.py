@@ -10,10 +10,11 @@ Covers:
 
 import logging
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import MagicMock, patch
 
-from headroom.cache.kompress_cache import KompressCache
 import headroom.transforms.kompress_compressor as kc
+from headroom.cache.kompress_cache import KompressCache
 
 # ── Import safety (the whole point of the fix) ─────────────────────────
 
@@ -189,6 +190,7 @@ class TestKompressBackendSelection:
         captured_providers: list[Any] = []
         monkeypatch.setenv("HEADROOM_KOMPRESS_BACKEND", "onnx_gpu")
         monkeypatch.setattr(kmod, "_is_onnx_available", lambda: True)
+        monkeypatch.setattr(kmod, "_available_gpu_providers", lambda: ["CUDAExecutionProvider"])
         monkeypatch.setattr(kmod, "_kompress_cache", {})
         monkeypatch.setattr(
             kmod,
@@ -602,16 +604,30 @@ class TestKompressCompressorBatch:
     def test_batch_preserves_cached_long_result_when_other_input_is_short(self, monkeypatch) -> None:
         cache = KompressCache(max_entries=10, max_bytes=100_000, max_attempts=2)
         monkeypatch.setattr(kc, "get_kompress_cache", lambda: cache)
+        monkeypatch.setattr(kc, "_kompress_cache", {})
         cached = "cached " * 20
         short = "short input"
         cache.record_success(cached, "compressed", 20, 1)
         compressor = kc.KompressCompressor(kc.KompressConfig(enable_ccr=False))
-        monkeypatch.setattr(compressor, "_should_use_sequential_fallback", lambda: False)
+        loads = 0
+
+        def unexpected_load(*args, **kwargs):
+            nonlocal loads
+            loads += 1
+            raise AssertionError("model should not be loaded for short active inputs")
+
+        monkeypatch.setattr(kc, "_load_kompress", unexpected_load)
+        monkeypatch.setattr(
+            compressor,
+            "_should_use_sequential_fallback",
+            lambda: (_ for _ in ()).throw(AssertionError("backend should not be detected")),
+        )
 
         results = compressor.compress_batch([cached, short])
 
         assert [result.original for result in results] == [cached, short]
         assert [result.compressed for result in results] == ["compressed", short]
+        assert loads == 0
 
     def test_batch_failure_records_payloads_but_saturation_does_not(self, monkeypatch) -> None:
         cache = KompressCache(max_entries=10, max_bytes=100_000, max_attempts=2)
@@ -786,16 +802,23 @@ class TestKompressCompressorBatch:
         result = compressor.compress_batch([])
         assert result == []
 
-    def test_all_short_texts_passthrough_without_model(self) -> None:
+    def test_all_short_texts_passthrough_without_model(self, monkeypatch) -> None:
         """Texts under 10 words must passthrough; model never loaded."""
         from headroom.transforms.kompress_compressor import KompressCompressor
 
+        monkeypatch.setattr(kc, "_kompress_cache", {})
         compressor = KompressCompressor()
         contents = ["hello", "world", "short text here"]
+        loads = 0
+
+        def unexpected_load(*args, **kwargs):
+            nonlocal loads
+            loads += 1
+            raise AssertionError("model should not be loaded for short texts")
 
         with patch(
             "headroom.transforms.kompress_compressor._load_kompress",
-            side_effect=AssertionError("model should not be loaded for short texts"),
+            side_effect=unexpected_load,
         ):
             results = compressor.compress_batch(contents)
 
@@ -803,6 +826,7 @@ class TestKompressCompressorBatch:
         for i, r in enumerate(results):
             assert r.compressed == contents[i]
             assert r.compression_ratio == 1.0
+        assert loads == 0
 
     def test_order_preserved(self) -> None:
         """Output order must match input order even when model load fails."""

@@ -43,7 +43,7 @@ class KompressCache:
         self.max_entries = max(1, max_entries)
         self.max_bytes = max(1, max_bytes)
         self.max_attempts = max(1, max_attempts)
-        self._entries: dict[bytes, KompressCacheEntry] = {}
+        self._entries: dict[tuple[bytes, int], KompressCacheEntry] = {}
         self._entry_bytes = 0
         self._sequence = 0
         self._hits = 0
@@ -89,15 +89,15 @@ class KompressCache:
                 self._entries.values(),
                 key=lambda entry: (entry.access_count, entry.created_sequence),
             )
-            del self._entries[victim.digest]
+            del self._entries[(victim.digest, victim.input_bytes)]
             self._entry_bytes -= self._estimate(victim)
             self._evictions += 1
 
     def lookup(self, content: str) -> KompressCacheEntry | None:
-        digest, input_bytes = self._identity(content)
+        key = self._identity(content)
         with self._lock:
-            entry = self._entries.get(digest)
-            if entry is None or entry.input_bytes != input_bytes:
+            entry = self._entries.get(key)
+            if entry is None:
                 self._misses += 1
                 return None
             entry.access_count += 1
@@ -113,6 +113,7 @@ class KompressCache:
         compressed_tokens: int,
     ) -> None:
         digest, input_bytes = self._identity(content)
+        key = (digest, input_bytes)
         entry = KompressCacheEntry(
             digest=digest,
             input_bytes=input_bytes,
@@ -127,20 +128,21 @@ class KompressCache:
         if self._estimate(entry) > self.max_bytes:
             return
         with self._lock:
-            previous = self._entries.pop(digest, None)
+            previous = self._entries.pop(key, None)
             if previous is not None:
                 self._entry_bytes -= self._estimate(previous)
             sequence = self._next_sequence()
             entry.created_sequence = sequence
             entry.last_access_sequence = sequence
-            self._entries[digest] = entry
+            self._entries[key] = entry
             self._entry_bytes += self._estimate(entry)
             self._evict_until_within_limits()
 
     def record_failure(self, content: str) -> KompressCacheEntry:
         digest, input_bytes = self._identity(content)
+        key = (digest, input_bytes)
         with self._lock:
-            previous = self._entries.pop(digest, None)
+            previous = self._entries.pop(key, None)
             if previous is not None:
                 self._entry_bytes -= self._estimate(previous)
             attempts = (previous.attempts + 1) if previous is not None else 1
@@ -157,7 +159,7 @@ class KompressCache:
             if previous is not None:
                 self._retries += 1
             if self._estimate(entry) <= self.max_bytes:
-                self._entries[digest] = entry
+                self._entries[key] = entry
                 self._entry_bytes += self._estimate(entry)
                 self._evict_until_within_limits()
             return self._detached(entry)

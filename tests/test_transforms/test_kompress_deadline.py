@@ -10,8 +10,8 @@ one that leaks.
 
 from __future__ import annotations
 
-from headroom.transforms import kompress_compressor as kc
 from headroom.cache.kompress_cache import KompressCache
+from headroom.transforms import kompress_compressor as kc
 
 
 def test_compress_bails_at_deadline_keeping_tail_verbatim(monkeypatch):
