@@ -12,6 +12,7 @@ _DEFAULT_MAX_BYTES = 64 * 1024 * 1024
 _DEFAULT_MAX_ATTEMPTS = 3
 _MAX_LIMIT = 1_000_000_000
 _FIXED_ENTRY_BYTES = 8
+_DEFAULT_SINGLE_FLIGHT_WAIT_SECONDS = 5.0
 _CacheKey = tuple[str, bytes, int]
 
 
@@ -188,12 +189,19 @@ class KompressCache:
             if previous is not None:
                 self._entry_bytes -= self._estimate(previous)
 
-    def acquire_inference(self, content: str, namespace: str = "") -> bool:
+    def acquire_inference(
+        self,
+        content: str,
+        namespace: str = "",
+        *,
+        timeout_seconds: float = _DEFAULT_SINGLE_FLIGHT_WAIT_SECONDS,
+    ) -> bool | None:
         """Claim an uncached key or wait for its current inference to finish.
 
         The cache lock is released before waiting or inference. A waiter returns
         ``False`` and must perform a fresh lookup before deciding whether it
-        needs to retry; this preserves retryable-failure and fail-open behavior.
+        needs to retry; ``None`` means its bounded wait expired and the caller
+        must fail open without recording a cache failure.
         """
         key = self._key(content, namespace)
         with self._lock:
@@ -201,7 +209,8 @@ class KompressCache:
             if event is None:
                 self._inflight[key] = threading.Event()
                 return True
-        event.wait()
+        if not event.wait(timeout=max(0.0, timeout_seconds)):
+            return None
         return False
 
     def release_inference(self, content: str, namespace: str = "") -> None:

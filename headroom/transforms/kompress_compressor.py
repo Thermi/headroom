@@ -60,6 +60,7 @@ _KOMPRESS_MUST_KEEP_RE = re.compile(
 _KOMPRESS_MUST_KEEP_ENV = "HEADROOM_KOMPRESS_MUST_KEEP"
 KOMPRESS_BACKEND_ENV = "HEADROOM_KOMPRESS_BACKEND"
 KOMPRESS_ONNX_FILENAME_ENV = "HEADROOM_KOMPRESS_ONNX_FILENAME"
+KOMPRESS_ONNX_PATH_ENV = "HEADROOM_KOMPRESS_ONNX_PATH"
 
 
 def _add_kompress_must_keep_words(
@@ -115,6 +116,7 @@ KOMPRESS_ACQUIRE_TIMEOUT_ENV = "HEADROOM_KOMPRESS_ACQUIRE_TIMEOUT_SECONDS"
 KOMPRESS_TIME_BUDGET_ENV = "HEADROOM_KOMPRESS_TIME_BUDGET_SECONDS"
 KOMPRESS_CANARY_THRESHOLD_ENV = "HEADROOM_KOMPRESS_CANARY_SECONDS"
 KOMPRESS_REQUEST_DEADLINE_ENV = "HEADROOM_COMPRESSION_DEADLINE_MS"
+_SINGLE_FLIGHT_WAIT_FALLBACK_SECONDS = 5.0
 
 # Both defaults sit well under the proxy's 30s compression-stage timeout so a
 # slow model gives up (passthrough) before the request is abandoned. A thread
@@ -200,6 +202,14 @@ def _request_deadline_seconds() -> float:
         return max(0.0, float(os.environ.get(KOMPRESS_REQUEST_DEADLINE_ENV, "20000")) / 1000.0)
     except ValueError:
         return 20.0
+
+
+def _single_flight_wait_timeout_seconds(started_at: float) -> float:
+    """Bound a cache waiter by the current request deadline or safe fallback."""
+    deadline = _request_deadline_seconds()
+    if deadline > 0:
+        return max(0.0, deadline - (time.perf_counter() - started_at))
+    return _SINGLE_FLIGHT_WAIT_FALLBACK_SECONDS
 
 
 def _acquire_execution_slot(
@@ -717,13 +727,14 @@ def _onnx_filename_candidates() -> tuple[str, ...]:
       2. ``HEADROOM_KOMPRESS_ONNX_FILENAME`` — repo-relative path override.
       3. Default candidates (int8-wo → fp32 → int8).
     """
-    local_path = os.environ.get("HEADROOM_KOMPRESS_ONNX_PATH", "").strip()
+    local_path = os.environ.get(KOMPRESS_ONNX_PATH_ENV, "").strip()
     if local_path and os.path.isfile(local_path):
         return (local_path,)
     if local_path:
         logger.warning(
-            "HEADROOM_KOMPRESS_ONNX_PATH set to %r but file not found; "
+            "%s set to %r but file not found; "
             "falling back to HuggingFace download",
+            KOMPRESS_ONNX_PATH_ENV,
             local_path,
         )
 
@@ -1487,6 +1498,7 @@ class KompressCompressor(Transform):
         """Return the stable namespace for this compressor's raw outputs."""
         backend = _selected_backend()
         onnx_filename = os.environ.get(KOMPRESS_ONNX_FILENAME_ENV, "")
+        onnx_path = os.environ.get(KOMPRESS_ONNX_PATH_ENV, "")
         settings = (
             self.config.model_id,
             self.config.chunk_words,
@@ -1494,8 +1506,9 @@ class KompressCompressor(Transform):
             self.config.device,
             backend,
             onnx_filename,
+            onnx_path,
         )
-        if settings == (HF_MODEL_ID, 350, 0.5, "auto", "auto", ""):
+        if settings == (HF_MODEL_ID, 350, 0.5, "auto", "auto", "", ""):
             return ""
         return repr(settings)
 
@@ -1639,6 +1652,7 @@ class KompressCompressor(Transform):
         cache_namespace = self._cache_namespace()
         cache_owner = False
         if cache_enabled:
+            cache_wait_timeout = _single_flight_wait_timeout_seconds(t_deadline)
             while True:
                 cached = cache.lookup(content, cache_namespace)
                 if cached is not None:
@@ -1655,7 +1669,14 @@ class KompressCompressor(Transform):
                             model_used=self.config.model_id,
                         )
                         return self._add_ccr_marker(result, ccr_original)
-                if cache.acquire_inference(content, cache_namespace):
+                claim = cache.acquire_inference(
+                    content,
+                    cache_namespace,
+                    timeout_seconds=cache_wait_timeout,
+                )
+                if claim is None:
+                    return self._passthrough(content, n_words)
+                if claim:
                     cache_owner = True
                     break
 
@@ -2231,7 +2252,8 @@ class KompressCompressor(Transform):
         # internally. This keeps the public API consistent while avoiding the
         # per-item slowdown measured on ONNX CPU (~0.7-0.9x vs sequential).
         # GPU users still benefit from the batched forward pass below.
-        if self._should_use_sequential_fallback():
+        use_sequential_fallback = self._should_use_sequential_fallback()
+        if use_sequential_fallback:
             active_results = [
                 self.compress(
                     content,
@@ -2293,6 +2315,64 @@ class KompressCompressor(Transform):
         is_onnx = backend.startswith("onnx")
         device_type = _model_device_type(model, backend)
         kept_ids_per_text: dict[int, set[int]] = {i: set() for i in range(n) if results[i] is None}
+        claimed_contents: set[str] = set()
+
+        def release_claim(content: str) -> None:
+            if content in claimed_contents:
+                claimed_contents.remove(content)
+                cache.release_inference(content, cache_namespace)
+
+        # The sequential fallback delegates to direct compress(), which owns
+        # its own single-flight claim. Only the actual GPU/MPS batch path claims
+        # misses here, after model selection has ruled out that fallback.
+        if record_cache and not use_sequential_fallback:
+            cache_wait_timeout = _single_flight_wait_timeout_seconds(t_deadline)
+            for text_idx, content in enumerate(contents):
+                if results[text_idx] is not None or ratios[text_idx] is not None:
+                    continue
+                if content in claimed_contents:
+                    continue
+                while True:
+                    cached = cache.lookup(content, cache_namespace)
+                    if cached is not None and cached.exhausted:
+                        results[text_idx] = self._passthrough(content, len(word_lists[text_idx]))
+                        kept_ids_per_text.pop(text_idx, None)
+                        break
+                    if cached is not None and cached.compressed is not None:
+                        cached_result = KompressResult(
+                            compressed=cached.compressed,
+                            original=content,
+                            original_tokens=cached.original_tokens or len(word_lists[text_idx]),
+                            compressed_tokens=cached.compressed_tokens
+                            or len(cached.compressed.split()),
+                            compression_ratio=(cached.compressed_tokens or len(word_lists[text_idx]))
+                            / len(word_lists[text_idx]),
+                            model_used=self.config.model_id,
+                        )
+                        results[text_idx] = self._add_ccr_marker(
+                            cached_result, ccr_sources[text_idx]
+                        )
+                        kept_ids_per_text.pop(text_idx, None)
+                        break
+
+                    claim = cache.acquire_inference(
+                        content,
+                        cache_namespace,
+                        timeout_seconds=cache_wait_timeout,
+                    )
+                    if claim is True:
+                        claimed_contents.add(content)
+                        break
+                    if claim is None:
+                        results[text_idx] = self._passthrough(content, len(word_lists[text_idx]))
+                        set_outcome(text_idx, "skip")
+                        kept_ids_per_text.pop(text_idx, None)
+                        break
+
+            chunk_queue = [
+                chunk for chunk in chunk_queue if results[chunk[0]] is None
+            ]
+
         inference_ms = 0.0
         deadline_s = getattr(self, "_deadline_s", None)
         if deadline_s is None:
@@ -2324,6 +2404,7 @@ class KompressCompressor(Transform):
                             cache.record_failure(contents[text_idx], cache_namespace)
                     else:
                         set_outcome(text_idx, "skip")
+                    release_claim(contents[text_idx])
                     kept_ids_per_text.pop(text_idx, None)
 
         for batch_start in range(0, len(chunk_queue), batch_size):
@@ -2441,6 +2522,7 @@ class KompressCompressor(Transform):
                     )
                     for text_idx, _, _, ratio in batch:
                         if results[text_idx] is None:
+                            release_claim(contents[text_idx])
                             results[text_idx] = self.compress(
                                 contents[text_idx],
                                 context=context,
@@ -2464,6 +2546,7 @@ class KompressCompressor(Transform):
                                 cache.record_failure(contents[text_idx], cache_namespace)
                         else:
                             set_outcome(text_idx, "skip")
+                        release_claim(contents[text_idx])
                         kept_ids_per_text.pop(text_idx, None)
 
         # Reconstruct compressed text for each non-passthrough result.
@@ -2480,6 +2563,7 @@ class KompressCompressor(Transform):
                     set_outcome(text_idx, "success")
                     if record_cache:
                         cache.discard(content, cache_namespace)
+                    release_claim(content)
                 else:
                     set_outcome(text_idx, "skip")
                 continue
@@ -2509,9 +2593,11 @@ class KompressCompressor(Transform):
                             compressed_count,
                             cache_namespace,
                         )
+                    release_claim(content)
                 else:
                     if record_cache:
                         cache.discard(content, cache_namespace)
+                    release_claim(content)
             else:
                 set_outcome(text_idx, "skip")
 
@@ -2542,6 +2628,7 @@ class KompressCompressor(Transform):
             if r is None:
                 final.append(self._passthrough(contents[i], len(word_lists[i])))
                 set_outcome(i, "skip")
+                release_claim(contents[i])
             else:
                 final.append(r)
         if inference_ms >= 1000.0:

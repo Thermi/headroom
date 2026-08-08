@@ -426,6 +426,48 @@ class TestKompressResultCache:
         assert not second_thread.is_alive()
         assert [result.compressed for result in results] == ["one two three"] * 2
         assert calls == 1
+        assert cache._inflight == {}
+
+    def test_single_flight_waiter_times_out_without_cache_failure(self, monkeypatch) -> None:
+        cache = KompressCache(max_entries=10, max_bytes=100_000, max_attempts=2)
+        monkeypatch.setattr(kc, "get_kompress_cache", lambda: cache)
+        monkeypatch.setattr(kc, "_request_deadline_seconds", lambda: 0.05)
+        compressor = kc.KompressCompressor(kc.KompressConfig(enable_ccr=False))
+        text = "one two three four five six seven eight nine ten eleven twelve"
+        inference_started = threading.Event()
+        release_inference = threading.Event()
+        owner_result: list[kc.KompressResult] = []
+        waiter_result: list[kc.KompressResult] = []
+
+        def fake_inference(*args, **kwargs):
+            inference_started.set()
+            assert release_inference.wait(timeout=1)
+            return kc.KompressResult(
+                compressed="one two three",
+                original=text,
+                original_tokens=12,
+                compressed_tokens=3,
+                compression_ratio=0.25,
+            ), "success"
+
+        monkeypatch.setattr(compressor, "_compress_uncached", fake_inference)
+        owner_thread = threading.Thread(target=lambda: owner_result.append(compressor.compress(text)))
+        waiter_thread = threading.Thread(target=lambda: waiter_result.append(compressor.compress(text)))
+        owner_thread.start()
+        assert inference_started.wait(timeout=1)
+        waiter_thread.start()
+        waiter_thread.join(timeout=1)
+
+        assert not waiter_thread.is_alive()
+        assert waiter_result[0].compressed == text
+        assert cache.lookup(text) is None
+        assert cache.stats()["failures"] == 0
+
+        release_inference.set()
+        owner_thread.join(timeout=1)
+        assert not owner_thread.is_alive()
+        assert owner_result[0].compressed == "one two three"
+        assert cache._inflight == {}
 
     def test_effective_configuration_namespaces_cached_results(self, monkeypatch) -> None:
         cache = KompressCache(max_entries=10, max_bytes=100_000, max_attempts=2)
@@ -454,6 +496,18 @@ class TestKompressResultCache:
         assert first.compress(text).compressed == "model-a"
         assert second.compress(text).compressed == "model-b"
         assert calls == ["model-a", "model-b"]
+
+    def test_onnx_path_is_part_of_effective_cache_namespace(self, monkeypatch) -> None:
+        compressor = kc.KompressCompressor()
+        default_namespace = compressor._cache_namespace()
+
+        monkeypatch.setenv("HEADROOM_KOMPRESS_ONNX_PATH", "C:/models/first.onnx")
+        first_namespace = compressor._cache_namespace()
+        monkeypatch.setenv("HEADROOM_KOMPRESS_ONNX_PATH", "C:/models/second.onnx")
+        second_namespace = compressor._cache_namespace()
+
+        assert first_namespace != default_namespace
+        assert second_namespace != first_namespace
 
     def test_exhausted_payload_failure_bypasses_inference(self, monkeypatch) -> None:
         cache = KompressCache(max_entries=10, max_bytes=100_000, max_attempts=2)
@@ -812,6 +866,64 @@ class TestKompressCompressorBatch:
         assert sorted(stored) == sorted([fresh, cached])
         assert inference_calls == 1
         assert cache.stats()["hits"] == 1
+
+    def test_concurrent_gpu_batches_single_flight_identical_miss(self, monkeypatch) -> None:
+        cache = KompressCache(max_entries=10, max_bytes=100_000, max_attempts=2)
+        monkeypatch.setattr(kc, "get_kompress_cache", lambda: cache)
+        text = "one two three four five six seven eight nine ten eleven twelve"
+        inference_started = threading.Event()
+        release_inference = threading.Event()
+        calls = 0
+
+        class BatchEncoding(dict):
+            def __init__(self, batch_words):
+                input_ids = [[1] * len(words) for words in batch_words]
+                super().__init__(input_ids=input_ids, attention_mask=input_ids)
+                self.batch_words = batch_words
+
+            def word_ids(self, batch_index=0):
+                return list(range(len(self.batch_words[batch_index])))
+
+        class BatchTokenizer:
+            def __call__(self, batch_words, **kwargs):
+                return BatchEncoding(batch_words)
+
+        class BatchModel:
+            def get_scores(self, input_ids, attention_mask):
+                nonlocal calls
+                calls += 1
+                inference_started.set()
+                assert release_inference.wait(timeout=1)
+                return [[1.0] + [0.0] * (len(row) - 1) for row in input_ids]
+
+        monkeypatch.setattr(
+            kc,
+            "_load_kompress",
+            lambda *args, **kwargs: (BatchModel(), BatchTokenizer(), "onnx_gpu"),
+        )
+        results: list[list[kc.KompressResult]] = []
+        first = kc.KompressCompressor(kc.KompressConfig(enable_ccr=False))
+        second = kc.KompressCompressor(kc.KompressConfig(enable_ccr=False))
+        for compressor in (first, second):
+            monkeypatch.setattr(compressor, "_should_use_sequential_fallback", lambda: False)
+
+        first_thread = threading.Thread(target=lambda: results.append(first.compress_batch([text])))
+        second_thread = threading.Thread(target=lambda: results.append(second.compress_batch([text])))
+        first_thread.start()
+        assert inference_started.wait(timeout=1)
+        second_thread.start()
+        second_thread.join(timeout=0.05)
+        assert second_thread.is_alive()
+        release_inference.set()
+        first_thread.join(timeout=1)
+        second_thread.join(timeout=1)
+
+        assert not first_thread.is_alive()
+        assert not second_thread.is_alive()
+        assert len(results) == 2
+        assert all(batch[0].compressed.startswith("one") for batch in results)
+        assert calls == 1
+        assert cache._inflight == {}
 
     def test_batch_preserves_cached_long_result_when_other_input_is_short(self, monkeypatch) -> None:
         cache = KompressCache(max_entries=10, max_bytes=100_000, max_attempts=2)

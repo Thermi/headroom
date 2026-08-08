@@ -228,6 +228,19 @@ def test_single_flight_waiter_observes_owner_result():
     assert entry.compressed == "successful result"
 
 
+def test_single_flight_waiter_timeout_does_not_release_owner():
+    cache = KompressCache(max_entries=10, max_bytes=10_000, max_attempts=3)
+    content = "same payload"
+    assert cache.acquire_inference(content) is True
+
+    assert cache.acquire_inference(content, timeout_seconds=0.01) is None
+    assert cache._inflight
+
+    cache.release_inference(content)
+    assert cache.acquire_inference(content, timeout_seconds=0.01) is True
+    cache.release_inference(content)
+
+
 def test_invalid_environment_limits_use_positive_defaults(monkeypatch):
     monkeypatch.setenv("HEADROOM_KOMPRESS_CACHE_MAX_ENTRIES", "0")
     monkeypatch.setenv("HEADROOM_KOMPRESS_CACHE_MAX_BYTES", "not-an-int")
