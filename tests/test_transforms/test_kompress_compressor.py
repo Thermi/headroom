@@ -578,6 +578,20 @@ class TestKompressCompressorBatch:
         assert inference_calls == 1
         assert cache.stats()["hits"] == 1
 
+    def test_batch_preserves_cached_long_result_when_other_input_is_short(self, monkeypatch) -> None:
+        cache = KompressCache(max_entries=10, max_bytes=100_000, max_attempts=2)
+        monkeypatch.setattr(kc, "get_kompress_cache", lambda: cache)
+        cached = "cached " * 20
+        short = "short input"
+        cache.record_success(cached, "compressed", 20, 1)
+        compressor = kc.KompressCompressor(kc.KompressConfig(enable_ccr=False))
+        monkeypatch.setattr(compressor, "_should_use_sequential_fallback", lambda: False)
+
+        results = compressor.compress_batch([cached, short])
+
+        assert [result.original for result in results] == [cached, short]
+        assert [result.compressed for result in results] == ["compressed", short]
+
     def test_batch_failure_records_payloads_but_saturation_does_not(self, monkeypatch) -> None:
         cache = KompressCache(max_entries=10, max_bytes=100_000, max_attempts=2)
         monkeypatch.setattr(kc, "get_kompress_cache", lambda: cache)
@@ -637,6 +651,58 @@ class TestKompressCompressorBatch:
 
         assert cache.lookup(contents[0]) is None
         assert cache.lookup(contents[1]) is None
+
+    def test_batch_model_not_cached_does_not_record_payload_failure(self, monkeypatch) -> None:
+        content = "model unavailable " * 20
+        cache = KompressCache(max_entries=10, max_bytes=100_000, max_attempts=2)
+        monkeypatch.setattr(kc, "get_kompress_cache", lambda: cache)
+        compressor = kc.KompressCompressor()
+        monkeypatch.setattr(compressor, "_should_use_sequential_fallback", lambda: False)
+        monkeypatch.setattr(
+            kc,
+            "_load_kompress",
+            lambda *args, **kwargs: (_ for _ in ()).throw(
+                kc.KompressModelNotCached("not cached")
+            ),
+        )
+
+        [result] = compressor.compress_batch([content])
+
+        assert result.compressed == content
+        assert cache.lookup(content) is None
+
+    def test_target_ratio_bypasses_cache_but_none_reuses_payload_result(self, monkeypatch) -> None:
+        content = "ratio-sensitive " * 20
+        cache = KompressCache(max_entries=10, max_bytes=100_000, max_attempts=2)
+        cache.record_success(content, "cached", 20, 1)
+        monkeypatch.setattr(kc, "get_kompress_cache", lambda: cache)
+        compressor = kc.KompressCompressor()
+        monkeypatch.setattr(compressor, "_store_in_ccr", lambda *args: "ratio-key")
+        uncached_calls: list[float | None] = []
+
+        def fake_uncached(content, **kwargs):
+            uncached_calls.append(kwargs["target_ratio"])
+            return (
+                kc.KompressResult(
+                    compressed="ratio-specific",
+                    original=content,
+                    original_tokens=20,
+                    compressed_tokens=2,
+                    compression_ratio=0.1,
+                ),
+                False,
+            )
+
+        monkeypatch.setattr(compressor, "_compress_uncached", fake_uncached)
+
+        ratio_result = compressor.compress(content, target_ratio=0.5)
+        cached_result = compressor.compress(content)
+
+        assert ratio_result.compressed.startswith("ratio-specific")
+        assert ratio_result.cache_key == "ratio-key"
+        assert cached_result.compressed.startswith("cached")
+        assert uncached_calls == [0.5]
+        assert cache.stats()["hits"] == 1
 
     def test_execution_stats_include_cache_counters_without_payload_data(self, monkeypatch) -> None:
         cache = KompressCache(max_entries=7, max_bytes=1234, max_attempts=2)

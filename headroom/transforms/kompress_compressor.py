@@ -1613,20 +1613,22 @@ class KompressCompressor(Transform):
             return self._passthrough(content, n_words)
 
         cache = get_kompress_cache()
-        cached = cache.lookup(content)
-        if cached is not None:
-            if cached.exhausted:
-                return self._passthrough(content, n_words)
-            if cached.compressed is not None:
-                result = KompressResult(
-                    compressed=cached.compressed,
-                    original=content,
-                    original_tokens=cached.original_tokens or n_words,
-                    compressed_tokens=cached.compressed_tokens or len(cached.compressed.split()),
-                    compression_ratio=(cached.compressed_tokens or n_words) / n_words,
-                    model_used=self.config.model_id,
-                )
-                return self._add_ccr_marker(result, ccr_original)
+        if target_ratio is None:
+            cached = cache.lookup(content)
+            if cached is not None:
+                if cached.exhausted:
+                    return self._passthrough(content, n_words)
+                if cached.compressed is not None:
+                    result = KompressResult(
+                        compressed=cached.compressed,
+                        original=content,
+                        original_tokens=cached.original_tokens or n_words,
+                        compressed_tokens=cached.compressed_tokens
+                        or len(cached.compressed.split()),
+                        compression_ratio=(cached.compressed_tokens or n_words) / n_words,
+                        model_used=self.config.model_id,
+                    )
+                    return self._add_ccr_marker(result, ccr_original)
 
         try:
             outcome = self._compress_uncached(
@@ -1644,18 +1646,20 @@ class KompressCompressor(Transform):
             return self._passthrough(content, n_words)
         except Exception as exc:
             self._record_inference_failure(exc)
-            cache.record_failure(content)
+            if target_ratio is None:
+                cache.record_failure(content)
             return self._passthrough(content, n_words)
         result, cacheable = outcome
         if not cacheable and result.compressed_tokens < result.original_tokens:
-            cache.record_success(
-                content,
-                result.compressed,
-                result.original_tokens,
-                result.compressed_tokens,
-            )
+            if target_ratio is None:
+                cache.record_success(
+                    content,
+                    result.compressed,
+                    result.original_tokens,
+                    result.compressed_tokens,
+                )
             return self._add_ccr_marker(result, ccr_original)
-        if cacheable:
+        if target_ratio is None and cacheable:
             cache.record_failure(content)
         return result
 
@@ -2114,7 +2118,7 @@ class KompressCompressor(Transform):
         cached_results: list[KompressResult | None] = [None] * n
         active_indices: list[int] = []
         for i, content in enumerate(contents):
-            if len(content.split()) < 10:
+            if len(content.split()) < 10 or ratios[i] is not None:
                 active_indices.append(i)
                 continue
             cached = cache.lookup(content)
@@ -2179,17 +2183,32 @@ class KompressCompressor(Transform):
 
         if not chunk_queue:
             # Every input was short — all passthrough, no model needed.
-            return [r for r in results if r is not None]
+            return _restore_batch_order(
+                cached_results,
+                [r for r in results if r is not None],
+                active_indices,
+            )
 
         # Load model once for the whole batch.
         try:
             model, tokenizer, backend = _load_kompress(self.config.model_id, self.config.device)
+        except KompressModelNotCached as e:
+            logger.debug("Kompress model not cached for batch: %s", e)
+            for i in range(n):
+                if results[i] is None:
+                    results[i] = self._passthrough(contents[i], len(word_lists[i]))
+            return _restore_batch_order(
+                cached_results,
+                [r for r in results if r is not None],
+                active_indices,
+            )
         except Exception as e:
             logger.warning("Kompress load failed for batch: %s — passthrough all", e)
             for i in range(n):
                 if results[i] is None:
                     results[i] = self._passthrough(contents[i], len(word_lists[i]))
-                    cache.record_failure(contents[i])
+                    if ratios[i] is None:
+                        cache.record_failure(contents[i])
             return _restore_batch_order(
                 cached_results,
                 [r for r in results if r is not None],
@@ -2224,7 +2243,7 @@ class KompressCompressor(Transform):
                     results[text_idx] = self._passthrough(
                         contents[text_idx], len(word_lists[text_idx])
                     )
-                    if cache_failure:
+                    if cache_failure and ratios[text_idx] is None:
                         cache.record_failure(contents[text_idx])
                     kept_ids_per_text.pop(text_idx, None)
 
@@ -2360,7 +2379,8 @@ class KompressCompressor(Transform):
                         results[text_idx] = self._passthrough(
                             contents[text_idx], len(word_lists[text_idx])
                         )
-                        cache.record_failure(contents[text_idx])
+                        if ratios[text_idx] is None:
+                            cache.record_failure(contents[text_idx])
                         kept_ids_per_text.pop(text_idx, None)
 
         # Reconstruct compressed text for each non-passthrough result.
@@ -2389,7 +2409,7 @@ class KompressCompressor(Transform):
                 model_used=self.config.model_id,
             )
 
-            if compressed_count < n_words:
+            if ratios[text_idx] is None and compressed_count < n_words:
                 cache.record_success(content, compressed, n_words, compressed_count)
 
             if _emit_ccr and self.config.enable_ccr and comp_ratio < 0.8:
