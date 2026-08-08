@@ -2370,6 +2370,12 @@ class KompressCompressor(Transform):
                 claimed_contents.remove(content)
                 cache.release_inference(content, cache_namespace)
 
+        def record_failure_once(content: str, published_contents: set[str]) -> None:
+            if content in published_contents:
+                return
+            published_contents.add(content)
+            cache.record_failure(content, cache_namespace)
+
         # The sequential fallback delegates to direct compress(), which owns
         # its own single-flight claim. Only the actual GPU/MPS batch path claims
         # misses here, after model selection has ruled out that fallback.
@@ -2448,6 +2454,7 @@ class KompressCompressor(Transform):
                 device_type=device_type,
                 n_words=sum(len(c[2]) for c in chunk_queue[batch_start:]),
             )
+            published_failures: set[str] = set()
             for text_idx, _, _, _ in chunk_queue[batch_start:]:
                 if results[text_idx] is None:
                     results[text_idx] = self._passthrough(
@@ -2456,7 +2463,7 @@ class KompressCompressor(Transform):
                     if cache_failure and ratios[text_idx] is None:
                         set_outcome(text_idx, "failure")
                         if record_cache:
-                            cache.record_failure(contents[text_idx], cache_namespace)
+                            record_failure_once(contents[text_idx], published_failures)
                     else:
                         set_outcome(text_idx, "skip")
                     release_claim(contents[text_idx])
@@ -2590,6 +2597,7 @@ class KompressCompressor(Transform):
                 logger.warning(
                     "Kompress batch forward pass failed: %s — passthrough affected texts", e
                 )
+                published_failures: set[str] = set()
                 for text_idx, _, _, _ in batch:
                     if results[text_idx] is None:
                         results[text_idx] = self._passthrough(
@@ -2598,7 +2606,7 @@ class KompressCompressor(Transform):
                         if ratios[text_idx] is None:
                             set_outcome(text_idx, "failure")
                             if record_cache:
-                                cache.record_failure(contents[text_idx], cache_namespace)
+                                record_failure_once(contents[text_idx], published_failures)
                         else:
                             set_outcome(text_idx, "skip")
                         release_claim(contents[text_idx])

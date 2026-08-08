@@ -1118,6 +1118,58 @@ class TestKompressCompressorBatch:
         assert cache.lookup(contents[0]) is None
         assert cache.lookup(contents[1]) is None
 
+    def test_batch_failure_records_duplicate_payload_once_per_inference(self, monkeypatch) -> None:
+        cache = KompressCache(max_entries=10, max_bytes=100_000, max_attempts=2)
+        monkeypatch.setattr(kc, "get_kompress_cache", lambda: cache)
+        compressor = kc.KompressCompressor(kc.KompressConfig(enable_ccr=False))
+        content = "duplicate " * 20
+        contents = [content, content]
+        monkeypatch.setattr(compressor, "_should_use_sequential_fallback", lambda: False)
+        calls = 0
+
+        class BatchEncoding(dict):
+            def __init__(self, batch_words):
+                input_ids = [[1] * len(words) for words in batch_words]
+                super().__init__(input_ids=input_ids, attention_mask=input_ids)
+                self.batch_words = batch_words
+
+            def word_ids(self, batch_index=0):
+                return list(range(len(self.batch_words[batch_index])))
+
+        class BatchTokenizer:
+            def __call__(self, batch_words, **kwargs):
+                return BatchEncoding(batch_words)
+
+        class FailureModel:
+            def get_scores(self, input_ids, attention_mask):
+                nonlocal calls
+                calls += 1
+                raise TimeoutError("batch timeout")
+
+        monkeypatch.setattr(
+            kc,
+            "_load_kompress",
+            lambda *args, **kwargs: (FailureModel(), BatchTokenizer(), "onnx"),
+        )
+
+        first_results = compressor.compress_batch(contents)
+        first_entry = cache.lookup(content)
+
+        assert [result.compressed for result in first_results] == contents
+        assert first_entry is not None
+        assert first_entry.attempts == 1
+        assert not first_entry.exhausted
+        assert calls == 1
+
+        second_results = compressor.compress_batch(contents)
+        second_entry = cache.lookup(content)
+
+        assert [result.compressed for result in second_results] == contents
+        assert second_entry is not None
+        assert second_entry.attempts == 2
+        assert second_entry.exhausted
+        assert calls == 2
+
     def test_batch_no_compression_success_discards_retryable_failure(self, monkeypatch) -> None:
         cache = KompressCache(max_entries=10, max_bytes=100_000, max_attempts=3)
         monkeypatch.setattr(kc, "get_kompress_cache", lambda: cache)
