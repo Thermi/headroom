@@ -488,7 +488,7 @@ class TransformPipeline:
                 tokens_before > tokens_after
                 and (tokens_before - tokens_after) > _MIN_TOKENS_SAVED_FOR_WASTE_SIGNALS
             )
-            if saved_enough and tokens_before > waste_signal_token_limit:
+            if saved_enough and tokens_before > _waste_signal_token_limit:
                 # Telemetry-only re-parse would risk the compression timeout on a
                 # request this large (#296); skip it and keep the result.
                 logger.debug(
@@ -496,7 +496,7 @@ class TransformPipeline:
                     "(limit=%d) to keep the compression result on the critical path",
                     log_prefix,
                     tokens_before,
-                    waste_signal_token_limit,
+                    _waste_signal_token_limit,
                 )
             elif saved_enough:
                 try:
