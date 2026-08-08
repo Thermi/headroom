@@ -1650,17 +1650,21 @@ class KompressCompressor(Transform):
                 cache.record_failure(content)
             return self._passthrough(content, n_words)
         result, cacheable = outcome
+        if target_ratio is None:
+            if not cacheable:
+                if result.compressed_tokens < result.original_tokens:
+                    cache.record_success(
+                        content,
+                        result.compressed,
+                        result.original_tokens,
+                        result.compressed_tokens,
+                    )
+                else:
+                    cache.discard(content)
+            else:
+                cache.record_failure(content)
         if not cacheable and result.compressed_tokens < result.original_tokens:
-            if target_ratio is None:
-                cache.record_success(
-                    content,
-                    result.compressed,
-                    result.original_tokens,
-                    result.compressed_tokens,
-                )
             return self._add_ccr_marker(result, ccr_original)
-        if target_ratio is None and cacheable:
-            cache.record_failure(content)
         return result
 
     def _add_ccr_marker(
@@ -2408,6 +2412,8 @@ class KompressCompressor(Transform):
 
             if not kept_ids:
                 results[text_idx] = self._passthrough(content, n_words)
+                if ratios[text_idx] is None:
+                    cache.discard(content)
                 continue
 
             compressed_words = [words[w] for w in sorted(kept_ids) if w < n_words]
@@ -2424,8 +2430,11 @@ class KompressCompressor(Transform):
                 model_used=self.config.model_id,
             )
 
-            if ratios[text_idx] is None and compressed_count < n_words:
-                cache.record_success(content, compressed, n_words, compressed_count)
+            if ratios[text_idx] is None:
+                if compressed_count < n_words:
+                    cache.record_success(content, compressed, n_words, compressed_count)
+                else:
+                    cache.discard(content)
 
             if _emit_ccr and self.config.enable_ccr and comp_ratio < 0.8:
                 ccr_source = ccr_sources[text_idx]

@@ -453,6 +453,35 @@ class TestKompressResultCache:
         assert compressor.compress(text).compressed == "one two three"
         assert compressor.compress(text).compressed == "one two three"
 
+    def test_no_compression_success_discards_retryable_failure(self, monkeypatch) -> None:
+        cache = KompressCache(max_entries=10, max_bytes=100_000, max_attempts=3)
+        monkeypatch.setattr(kc, "get_kompress_cache", lambda: cache)
+        compressor = kc.KompressCompressor(kc.KompressConfig(enable_ccr=False))
+        text = "one two three four five six seven eight nine ten eleven twelve"
+        calls = 0
+
+        def outcomes(*args, **kwargs):
+            nonlocal calls
+            calls += 1
+            if calls in {1, 3}:
+                raise TimeoutError("transient inference failure")
+            return compressor._passthrough(text, 12), False
+
+        monkeypatch.setattr(compressor, "_compress_uncached", outcomes)
+
+        compressor.compress(text)
+        assert cache.lookup(text) is not None
+
+        no_compression = compressor.compress(text)
+        assert no_compression.compressed == text
+        assert cache.lookup(text) is None
+
+        compressor.compress(text)
+        entry = cache.lookup(text)
+        assert calls == 3
+        assert entry is not None
+        assert entry.attempts == 1
+
     def test_execution_saturation_is_not_cached(self, monkeypatch) -> None:
         cache = KompressCache(max_entries=10, max_bytes=100_000, max_attempts=2)
         monkeypatch.setattr(kc, "get_kompress_cache", lambda: cache)
@@ -691,6 +720,54 @@ class TestKompressCompressorBatch:
 
         assert cache.lookup(contents[0]) is None
         assert cache.lookup(contents[1]) is None
+
+    def test_batch_no_compression_success_discards_retryable_failure(self, monkeypatch) -> None:
+        cache = KompressCache(max_entries=10, max_bytes=100_000, max_attempts=3)
+        monkeypatch.setattr(kc, "get_kompress_cache", lambda: cache)
+        compressor = kc.KompressCompressor(kc.KompressConfig(enable_ccr=False))
+        monkeypatch.setattr(compressor, "_should_use_sequential_fallback", lambda: False)
+        content = "one two three four five six seven eight nine ten eleven twelve"
+        calls = 0
+
+        class BatchEncoding(dict):
+            def __init__(self, batch_words):
+                input_ids = [[1] * len(words) for words in batch_words]
+                super().__init__(input_ids=input_ids, attention_mask=input_ids)
+                self.batch_words = batch_words
+
+            def word_ids(self, batch_index=0):
+                return list(range(len(self.batch_words[batch_index])))
+
+        class BatchTokenizer:
+            def __call__(self, batch_words, **kwargs):
+                return BatchEncoding(batch_words)
+
+        class Model:
+            def get_scores(self, input_ids, attention_mask):
+                nonlocal calls
+                calls += 1
+                if calls in {1, 3}:
+                    raise TimeoutError("transient batch failure")
+                return [[0.0] * len(row) for row in input_ids]
+
+        monkeypatch.setattr(
+            kc,
+            "_load_kompress",
+            lambda *args, **kwargs: (Model(), BatchTokenizer(), "onnx"),
+        )
+
+        compressor.compress_batch([content])
+        assert cache.lookup(content) is not None
+
+        no_compression = compressor.compress_batch([content])[0]
+        assert no_compression.compressed == content
+        assert cache.lookup(content) is None
+
+        compressor.compress_batch([content])
+        entry = cache.lookup(content)
+        assert calls == 3
+        assert entry is not None
+        assert entry.attempts == 1
 
     def test_batch_model_not_cached_does_not_record_payload_failure(self, monkeypatch) -> None:
         content = "model unavailable " * 20

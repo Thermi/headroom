@@ -67,6 +67,19 @@ def test_failure_attempts_exhaust_and_success_replaces_failure():
     assert entry.exhausted is False
 
 
+def test_discard_removes_entry_for_exact_content():
+    cache = KompressCache(max_entries=10, max_bytes=10_000, max_attempts=3)
+    cache.record_failure("discard me")
+    cache.record_failure("keep me")
+
+    cache.discard("discard me")
+
+    assert cache.lookup("discard me") is None
+    kept = cache.lookup("keep me")
+    assert kept is not None
+    assert kept.attempts == 1
+
+
 def test_lfu_eviction_breaks_ties_by_oldest():
     cache = KompressCache(max_entries=2, max_bytes=10_000, max_attempts=2)
     cache.record_success("old", "x", 1, 1)

@@ -164,6 +164,14 @@ class KompressCache:
                 self._evict_until_within_limits()
             return self._detached(entry)
 
+    def discard(self, content: str) -> None:
+        """Remove the entry for exactly this content, if one exists."""
+        key = self._identity(content)
+        with self._lock:
+            previous = self._entries.pop(key, None)
+            if previous is not None:
+                self._entry_bytes -= self._estimate(previous)
+
     def stats(self) -> dict[str, int]:
         with self._lock:
             return {
