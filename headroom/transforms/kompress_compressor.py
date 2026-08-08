@@ -1741,6 +1741,17 @@ class KompressCompressor(Transform):
             model, tokenizer, backend = _load_kompress(
                 self.config.model_id, self.config.device, allow_download=allow_download
             )
+        except KompressModelNotCached:
+            logger.debug(
+                "Kompress model %s not cached; passing through without compression",
+                self.config.model_id,
+            )
+            return self._passthrough(content, n_words), False
+        except Exception as e:
+            self._record_inference_failure(e)
+            return self._passthrough(content, n_words), False
+
+        try:
             is_onnx = backend.startswith("onnx")
             device_type = _model_device_type(model, backend)
 

@@ -404,6 +404,27 @@ class TestKompressResultCache:
         assert result.compressed == text
         assert calls == 2
 
+    def test_generic_model_load_failure_is_not_cached_or_suppressed(self, monkeypatch) -> None:
+        cache = KompressCache(max_entries=10, max_bytes=100_000, max_attempts=2)
+        monkeypatch.setattr(kc, "get_kompress_cache", lambda: cache)
+        compressor = kc.KompressCompressor(kc.KompressConfig(enable_ccr=False))
+        text = "one two three four five six seven eight nine ten eleven twelve"
+        loads = 0
+
+        def failing_load(*args, **kwargs):
+            nonlocal loads
+            loads += 1
+            raise RuntimeError("model load failed")
+
+        monkeypatch.setattr(kc, "_load_kompress", failing_load)
+
+        first = compressor.compress(text)
+        second = compressor.compress(text)
+
+        assert first.compressed == second.compressed == text
+        assert loads == 2
+        assert cache.lookup(text) is None
+
     def test_success_replaces_cached_failure(self, monkeypatch) -> None:
         cache = KompressCache(max_entries=10, max_bytes=100_000, max_attempts=3)
         monkeypatch.setattr(kc, "get_kompress_cache", lambda: cache)
@@ -641,13 +662,16 @@ class TestKompressCompressorBatch:
             "_load_kompress",
             lambda *args, **kwargs: (SaturationModel(), BatchTokenizer(), "onnx"),
         )
-        monkeypatch.setattr(
-            kc,
-            "_acquire_execution_slot",
-            lambda *args, **kwargs: (None, 0.0),
-        )
 
-        compressor.compress_batch(contents)
+        monkeypatch.setenv("HEADROOM_KOMPRESS_EXECUTION_TIMEOUT_MS", "0")
+        monkeypatch.setenv("HEADROOM_KOMPRESS_MAX_CONCURRENT", "1")
+        monkeypatch.setattr(kc, "_execution_semaphores", {})
+        semaphore = kc._execution_semaphore("onnx", "onnx")
+        assert semaphore.acquire(blocking=False)
+        try:
+            compressor.compress_batch(contents)
+        finally:
+            semaphore.release()
 
         assert cache.lookup(contents[0]) is None
         assert cache.lookup(contents[1]) is None
