@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 
+from headroom.cache.kompress_cache import KompressCache
 from headroom.transforms import kompress_compressor as kc
 from headroom.transforms.kompress_compressor import (
     _KOMPRESS_MUST_KEEP_ENV,
@@ -32,7 +33,11 @@ class _Tok:
 
 
 class _Model:
+    def __init__(self):
+        self.keep_mask_calls = 0
+
     def get_keep_mask(self, input_ids, attention_mask):
+        self.keep_mask_calls += 1
         return [[idx == 0 for idx, _ in enumerate(row)] for row in input_ids]
 
     def get_scores(self, input_ids, attention_mask):
@@ -40,8 +45,10 @@ class _Model:
 
 
 def _install_fake_kompress(monkeypatch):
-    monkeypatch.setattr(kc, "_load_kompress", lambda *a, **k: (_Model(), _Tok(), "onnx"))
+    model = _Model()
+    monkeypatch.setattr(kc, "_load_kompress", lambda *a, **k: (model, _Tok(), "onnx"))
     monkeypatch.setattr(kc, "_model_device_type", lambda *a, **k: "cpu")
+    return model
 
 
 class TestMustKeepRegex:
@@ -121,6 +128,29 @@ class TestMustKeepCompression:
         )
 
         assert result.compressed.split() == ["alpha"]
+
+    def test_disabling_must_keep_bypasses_enabled_result_cache(self, monkeypatch):
+        model = _install_fake_kompress(monkeypatch)
+        cache = KompressCache(max_entries=10, max_bytes=100_000, max_attempts=2)
+        monkeypatch.setattr(kc, "get_kompress_cache", lambda: cache)
+        monkeypatch.delenv(_KOMPRESS_MUST_KEEP_ENV, raising=False)
+
+        compressor = KompressCompressor(KompressConfig(enable_ccr=False))
+        monkeypatch.setattr(compressor, "_should_batch_single_content", lambda *a, **k: False)
+        content = (
+            "alpha beta gamma delta epsilon zeta eta theta iota kappa 0x7fff2038 omega"
+        )
+
+        enabled = compressor.compress(content)
+        monkeypatch.setenv(_KOMPRESS_MUST_KEEP_ENV, "0")
+        disabled = compressor.compress(content)
+        monkeypatch.delenv(_KOMPRESS_MUST_KEEP_ENV, raising=False)
+        restored = compressor.compress(content)
+
+        assert enabled.compressed.split() == ["alpha", "0x7fff2038"]
+        assert disabled.compressed.split() == ["alpha"]
+        assert restored.compressed.split() == ["alpha", "0x7fff2038"]
+        assert model.keep_mask_calls == 2
 
     def test_compress_batch_keeps_must_keep_word_when_score_is_low(self, monkeypatch):
         _install_fake_kompress(monkeypatch)

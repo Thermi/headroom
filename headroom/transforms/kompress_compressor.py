@@ -75,6 +75,11 @@ def _add_kompress_must_keep_words(
             kept_ids.add(word_idx + chunk_start)
 
 
+def _kompress_result_cache_enabled() -> bool:
+    """Return whether payload-only results may use the result cache."""
+    return os.environ.get(_KOMPRESS_MUST_KEEP_ENV, "1") != "0"
+
+
 # ONNX artifacts are resolved against the model repo in this order, falling
 # through on download miss OR session-load failure:
 #
@@ -1614,7 +1619,8 @@ class KompressCompressor(Transform):
             return self._passthrough(content, n_words)
 
         cache = get_kompress_cache()
-        if target_ratio is None:
+        cache_enabled = target_ratio is None and _kompress_result_cache_enabled()
+        if cache_enabled:
             cached = cache.lookup(content)
             if cached is not None:
                 if cached.exhausted:
@@ -1647,11 +1653,11 @@ class KompressCompressor(Transform):
             return self._passthrough(content, n_words)
         except Exception as exc:
             self._record_inference_failure(exc)
-            if target_ratio is None:
+            if cache_enabled:
                 cache.record_failure(content)
             return self._passthrough(content, n_words)
         result, cache_outcome = outcome
-        if target_ratio is None:
+        if cache_enabled:
             if cache_outcome == "success":
                 if result.compressed_tokens < result.original_tokens:
                     cache.record_success(
@@ -2138,6 +2144,8 @@ class KompressCompressor(Transform):
             return [self._passthrough(content, len(content.split())) for content in contents]
 
         cache = get_kompress_cache()
+        cache_enabled = _kompress_result_cache_enabled()
+        record_cache = _record_cache and cache_enabled
         cached_results: list[KompressResult | None] = [None] * n
         active_indices: list[int] = []
         original_indices = list(range(n))
@@ -2148,6 +2156,9 @@ class KompressCompressor(Transform):
 
         for i, content in enumerate(contents):
             if len(content.split()) < 10 or ratios[i] is not None:
+                active_indices.append(i)
+                continue
+            if not cache_enabled:
                 active_indices.append(i)
                 continue
             cached = cache.lookup(content)
@@ -2281,7 +2292,7 @@ class KompressCompressor(Transform):
                     )
                     if cache_failure and ratios[text_idx] is None:
                         set_outcome(text_idx, "failure")
-                        if _record_cache:
+                        if record_cache:
                             cache.record_failure(contents[text_idx])
                     else:
                         set_outcome(text_idx, "skip")
@@ -2421,7 +2432,7 @@ class KompressCompressor(Transform):
                         )
                         if ratios[text_idx] is None:
                             set_outcome(text_idx, "failure")
-                            if _record_cache:
+                            if record_cache:
                                 cache.record_failure(contents[text_idx])
                         else:
                             set_outcome(text_idx, "skip")
@@ -2439,7 +2450,7 @@ class KompressCompressor(Transform):
                 results[text_idx] = self._passthrough(content, n_words)
                 if ratios[text_idx] is None:
                     set_outcome(text_idx, "success")
-                    if _record_cache:
+                    if record_cache:
                         cache.discard(content)
                 else:
                     set_outcome(text_idx, "skip")
@@ -2462,10 +2473,10 @@ class KompressCompressor(Transform):
             if ratios[text_idx] is None:
                 set_outcome(text_idx, "success")
                 if compressed_count < n_words:
-                    if _record_cache:
+                    if record_cache:
                         cache.record_success(content, compressed, n_words, compressed_count)
                 else:
-                    if _record_cache:
+                    if record_cache:
                         cache.discard(content)
             else:
                 set_outcome(text_idx, "skip")
