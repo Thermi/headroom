@@ -3,6 +3,8 @@
 Contains all Anthropic Messages API handlers including batch operations.
 """
 
+#  Copyright (c) 2026 Noel Kuntze
+
 from __future__ import annotations
 
 import asyncio
@@ -1907,27 +1909,31 @@ class AnthropicHandlerMixin:
                 # dropping the gate cannot start injecting into non-CCR
                 # conversations.
                 if configured_inject_tool:
-                    from headroom.proxy.helpers import (
-                        apply_session_sticky_ccr_tool,
-                        has_new_ccr_markers,
-                    )
+                    from headroom.proxy.helpers import apply_session_sticky_ccr_tool
 
-                    # #1850: markers replayed from the previously-forwarded
-                    # prefix (overlay_cached_prefix) are historical; only
-                    # markers NEW this turn may drive a first-time injection,
-                    # else a replayed marker injects the tool into a session
-                    # that never actually compressed.
-                    has_new_compressed_content = has_new_ccr_markers(
-                        current_detected_hashes=injector.detected_hashes,
-                        previous_forwarded_messages=prefix_tracker.get_last_forwarded_messages(),
-                        provider="anthropic",
-                    )
+                    # Inject whenever the request carries ANY CCR marker, new or
+                    # replayed from the frozen prefix. #1850 narrowed the
+                    # first-time gate to markers created THIS turn to avoid
+                    # arming a session that never compressed, but a replayed
+                    # marker is exactly as unredeemable as a fresh one: the agent
+                    # redeems hashes it was handed turns ago (project instructions
+                    # can even tell it to), and if `headroom_retrieve` is absent
+                    # Anthropic rejects the whole request with 400 "Tool reference
+                    # 'headroom_retrieve' not found in available tools" (#2766). A
+                    # present marker means the session HAS compressed, so this
+                    # cannot start injecting into non-CCR conversations. It is also
+                    # the cache-stable choice: toggling the tool in and out of the
+                    # tools array between turns is what busts the tools cache
+                    # segment, whereas injecting consistently whenever markers
+                    # exist keeps it stable. The `SessionCcrTracker` is
+                    # per-process, so a proxy restart mid-conversation makes live
+                    # sessions look fresh again, which is what re-armed the 400.
                     tools, ccr_tool_injected = apply_session_sticky_ccr_tool(
                         provider="anthropic",
                         session_id=session_id,
                         request_id=request_id,
                         existing_tools=tools,
-                        has_compressed_content_this_turn=has_new_compressed_content,
+                        has_compressed_content_this_turn=injector.has_compressed_content,
                     )
                     if ccr_tool_injected:
                         logger.debug(
