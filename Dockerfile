@@ -41,8 +41,8 @@ ENV CARGO_HOME=/usr/local/cargo \
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
       | sh -s -- -y --no-modify-path --profile minimal -c rustfmt -c clippy --default-toolchain 1.95.0
 
-ARG GIT_COMMIT=
-ARG BUILD_TIME=
+ARG GIT_COMMIT
+ARG BUILD_TIME
 ARG VERSION=unknown
 
 # ---- Build stage: compile native extensions, build wheel ----
