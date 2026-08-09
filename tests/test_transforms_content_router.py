@@ -462,11 +462,6 @@ def test_force_kompress_apply_uses_lightweight_detection(
         lambda content: (_ for _ in ()).throw(AssertionError("content detection called")),
     )
     monkeypatch.setattr(
-        content_router_module,
-        "_regex_detect_content_type",
-        lambda content: DetectionResult(ContentType.PLAIN_TEXT, 1.0, {}),
-    )
-    monkeypatch.setattr(
         router,
         "compress",
         lambda content, context="", bias=1.0: RouterCompressionResult(
