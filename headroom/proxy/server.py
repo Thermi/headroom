@@ -33,6 +33,7 @@ import asyncio
 import concurrent.futures
 import contextlib
 import hmac
+import importlib.metadata
 import ipaddress
 import json
 import logging
@@ -78,6 +79,17 @@ try:
 except ImportError:
     MCP_STREAMABLE_HTTP_AVAILABLE = False
     StreamableHTTPServerTransport = None  # type: ignore[assignment,misc]
+
+
+def _ojson_version(module: Any) -> str:
+    """Return ojson's version without requiring a module-level attribute."""
+    module_version = getattr(module, "__version__", None)
+    if module_version:
+        return str(module_version)
+    try:
+        return importlib.metadata.version("ojson")
+    except Exception:
+        return "unknown"
 
 try:
     import uvicorn
@@ -1785,7 +1797,7 @@ prefer_code_aware_for_code=_get_env_bool("HEADROOM_PREFER_CODE_AWARE_FOR_CODE", 
         try:
             import ojson
 
-            logger.info("ojson: available (version=%s)", ojson.__version__)
+            logger.info("ojson: available (version=%s)", _ojson_version(ojson))
         except ImportError:
             logger.warning("ojson: not installed (ordered JSON unavailable)")
         logger.info(f"Optimization: {'ENABLED' if self.config.optimize else 'DISABLED'}")

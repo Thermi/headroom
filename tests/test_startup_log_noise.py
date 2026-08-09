@@ -206,3 +206,12 @@ def pytest_importorskip_trafilatura():
         import pytest
 
         pytest.skip("trafilatura not installed")
+
+
+def test_ojson_version_resolution_does_not_require_module_version_attribute(monkeypatch):
+    import headroom.proxy.server as server
+
+    fake_ojson = object()
+    monkeypatch.setattr(server.importlib.metadata, "version", lambda name: "0.1.0")
+
+    assert server._ojson_version(fake_ojson) == "0.1.0"
