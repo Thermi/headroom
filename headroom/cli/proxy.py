@@ -75,6 +75,13 @@ _CONTEXT_TOOL_LEAN_CTX = "lean-ctx"
 _VALID_CONTEXT_TOOLS = {_CONTEXT_TOOL_RTK, _CONTEXT_TOOL_LEAN_CTX}
 
 
+def _mcp_endpoint_banner_line(available: bool) -> str:
+    """Format the startup banner's built-in MCP endpoint line."""
+    if available:
+        return "  POST /v1/mcp                  Streamable HTTP MCP tools"
+    return "  /v1/mcp                      unavailable (install headroom-ai[proxy])"
+
+
 def _get_env_bool(name: str, default: bool) -> bool:
     val = os.environ.get(name)
     if val is None:
@@ -1074,6 +1081,7 @@ def proxy(
     # Import here to avoid slow startup
     try:
         from headroom.proxy.server import (
+            MCP_STREAMABLE_HTTP_AVAILABLE,
             ProxyConfig,
             _parse_csv_tools,
             _parse_exclude_tools,
@@ -1551,6 +1559,7 @@ Memory (Multi-Provider):
         tuning_section = ""
 
     from headroom._version import __version__
+    mcp_endpoint_line = _mcp_endpoint_banner_line(MCP_STREAMABLE_HTTP_AVAILABLE)
 
     try:
         from headroom._build_info import BUILD_GIT_COMMIT, BUILD_TIME
@@ -1599,6 +1608,7 @@ Usage:
   Codex / OpenAI: OPENAI_BASE_URL=http://{config.host}:{config.port}/v1 your-app
 {memory_section}
 Endpoints:
+{mcp_endpoint_line}
   GET  /livez      Process liveness
   GET  /readyz     Traffic readiness
   GET  /health     Aggregate health

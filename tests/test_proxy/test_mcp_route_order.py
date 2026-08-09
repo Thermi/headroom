@@ -11,6 +11,8 @@ See headroom/proxy/server.py create_app().
 
 from __future__ import annotations
 
+import pytest
+
 from headroom.proxy.models import ProxyConfig
 from headroom.proxy.server import create_app
 
@@ -52,3 +54,45 @@ def test_v1_mcp_registered_before_catchall():
         "/v1/mcp must be registered before the /{path:path} catch-all, "
         "otherwise it is tunneled upstream as an HTML 404"
     )
+
+
+def test_mcp_banner_line_reports_available_and_unavailable_states():
+    from headroom.cli.proxy import _mcp_endpoint_banner_line
+
+    assert "/v1/mcp" in _mcp_endpoint_banner_line(True)
+    assert "Streamable HTTP MCP tools" in _mcp_endpoint_banner_line(True)
+    assert "/v1/mcp" in _mcp_endpoint_banner_line(False)
+    assert "unavailable" in _mcp_endpoint_banner_line(False)
+
+
+@pytest.mark.asyncio
+async def test_v1_mcp_initializes_and_lists_builtin_tools():
+    pytest.importorskip("mcp.server.streamable_http")
+    import httpx
+    from mcp.client.session import ClientSession
+    from mcp.client.streamable_http import streamable_http_client
+
+    app = create_app(_minimal_config())
+    transport = httpx.ASGITransport(app=app)
+
+    for handler in app.router.on_startup:
+        await handler()
+    try:
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            async with streamable_http_client(
+                "http://testserver/v1/mcp",
+                http_client=client,
+                terminate_on_close=False,
+            ) as (read_stream, write_stream, _get_session_id):
+                async with ClientSession(read_stream, write_stream) as session:
+                    await session.initialize()
+                    tools = await session.list_tools()
+    finally:
+        for handler in reversed(app.router.on_shutdown):
+            await handler()
+
+    assert {tool.name for tool in tools.tools} >= {
+        "headroom_compress",
+        "headroom_retrieve",
+        "headroom_stats",
+    }

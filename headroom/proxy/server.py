@@ -5361,10 +5361,13 @@ def create_app(config: ProxyConfig | None = None) -> FastAPI:
     # Requires the ``mcp`` and ``httpx`` packages.
     # ------------------------------------------------------------------
     if MCP_STREAMABLE_HTTP_AVAILABLE:
+        from headroom.ccr.mcp_http import create_streamable_http_session_manager
         from headroom.ccr.mcp_server import DEFAULT_PROXY_URL as _MCP_DEFAULT_PROXY
         from headroom.ccr.mcp_server import HeadroomMCPServer
 
         _mcp_server_instance: HeadroomMCPServer | None = None
+        _mcp_session_manager: Any = None
+        _mcp_session_context: Any = None
 
         def _get_mcp_server() -> HeadroomMCPServer:
             nonlocal _mcp_server_instance
@@ -5385,44 +5388,29 @@ def create_app(config: ProxyConfig | None = None) -> FastAPI:
                 _mcp_server_instance = _mcp
             return _mcp_server_instance
 
-        # Transport per request. ``connect()`` yields the read/write
-        # streams that the MCP server loop processes; ``handle_request``
-        # dispatches GET/POST/DELETE by method and feeds messages into
-        # those streams.
-        class _TransportHandledResponse(Response):
-            async def __call__(self, scope, receive, send):
-                pass
+        async def _start_mcp_session_manager() -> None:
+            nonlocal _mcp_session_manager, _mcp_session_context
+            if _mcp_session_manager is None:
+                _mcp_session_manager = create_streamable_http_session_manager(_get_mcp_server())
+                _mcp_session_context = _mcp_session_manager.run()
+                await _mcp_session_context.__aenter__()
+
+        async def _stop_mcp_session_manager() -> None:
+            nonlocal _mcp_session_context
+            if _mcp_session_context is not None:
+                await _mcp_session_context.__aexit__(None, None, None)
+                _mcp_session_context = None
+
+        app.router.add_event_handler("startup", _start_mcp_session_manager)
+        app.router.add_event_handler("shutdown", _stop_mcp_session_manager)
 
         @app.api_route("/v1/mcp", methods=["GET", "POST", "DELETE"])
         async def mcp_handler(request: Request):
             """Handle MCP messages via the Streamable HTTP transport."""
-            mcp_server = _get_mcp_server()
-            transport = StreamableHTTPServerTransport(
-                mcp_session_id=None,
-                is_json_response_enabled=True,
-            )
-
-            async with transport.connect() as streams:
-                read_stream, write_stream = streams
-                mcp_task = asyncio.create_task(
-                    mcp_server.server.run(
-                        read_stream,
-                        write_stream,
-                        mcp_server.server.create_initialization_options(),
-                    )
-                )
-                try:
-                    await transport.handle_request(
-                        request.scope, request.receive, request._send
-                    )
-                finally:
-                    mcp_task.cancel()
-                    try:
-                        await mcp_task
-                    except (asyncio.CancelledError, Exception):
-                        pass
-
-            return _TransportHandledResponse()
+            if _mcp_session_manager is None:
+                await _start_mcp_session_manager()
+            await _mcp_session_manager.handle_request(request.scope, request.receive, request._send)
+            return Response()
 
         logger.info("MCP Streamable HTTP endpoint: /v1/mcp")
 
