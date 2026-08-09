@@ -1735,8 +1735,9 @@ prefer_code_aware_for_code=_get_env_bool("HEADROOM_PREFER_CODE_AWARE_FOR_CODE", 
                 transform_statuses.append(transform_status)
         return eager_status, transform_statuses
 
-    def _start_kompress_artifact_prefetch(self) -> None:
-        """Start file-only Kompress prefetch independently of eager loading."""
+    def _preload_kompress_models(self) -> dict[str, str]:
+        """Load Kompress models before serving requests."""
+        status: dict[str, str] = {}
         seen_transform_ids: set[int] = set()
         derived_pipelines = list(getattr(self, "_compress_pipeline_cache", {}).values())
         for pipeline in (self.anthropic_pipeline, self.openai_pipeline, *derived_pipelines):
@@ -1744,13 +1745,17 @@ prefer_code_aware_for_code=_get_env_bool("HEADROOM_PREFER_CODE_AWARE_FOR_CODE", 
                 if id(transform) in seen_transform_ids:
                     continue
                 seen_transform_ids.add(id(transform))
-                prefetch = getattr(transform, "start_background_kompress_prefetch", None)
-                if not callable(prefetch):
+                preload = getattr(transform, "preload_kompress", None)
+                if not callable(preload):
                     continue
                 try:
-                    prefetch()
+                    backend = preload()
+                    if backend:
+                        status.setdefault("kompress", "enabled")
+                        status.setdefault("kompress_backend", str(backend))
                 except Exception as exc:
-                    logger.debug("Kompress artifact prefetch skipped: %s", exc)
+                    logger.warning("Kompress startup preload failed: %s", exc)
+        return status
 
     async def startup(self):
         """Initialize async resources."""
@@ -1833,13 +1838,6 @@ prefer_code_aware_for_code=_get_env_bool("HEADROOM_PREFER_CODE_AWARE_FOR_CODE", 
         self._kompress_status = "not installed"
         eager_status: dict[str, str] = {}
 
-        # Download Kompress artifacts as soon as the proxy starts, even when
-        # full eager loading is disabled. This keeps the request path from
-        # becoming the first network trigger while still avoiding native model
-        # initialization before the server is ready.
-        if self.config.kompress_enabled:
-            self._start_kompress_artifact_prefetch()
-
         if self.config.optimize:
             logger.info("Pre-loading compressors and parsers...")
             # Run the preload OFF the event loop with a bound. The loop body
@@ -1867,6 +1865,24 @@ prefer_code_aware_for_code=_get_env_bool("HEADROOM_PREFER_CODE_AWARE_FOR_CODE", 
             # written off-thread).
             for transform_status in transform_statuses:
                 self.warmup.merge_transform_status(transform_status)
+        elif self.config.kompress_enabled:
+            # Kompress remains usable with optimize=False, so still warm its
+            # model before accepting requests even though other eager loaders
+            # are disabled.
+            try:
+                eager_status = await asyncio.wait_for(
+                    asyncio.to_thread(self._preload_kompress_models),
+                    timeout=EAGER_PRELOAD_TIMEOUT_SECONDS,
+                )
+                if eager_status:
+                    self.warmup.merge_transform_status(eager_status)
+            except Exception as exc:
+                logger.warning(
+                    "Kompress startup preload exceeded %.0fs or failed (%s); "
+                    "continuing with request-time fallback.",
+                    EAGER_PRELOAD_TIMEOUT_SECONDS,
+                    exc,
+                )
 
         # Update internal status from eager loading results
         if eager_status.get("kompress") in {"enabled", "deferred"}:

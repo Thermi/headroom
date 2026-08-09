@@ -4073,6 +4073,15 @@ class ContentRouter(Transform):
             return False
         return self._prefetch_kompress_artifacts_async(getattr(compressor, "config", None))
 
+    def preload_kompress(self) -> str | None:
+        """Load the Kompress model before serving requests."""
+        if not self.config.enable_kompress:
+            return None
+        compressor = self._get_kompress()
+        if compressor is None or not hasattr(compressor, "preload"):
+            return None
+        return compressor.preload(allow_download=True)
+
     def eager_load_compressors(self) -> dict[str, str]:
         """Pre-load compressors at startup to avoid first-request latency.
 
@@ -4086,19 +4095,9 @@ class ContentRouter(Transform):
 
         # 1. ML text compressor: Kompress.
         #
-        # Native model initialization stays out of the blocking startup/lifespan
-        # path. The existing lazy request path loads Kompress on first use. This is
-        # load-bearing, NOT laziness: on RHEL/CentOS 7-family hosts entering cached
-        # Kompress native init before the port binds segfaults in libarrow/jemalloc
-        # with no Python traceback (#1908, fixed by #2001) — a crash no try/except
-        # can catch. Do not call `preload()` here.
-        #
-        # What we CAN do at startup is prefetch the model FILES. Downloading is
-        # pure huggingface_hub HTTP — no ONNX session, no transformers import, so it
-        # never touches the native path that #1908 crashes on. That removes the real
-        # cold-start cost: previously the ~4-minute download began on the FIRST
-        # REQUEST, and every request in that window went silently uncompressed
-        # behind a single "model not ready" warning.
+        # Native model initialization is performed off the event loop by the
+        # proxy startup wrapper. This keeps startup responsive while ensuring
+        # the model and tokenizer are ready before requests are accepted.
         if self.config.enable_kompress:
             compressor = self._get_kompress()
             if compressor:
@@ -4106,11 +4105,13 @@ class ContentRouter(Transform):
                     status["kompress"] = "enabled"
                     status["kompress_backend"] = "unknown"
                 else:
-                    status["kompress"] = "deferred"
-                    if self.start_background_kompress_prefetch():
-                        status["kompress_artifacts"] = "prefetching"
+                    backend = self.preload_kompress()
+                    status["kompress"] = "enabled"
+                    if backend:
+                        status["kompress_backend"] = backend
                     logger.info(
-                        "Kompress native model preload deferred; artifact prefetch runs in background"
+                        "Kompress model loaded before serving requests (backend=%s)",
+                        backend or "unknown",
                     )
             else:
                 status["kompress"] = "unavailable"
