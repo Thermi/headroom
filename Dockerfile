@@ -138,6 +138,11 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --system --no-build-isolation --no-deps \
         ".[${HEADROOM_EXTRAS}]"
 
+# The proxy uses ojson for ordered JSON support during startup and request
+# serialization. Install it in the builder so both runtime stages inherit it.
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --system "ojson==0.1.0"
+
 # Build-stage smoke check: verify the extension loads end-to-end inside
 # the build image before we copy site-packages into the runtime image.
 # If this fails, the runtime image would fail Phase A0's fail-loud
