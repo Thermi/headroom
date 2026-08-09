@@ -624,6 +624,155 @@ def test_all_artifacts_failing_at_run_raises_rather_than_returning_a_dead_sessio
         kc._create_onnx_session("org/model", ["CPUExecutionProvider"])
 
 
+def test_refresh_onnx_artifact_replaces_replaceable_file(monkeypatch, tmp_path):
+    target = tmp_path / "kompress-int8-wo.onnx"
+    fresh = tmp_path / "fresh.onnx"
+    target.write_bytes(b"old")
+    fresh.write_bytes(b"new")
+    downloads = []
+
+    def fake_download(repo, filename, **kwargs):
+        downloads.append((repo, filename, kwargs))
+        return str(fresh)
+
+    monkeypatch.setattr(kc, "hf_hub_download_local_first", fake_download)
+
+    assert (
+        kc._refresh_onnx_artifact(
+            "org/model",
+            "onnx/kompress-int8-wo.onnx",
+            str(target),
+            allow_download=True,
+        )
+        is True
+    )
+    assert target.read_bytes() == b"new"
+    assert downloads == [
+        (
+            "org/model",
+            "onnx/kompress-int8-wo.onnx",
+            {"allow_network": True, "force_download": True},
+        )
+    ]
+
+
+def test_refresh_onnx_artifact_refuses_mount(monkeypatch, tmp_path):
+    target = tmp_path / "mounted.onnx"
+    target.write_bytes(b"old")
+    monkeypatch.setattr(kc.os.path, "ismount", lambda path: True)
+    monkeypatch.setattr(kc, "hf_hub_download_local_first", lambda *args, **kwargs: pytest.fail())
+
+    assert (
+        kc._refresh_onnx_artifact(
+            "org/model",
+            "onnx/kompress-fp32.onnx",
+            str(target),
+            allow_download=True,
+        )
+        is False
+    )
+    assert target.read_bytes() == b"old"
+
+
+def test_refresh_onnx_artifact_refuses_unwritable_file(monkeypatch, tmp_path):
+    target = tmp_path / "readonly.onnx"
+    target.write_bytes(b"old")
+    monkeypatch.setattr(kc.os, "access", lambda path, mode: False)
+    monkeypatch.setattr(kc, "hf_hub_download_local_first", lambda *args, **kwargs: pytest.fail())
+
+    assert (
+        kc._refresh_onnx_artifact(
+            "org/model",
+            "onnx/kompress-fp32.onnx",
+            str(target),
+            allow_download=True,
+        )
+        is False
+    )
+    assert target.read_bytes() == b"old"
+
+
+def test_refresh_onnx_artifact_skips_cache_only_mode(monkeypatch, tmp_path):
+    target = tmp_path / "local.onnx"
+    target.write_bytes(b"old")
+    monkeypatch.setattr(kc, "hf_hub_download_local_first", lambda *args, **kwargs: pytest.fail())
+
+    assert (
+        kc._refresh_onnx_artifact(
+            "org/model",
+            "onnx/kompress-fp32.onnx",
+            str(target),
+            allow_download=False,
+        )
+        is False
+    )
+    assert target.read_bytes() == b"old"
+
+
+def test_refresh_onnx_artifact_preserves_file_when_download_fails(monkeypatch, tmp_path):
+    target = tmp_path / "kompress-fp32.onnx"
+    target.write_bytes(b"old")
+    monkeypatch.setattr(
+        kc,
+        "hf_hub_download_local_first",
+        lambda *args, **kwargs: (_ for _ in ()).throw(OSError("download failed")),
+    )
+
+    assert (
+        kc._refresh_onnx_artifact(
+            "org/model",
+            "onnx/kompress-fp32.onnx",
+            str(target),
+            allow_download=True,
+        )
+        is False
+    )
+    assert target.read_bytes() == b"old"
+
+
+def test_session_load_failure_refreshes_and_retries_local_artifact(monkeypatch, tmp_path):
+    import sys
+
+    target = tmp_path / "kompress-fp32.onnx"
+    fresh = tmp_path / "fresh.onnx"
+    target.write_bytes(b"old")
+    fresh.write_bytes(b"new")
+    attempts = []
+    downloads = []
+
+    monkeypatch.setenv("HEADROOM_KOMPRESS_ONNX_PATH", str(target))
+    monkeypatch.setenv("HEADROOM_KOMPRESS_ONNX_FILENAME", "onnx/kompress-fp32.onnx")
+
+    def fake_download(repo, filename, **kwargs):
+        downloads.append((repo, filename, kwargs))
+        return str(fresh)
+
+    monkeypatch.setattr(kc, "hf_hub_download_local_first", fake_download)
+
+    class FakeOrt:
+        @staticmethod
+        def SessionOptions():
+            return object()
+
+        @staticmethod
+        def InferenceSession(path, options=None, providers=None):
+            attempts.append(path)
+            if len(attempts) == 1:
+                raise RuntimeError("invalid graph")
+            return _FakeOrtSession(path, fails_at_run=False)
+
+    monkeypatch.setitem(sys.modules, "onnxruntime", FakeOrt)
+    monkeypatch.setattr(kc, "_onnx_session_options", lambda _ort: object())
+
+    session = kc._create_onnx_session("org/model", ["CPUExecutionProvider"])
+
+    assert session.path == str(target)
+    assert attempts == [str(target), str(target)]
+    assert target.read_bytes() == b"new"
+    assert downloads[0][1] == "onnx/kompress-fp32.onnx"
+    assert downloads[0][2]["force_download"] is True
+
+
 # ── Failure latch: a broken model stops costing us every request ───────────────
 
 

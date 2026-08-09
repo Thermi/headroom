@@ -20,9 +20,12 @@ import hashlib
 import logging
 import os
 import re
+import shutil
+import tempfile
 import threading
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Literal
 
 from ..cache.kompress_cache import get_kompress_cache
@@ -745,6 +748,82 @@ def _onnx_filename_candidates() -> tuple[str, ...]:
     return _DEFAULT_ONNX_FILENAMES
 
 
+def _onnx_refresh_source(filename: str) -> str | None:
+    """Resolve the Hub filename for a failed ONNX artifact."""
+    if not os.path.isabs(filename):
+        return filename
+
+    override = os.environ.get(KOMPRESS_ONNX_FILENAME_ENV, "").strip()
+    if override:
+        return override
+
+    basename = Path(filename).name
+    for candidate in _DEFAULT_ONNX_FILENAMES:
+        if Path(candidate).name == basename:
+            return candidate
+    return None
+
+
+def _refresh_onnx_artifact(
+    model_id: str,
+    source_filename: str | None,
+    target_path: str,
+    *,
+    allow_download: bool,
+) -> bool:
+    """Replace a failed ONNX artifact when the local path is safely writable."""
+    if not allow_download or source_filename is None:
+        return False
+
+    target = Path(target_path)
+    try:
+        if (
+            not target.is_file()
+            or os.path.ismount(target)
+            or not os.access(target, os.W_OK)
+            or not os.access(target.parent, os.W_OK)
+        ):
+            return False
+    except OSError:
+        return False
+
+    temporary_path: str | None = None
+    try:
+        fresh_path = hf_hub_download_local_first(
+            model_id,
+            source_filename,
+            allow_network=True,
+            force_download=True,
+        )
+        if os.path.abspath(fresh_path) == os.path.abspath(target_path):
+            return True
+
+        with tempfile.NamedTemporaryFile(
+            dir=target.parent,
+            prefix=f".{target.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as temporary:
+            temporary_path = temporary.name
+        shutil.copyfile(fresh_path, temporary_path)
+        shutil.copymode(target, temporary_path)
+        os.replace(temporary_path, target_path)
+        temporary_path = None
+        return True
+    except Exception as exc:
+        logger.warning(
+            "Could not refresh ONNX artifact %s from %s: %s",
+            target_path,
+            model_id,
+            exc,
+        )
+        return False
+    finally:
+        if temporary_path is not None:
+            with contextlib.suppress(OSError):
+                os.unlink(temporary_path)
+
+
 def _smoke_run(session: Any) -> None:
     """Run one tiny forward pass so a broken artifact fails HERE, not per request.
 
@@ -782,6 +861,12 @@ def _create_onnx_session(
     accept at load and then reject at execution — those installs fall through to
     the fp32 artifact instead of losing Kompress). See :func:`_smoke_run`.
 
+    When session construction fails, a replaceable local artifact is refreshed
+    once with a forced download and retried. Mounted, unwritable, ambiguous,
+    and cache-only artifacts are never replaced. Smoke-run failures are not
+    refreshed because they can indicate an unsupported ONNX Runtime operator
+    rather than a malformed file.
+
     When ``allow_download`` is ``False`` candidates are resolved from the local
     cache only; if none is cached, :class:`KompressModelNotCached` is raised
     instead of hitting the network. ``onnxruntime`` is imported only after a
@@ -811,22 +896,44 @@ def _create_onnx_session(
             import onnxruntime
 
             ort = onnxruntime
-        try:
-            session = ort.InferenceSession(
-                onnx_path,
-                _onnx_session_options(ort),
-                providers=providers,
-            )
-            _smoke_run(session)
+        refreshed = False
+        while True:
+            try:
+                session = ort.InferenceSession(
+                    onnx_path,
+                    _onnx_session_options(ort),
+                    providers=providers,
+                )
+            except Exception as exc:
+                last_err = exc
+                if not refreshed and _refresh_onnx_artifact(
+                    model_id,
+                    _onnx_refresh_source(filename),
+                    onnx_path,
+                    allow_download=allow_download,
+                ):
+                    refreshed = True
+                    continue
+                logger.warning(
+                    "ONNX artifact %r from %s is unusable (%s); trying next candidate",
+                    filename,
+                    model_id,
+                    exc,
+                )
+                break
+
+            try:
+                _smoke_run(session)
+            except Exception as exc:
+                last_err = exc
+                logger.warning(
+                    "ONNX artifact %r from %s is unusable (%s); trying next candidate",
+                    filename,
+                    model_id,
+                    exc,
+                )
+                break
             return session
-        except Exception as exc:
-            last_err = exc
-            logger.warning(
-                "ONNX artifact %r from %s is unusable (%s); trying next candidate",
-                filename,
-                model_id,
-                exc,
-            )
     if not allow_download and cache_miss:
         raise KompressModelNotCached(model_id) from last_err
     raise FileNotFoundError(
