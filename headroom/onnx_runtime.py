@@ -36,6 +36,7 @@ def cpu_arena_enabled() -> bool:
         return override
     return sys.platform == "win32"
 
+
 # ── HuggingFace model revision pinning ───────────────────────────────────
 #
 # Model artifacts are pinned to immutable commit SHAs for supply-chain

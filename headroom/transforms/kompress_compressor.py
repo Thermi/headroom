@@ -130,7 +130,9 @@ _DEFAULT_ACQUIRE_TIMEOUT_SECONDS = 5.0
 _DEFAULT_TIME_BUDGET_SECONDS = 20.0
 _DEFAULT_CANARY_THRESHOLD_SECONDS = 5.0
 
-KompressBackend = Literal["auto", "onnx", "onnx_cpu", "onnx_coreml", "onnx_gpu", "pytorch", "pytorch_mps"]
+KompressBackend = Literal[
+    "auto", "onnx", "onnx_cpu", "onnx_coreml", "onnx_gpu", "pytorch", "pytorch_mps"
+]
 _CacheOutcome = Literal["success", "failure", "skip"]
 
 # HuggingFace local-lookup errors that mean "asset not in cache" rather than a
@@ -735,8 +737,7 @@ def _onnx_filename_candidates() -> tuple[str, ...]:
         return (local_path,)
     if local_path:
         logger.warning(
-            "%s set to %r but file not found; "
-            "falling back to HuggingFace download",
+            "%s set to %r but file not found; falling back to HuggingFace download",
             KOMPRESS_ONNX_PATH_ENV,
             local_path,
         )
@@ -1308,9 +1309,7 @@ def _recover_onnx_gpu_session(model_id: str) -> bool:
     if entry is None or entry[2] != "onnx_gpu":
         return False
 
-    logger.warning(
-        "Kompress ONNX GPU session failed; unloading it and retrying with CPU execution"
-    )
+    logger.warning("Kompress ONNX GPU session failed; unloading it and retrying with CPU execution")
     unload_kompress_model(model_id)
     try:
         model, tokenizer, backend = _load_kompress_onnx(model_id, allow_download=True)
@@ -1836,9 +1835,7 @@ class KompressCompressor(Transform):
             if cache_owner:
                 cache.release_inference(content, cache_namespace)
 
-    def _add_ccr_marker(
-        self, result: KompressResult, ccr_original: str | None
-    ) -> KompressResult:
+    def _add_ccr_marker(self, result: KompressResult, ccr_original: str | None) -> KompressResult:
         if self.config.enable_ccr and result.compression_ratio < 0.8:
             ccr_source = ccr_original if ccr_original is not None else result.original
             ccr_source_tokens = len(ccr_source.split())
@@ -2376,8 +2373,7 @@ class KompressCompressor(Transform):
                     compressed=cached.compressed,
                     original=content,
                     original_tokens=cached.original_tokens or len(content.split()),
-                    compressed_tokens=cached.compressed_tokens
-                    or len(cached.compressed.split()),
+                    compressed_tokens=cached.compressed_tokens or len(cached.compressed.split()),
                     compression_ratio=(cached.compressed_tokens or len(content.split()))
                     / len(content.split()),
                     model_used=self.config.model_id,
@@ -2509,7 +2505,9 @@ class KompressCompressor(Transform):
                             original_tokens=cached.original_tokens or len(word_lists[text_idx]),
                             compressed_tokens=cached.compressed_tokens
                             or len(cached.compressed.split()),
-                            compression_ratio=(cached.compressed_tokens or len(word_lists[text_idx]))
+                            compression_ratio=(
+                                cached.compressed_tokens or len(word_lists[text_idx])
+                            )
                             / len(word_lists[text_idx]),
                             model_used=self.config.model_id,
                         )
@@ -2540,9 +2538,7 @@ class KompressCompressor(Transform):
                         break
                     waited_for_owner = True
 
-            chunk_queue = [
-                chunk for chunk in chunk_queue if results[chunk[0]] is None
-            ]
+            chunk_queue = [chunk for chunk in chunk_queue if results[chunk[0]] is None]
 
         inference_ms = 0.0
         deadline_s = getattr(self, "_deadline_s", None)
