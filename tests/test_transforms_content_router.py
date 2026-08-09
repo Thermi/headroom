@@ -174,6 +174,24 @@ def test_text_crusher_tuple_result_is_normalized_to_text(monkeypatch):
     assert isinstance(compressed, str)
 
 
+def test_kompress_tuple_result_is_normalized_to_text(monkeypatch):
+    router = ContentRouter(ContentRouterConfig(enable_code_aware=False))
+
+    class FakeKompress:
+        def is_ready(self):
+            return True
+
+        def compress(self, content, **kwargs):
+            return SimpleNamespace(compressed=("compressed text", True), compressed_tokens=2)
+
+    monkeypatch.setattr(router, "_get_kompress", lambda: FakeKompress())
+
+    compressed, _tokens = router._try_ml_compressor("original text", "")
+
+    assert compressed == "compressed text"
+    assert isinstance(compressed, str)
+
+
 def test_content_signature_and_detection_helpers(monkeypatch: pytest.MonkeyPatch) -> None:
     """Stage-3d (PR5) wired `_detect_content` through the Rust chain
     (`headroom._core.detect_content_type` -> magika -> unidiff ->

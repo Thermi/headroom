@@ -160,6 +160,17 @@ def _estimate_tokens(text: str) -> int:
     return max(1, _TOKEN_ESTIMATOR.count_text(text))
 
 
+def _coerce_compressed_text(value: Any) -> str:
+    """Normalize native compressor result shapes to the router text contract."""
+    if isinstance(value, tuple):
+        if not value:
+            raise TypeError("compressor returned an empty tuple")
+        value = value[0]
+    if not isinstance(value, str):
+        raise TypeError(f"compressor returned non-text content: {type(value).__name__}")
+    return value
+
+
 def _compression_deadline_seconds() -> float:
     try:
         return max(
@@ -3663,14 +3674,9 @@ class ContentRouter(Transform):
             crusher = self._get_text_crusher()
             if crusher is not None:
                 try:
-                    crushed: Any = crusher.compress(
-                        text_to_compress, context=context or ""
-                    ).compressed
-                    if isinstance(crushed, tuple):
-                        crushed = crushed[0]
-                    if not isinstance(crushed, str):
-                        raise TypeError("TextCrusher returned non-text compressed content")
-                    out = crushed
+                    out = _coerce_compressed_text(
+                        crusher.compress(text_to_compress, context=context or "").compressed
+                    )
                 except Exception as e:
                     logger.warning(
                         "Kompress size-gate -> TextCrusher failed (%s); passing through", e
@@ -3739,7 +3745,7 @@ class ContentRouter(Transform):
                         if protected:
                             compress_kwargs["ccr_original"] = content
                         result = compressor.compress(text_to_compress, **compress_kwargs)
-                        compressed = result.compressed
+                        compressed = _coerce_compressed_text(result.compressed)
                         compressed_tokens = result.compressed_tokens
                     except Exception as e:
                         logger.warning("Kompress failed: %s", e)
