@@ -304,6 +304,13 @@ def _lookup_encoding_name(model: str, custom_encodings: dict[str, str] | None = 
     if custom_encodings and model in custom_encodings:
         return custom_encodings[model]
 
+    from .model_metadata import get_openrouter_model_info
+
+    metadata = get_openrouter_model_info(model)
+    tokenizer = metadata.get("tokenizer") if metadata else None
+    if isinstance(tokenizer, str) and tokenizer in {"cl100k_base", "o200k_base"}:
+        return tokenizer
+
     # Direct match
     if model in _MODEL_ENCODINGS:
         return _MODEL_ENCODINGS[model]
@@ -527,6 +534,13 @@ class OpenAIProvider(Provider):
 
         Never raises an exception - uses sensible defaults for unknown models.
         """
+        # OpenRouter exposes authoritative metadata for models outside LiteLLM.
+        from .model_metadata import get_openrouter_model_info
+
+        openrouter_info = get_openrouter_model_info(model)
+        if openrouter_info and openrouter_info.get("context_limit") is not None:
+            return int(openrouter_info["context_limit"])
+
         # Try LiteLLM first
         litellm = _get_litellm_module()
         if litellm is not None:
@@ -544,6 +558,12 @@ class OpenAIProvider(Provider):
 
     def _get_context_limit_manual(self, model: str) -> int:
         """Get context limit using hardcoded values (fallback)."""
+        from .model_metadata import get_openrouter_model_info
+
+        openrouter_info = get_openrouter_model_info(model)
+        if openrouter_info and openrouter_info.get("context_limit") is not None:
+            return int(openrouter_info["context_limit"])
+
         if model in self._context_limits:
             return self._context_limits[model]
 
@@ -669,6 +689,15 @@ class OpenAIProvider(Provider):
         override = self._pricing_overrides.get(model)
         if override is not None:
             return override
+
+        from .model_metadata import get_openrouter_model_info
+
+        metadata = get_openrouter_model_info(model)
+        if metadata:
+            input_price = metadata.get("input_cost_per_token")
+            output_price = metadata.get("output_cost_per_token")
+            if isinstance(input_price, float) and isinstance(output_price, float):
+                return input_price * 1_000_000, output_price * 1_000_000
 
         # 2. LiteLLM.
         from headroom.pricing.litellm_pricing import pricing_per_1m

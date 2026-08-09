@@ -2,7 +2,9 @@
 
 import pytest
 
+from headroom.providers.model_metadata import translate_openrouter_models_response
 from headroom.providers.openai import (
+    OpenAIProvider,
     _get_encoding_name_for_model,
 )
 
@@ -57,6 +59,47 @@ class TestOpenAITokenCounting:
 
 
 class TestOpenAIModelLimits:
+    def test_get_context_limit_uses_openrouter_metadata(self):
+        translate_openrouter_models_response(
+            {
+                "data": [
+                    {
+                        "id": "deepseek/deepseek-v4-flash-0731",
+                        "context_length": 1_000_000,
+                        "architecture": {"tokenizer": "o200k_base"},
+                        "pricing": {
+                            "prompt": "0.00000027",
+                            "completion": "0.00000110",
+                        },
+                    }
+                ]
+            }
+        )
+
+        assert OpenAIProvider().get_context_limit("deepseek/deepseek-v4-flash-0731") == 1_000_000
+
+    def test_openrouter_metadata_supplies_encoding_and_pricing(self):
+        translate_openrouter_models_response(
+            {
+                "data": [
+                    {
+                        "id": "provider/model-with-metadata",
+                        "architecture": {"tokenizer": "o200k_base"},
+                        "pricing": {
+                            "prompt": "0.00000027",
+                            "completion": "0.00000110",
+                        },
+                    }
+                ]
+            }
+        )
+        provider = OpenAIProvider()
+
+        assert _get_encoding_name_for_model("provider/model-with-metadata") == "o200k_base"
+        assert provider._get_pricing("provider/model-with-metadata") == pytest.approx(
+            (0.27, 1.10)
+        )
+
     def test_get_context_limit_gpt4o(self, openai_provider):
         assert openai_provider.get_context_limit("gpt-4o") == 128000
 

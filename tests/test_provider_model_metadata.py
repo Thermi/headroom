@@ -9,6 +9,7 @@ from headroom.providers.model_metadata import (
     ModelMetadataEndpoint,
     handle_model_metadata_endpoint,
     model_metadata_get_endpoint,
+    openrouter_model_info,
     translate_openrouter_models_response,
 )
 
@@ -45,6 +46,35 @@ def test_translate_openrouter_models_response_preserves_catalogue_metadata() -> 
                 "supported_parameters": ["reasoning", "tools"],
             }
         ],
+    }
+
+
+def test_openrouter_model_info_translates_internal_metadata() -> None:
+    model = {
+        "id": "deepseek/deepseek-v4-flash-0731",
+        "context_length": 1_000_000,
+        "architecture": {
+            "tokenizer": "DeepSeekTokenizer",
+            "input_modalities": ["text", "image"],
+            "output_modalities": ["text"],
+        },
+        "pricing": {
+            "prompt": "0.00000027",
+            "completion": "0.00000110",
+            "cache_read": "0.00000014",
+        },
+        "top_provider": {"max_completion_tokens": 32768},
+    }
+
+    assert openrouter_model_info(model) == {
+        "context_limit": 1_000_000,
+        "max_output_tokens": 32768,
+        "tokenizer": "DeepSeekTokenizer",
+        "input_modalities": ["text", "image"],
+        "output_modalities": ["text"],
+        "input_cost_per_token": 0.00000027,
+        "output_cost_per_token": 0.00000110,
+        "cache_read_input_token_cost": 0.00000014,
     }
 
 
