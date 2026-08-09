@@ -192,6 +192,33 @@ def test_kompress_tuple_result_is_normalized_to_text(monkeypatch):
     assert isinstance(compressed, str)
 
 
+def test_registry_output_tuple_is_normalized_before_text_routing(monkeypatch):
+    router = ContentRouter(ContentRouterConfig(enable_code_aware=False))
+
+    class FakeEntry:
+        def compress(self, _input):
+            return content_router_module.CompressOutput(
+                content=("compressed text", True),
+                tokens_before=2,
+                tokens_after=2,
+                lossless=False,
+            )
+
+    monkeypatch.setattr(router.compressor_registry, "get", lambda _name: FakeEntry())
+
+    output = router._registry_compress(
+        "kompress",
+        CompressionStrategy.TEXT,
+        "original text",
+        "",
+        1.0,
+    )
+
+    assert output is not None
+    assert output.content == "compressed text"
+    assert isinstance(output.content, str)
+
+
 def test_content_signature_and_detection_helpers(monkeypatch: pytest.MonkeyPatch) -> None:
     """Stage-3d (PR5) wired `_detect_content` through the Rust chain
     (`headroom._core.detect_content_type` -> magika -> unidiff ->

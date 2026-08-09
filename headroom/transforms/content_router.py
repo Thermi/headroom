@@ -2964,7 +2964,7 @@ class ContentRouter(Transform):
         entry = self.compressor_registry.get(name)
         if entry is None:
             return None
-        return entry.compress(
+        output = entry.compress(
             CompressInput(
                 content=content,
                 content_type=_CONTENT_TYPE_TO_MIME.get(
@@ -2975,6 +2975,9 @@ class ContentRouter(Transform):
                 budget={"bias": bias},
             )
         )
+        if not isinstance(output.content, str):
+            output = replace(output, content=_coerce_compressed_text(output.content))
+        return output
 
     def _registry_compress_content(
         self,
