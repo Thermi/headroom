@@ -84,6 +84,31 @@ def test_stats_refreshes_recent_requests_when_cached() -> None:
     assert second_payload["request_logs"][-1]["model"] == "claude-sonnet"
 
 
+def test_stats_without_provider_name_config_returns_recent_requests() -> None:
+    app = create_app(
+        ProxyConfig(
+            optimize=False,
+            cache_enabled=False,
+            rate_limit_enabled=False,
+            cost_tracking_enabled=False,
+            log_requests=False,
+            ccr_inject_tool=False,
+            ccr_handle_responses=False,
+            ccr_context_tracking=False,
+            http2=False,
+        )
+    )
+    logger = FakeRequestLogger()
+    app.state.proxy.logger = logger
+    logger.logs = [FakeLogEntry({"provider": "anthropic", "model": "claude-sonnet"})]
+
+    with TestClient(app, base_url="http://127.0.0.1", client=("127.0.0.1", 12345)) as client:
+        response = client.get("/stats")
+
+    assert response.status_code == 200
+    assert response.json()["recent_requests"][0]["provider"] == "anthropic"
+
+
 def test_stats_recent_requests_includes_token_incomplete_requests() -> None:
     app = create_app(
         ProxyConfig(

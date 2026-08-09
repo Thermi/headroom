@@ -342,7 +342,6 @@ def _remap_provider_counts(counts: dict[str, int], config: ProxyConfig) -> dict[
         display = resolve_display_provider(
             provider,
             openai_api_url=config.openai_api_url,
-            provider_name=config.provider_name,
         )
         out[display] = out.get(display, 0) + int(count)
     return out
@@ -3939,7 +3938,6 @@ def create_app(config: ProxyConfig | None = None) -> FastAPI:
                     "provider": resolve_display_provider(
                         log.get("provider"),
                         openai_api_url=proxy.config.openai_api_url,
-                        provider_name=proxy.config.provider_name,
                     ),
                     "model": log.get("model"),
                     "input_tokens_original": _recent_request_optional_number(
@@ -4649,7 +4647,6 @@ def create_app(config: ProxyConfig | None = None) -> FastAPI:
                         "provider": resolve_display_provider(
                             log.get("provider"),
                             openai_api_url=proxy.config.openai_api_url,
-                            provider_name=proxy.config.provider_name,
                         ),
                         "model": log.get("model"),
                         "input_tokens_original": log.get("input_tokens_original"),
