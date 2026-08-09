@@ -959,7 +959,7 @@ def _load_kompress_onnx(
         if model_id in _kompress_cache:
             return _kompress_cache[model_id]
 
-        logger.info("Downloading Kompress ONNX model from %s ...", model_id)
+        logger.info("Loading Kompress ONNX model from cache or HuggingFace: %s ...", model_id)
 
         try:
             import onnxruntime as ort

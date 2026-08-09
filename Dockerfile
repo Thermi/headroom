@@ -229,6 +229,7 @@ WORKDIR ${RUNTIME_HOME}
 ENV HEADROOM_HOST=0.0.0.0 \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
+    HF_HOME=${RUNTIME_HOME}/.headroom/huggingface \
     LD_LIBRARY_PATH=/usr/local/cuda-12.6/lib64:${LD_LIBRARY_PATH:-}
 
 # Declare ~/.headroom as a volume so Docker (and ACA) can attach persistent
@@ -279,7 +280,10 @@ ENV HEADROOM_HOST=0.0.0.0 \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH=${PYTHON_SITE_PACKAGES} \
+    HF_HOME=/app/.headroom/huggingface \
     LD_LIBRARY_PATH=/usr/local/cuda-12.6/lib64:${LD_LIBRARY_PATH}
+
+VOLUME /app/.headroom
 
 EXPOSE 8787
 
