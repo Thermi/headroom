@@ -265,6 +265,7 @@ def hf_hub_download_local_first(
     *,
     allow_network: bool = True,
     revision: str | None = None,
+    force_download: bool = False,
 ) -> str:
     """Download a file from HuggingFace Hub, preferring the local cache.
 
@@ -283,6 +284,8 @@ def hf_hub_download_local_first(
             ``None``, a pinned SHA is applied for known repos (see
             ``_PINNED_REVISIONS``) for supply-chain integrity; unknown repos use
             the floating default ref.
+        force_download: When ``True``, skip the local cache and force a fresh
+            network download. This is used to replace a corrupt local artifact.
 
     Returns:
         Absolute path to the local cached file.
@@ -296,6 +299,16 @@ def hf_hub_download_local_first(
     from huggingface_hub.errors import EntryNotFoundError, LocalEntryNotFoundError
 
     revision = _resolve_revision(repo_id, revision)
+
+    if force_download:
+        return str(
+            hf_hub_download(
+                repo_id,
+                filename,
+                revision=revision,
+                force_download=True,
+            )
+        )
 
     try:
         return str(hf_hub_download(repo_id, filename, revision=revision, local_files_only=True))

@@ -158,3 +158,33 @@ def test_hf_entry_known_absent_false_when_repo_not_cached_at_all(tmp_path, monke
     monkeypatch.delenv("HEADROOM_HF_PIN", raising=False)
 
     assert hf_entry_known_absent("nobody/nothing", "merged.pt") is False
+
+
+def test_hf_download_force_download_bypasses_local_lookup(monkeypatch):
+    import huggingface_hub
+
+    calls = []
+
+    def fake_download(*args, **kwargs):
+        calls.append((args, kwargs))
+        return "/tmp/fresh.onnx"
+
+    monkeypatch.setattr(huggingface_hub, "hf_hub_download", fake_download)
+
+    from headroom.onnx_runtime import hf_hub_download_local_first
+
+    assert (
+        hf_hub_download_local_first(
+            "acme/widget",
+            "onnx/model.onnx",
+            force_download=True,
+            revision="abc123",
+        )
+        == "/tmp/fresh.onnx"
+    )
+    assert calls == [
+        (
+            ("acme/widget", "onnx/model.onnx"),
+            {"revision": "abc123", "force_download": True},
+        )
+    ]
