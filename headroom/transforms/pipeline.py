@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+import random
 import threading
 import time
 from collections.abc import Callable
@@ -41,6 +42,20 @@ MAX_WASTE_SIGNAL_DETECTION_TOKENS = 100_000
 # A token saving below this is treated as noise — waste-signal detection only
 # runs when compression saved more than this many tokens.
 _MIN_TOKENS_SAVED_FOR_WASTE_SIGNALS = 100
+
+
+def _waste_sampling_check() -> bool:
+    """Return whether this request is sampled for waste-signal telemetry."""
+    try:
+        rate = float(os.environ.get("HEADROOM_WASTE_SIGNAL_SAMPLE_RATE", "1.0"))
+    except (TypeError, ValueError):
+        logger.warning("Invalid HEADROOM_WASTE_SIGNAL_SAMPLE_RATE; defaulting to 1.0")
+        rate = 1.0
+    if rate <= 0:
+        return False
+    if rate >= 1:
+        return True
+    return random.random() < rate
 
 # OTel GenAI semantic conventions (open-telemetry/semantic-conventions-genai).
 # The compression-pipeline span carries this gen_ai.* attribute alongside the
@@ -498,7 +513,7 @@ class TransformPipeline:
                     tokens_before,
                     _waste_signal_token_limit,
                 )
-            elif saved_enough:
+            elif saved_enough and _waste_sampling_check():
                 try:
                     from ..parser import parse_messages
 

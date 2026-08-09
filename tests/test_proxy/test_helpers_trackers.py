@@ -52,7 +52,6 @@ from headroom.proxy.helpers import (
     merge_openai_beta,
     reset_tool_search_hint_state,
     serialize_tool_definition_canonical,
-    should_inject_ccr_tool,
     take_tool_search_hint_slot,
     tool_search_hint_pending,
 )
@@ -980,7 +979,7 @@ class TestSessionCcrTracker:
         assert tracker.active_sessions == 0
 
 
-# ── Section 10: get_session_ccr_tracker + should_inject_ccr_tool ───────
+# ── Section 10: get_session_ccr_tracker ─────────────────────────────────
 
 
 class TestGetSessionCcrTracker:
@@ -1003,53 +1002,6 @@ class TestGetSessionCcrTracker:
 
     def teardown_method(self) -> None:
         _reset_session_ccr_tracker_for_test()
-
-
-class TestShouldInjectCcrTool:
-    def test_inject_true(self) -> None:
-        result, override = should_inject_ccr_tool(
-            configured_inject_tool=True,
-            frozen_message_count=0,
-            has_compressed_content=False,
-        )
-        assert result is True
-        assert override is False
-
-    def test_defer_when_frozen_messages(self) -> None:
-        result, override = should_inject_ccr_tool(
-            configured_inject_tool=True,
-            frozen_message_count=5,
-            has_compressed_content=False,
-        )
-        assert result is False
-        assert override is False
-
-    def test_marker_override_with_frozen(self) -> None:
-        result, override = should_inject_ccr_tool(
-            configured_inject_tool=True,
-            frozen_message_count=5,
-            has_compressed_content=True,
-        )
-        assert result is True
-        assert override is True
-
-    def test_marker_override_without_frozen_no_inject(self) -> None:
-        result, override = should_inject_ccr_tool(
-            configured_inject_tool=False,
-            frozen_message_count=5,
-            has_compressed_content=True,
-        )
-        assert result is True
-        assert override is True
-
-    def test_no_inject_when_not_configured_and_no_compression(self) -> None:
-        result, override = should_inject_ccr_tool(
-            configured_inject_tool=False,
-            frozen_message_count=0,
-            has_compressed_content=False,
-        )
-        assert result is False
-        assert override is False
 
 
 # ── Section 11: apply_session_sticky_ccr_tool ────────────────────────────

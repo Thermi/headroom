@@ -1797,6 +1797,14 @@ class ContentRouter(Transform):
         # filtered out here so they are only ever dispatched by the if/elif.
         self._active_external_compressors: list[Any] = self._resolve_active_external_compressors()
 
+        # Reuse workers across apply() calls. Creating a pool for every request
+        # adds avoidable startup overhead and can amplify executor contention.
+        pool_size = int(os.environ.get("HEADROOM_COMPRESS_WORKERS", "4"))
+        self._shared_executor = ThreadPoolExecutor(
+            max_workers=max(1, pool_size),
+            thread_name_prefix="hdr-cmp-blk",
+        )
+
         # Lazy-loaded compressors
         self._code_compressor: Any = None
         self._smart_crusher: Any = None
@@ -1933,6 +1941,12 @@ class ContentRouter(Transform):
         # cache. Counting pins isolates the freeze's attributable payoff.
         self._freeze_pin_hits = 0
         self._freeze_pin_chars = 0
+
+    def __del__(self) -> None:
+        """Release the shared compression workers during interpreter teardown."""
+        executor = getattr(self, "_shared_executor", None)
+        if executor is not None:
+            executor.shutdown(wait=False)
 
     def _record_freeze_pin(self, content: str, cached_ratio: float) -> None:
         """Count one freeze divergence (thread-safe) and log it.
@@ -5341,14 +5355,14 @@ class ContentRouter(Transform):
                     compress_ms = (time.perf_counter() - t0) * 1000
                     task_results.append((r, compress_ms))
             else:
-                # Parallel compression via thread pool
-                with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                    futures = []
-                    for _, task_content, task_ctx, task_bias, _, _ in pending_tasks:
-                        futures.append(
-                            executor.submit(self._timed_compress, task_content, task_ctx, task_bias)
-                        )
-                    task_results = [f.result() for f in futures]
+                # Parallel compression via the router's shared thread pool.
+                futures = [
+                    self._shared_executor.submit(
+                        self._timed_compress, task_content, task_ctx, task_bias
+                    )
+                    for _, task_content, task_ctx, task_bias, _, _ in pending_tasks
+                ]
+                task_results = [future.result() for future in futures]
 
             parallel_ms = (time.perf_counter() - t_parallel_start) * 1000
             compressor_timing["parallel_compress_total"] = parallel_ms
@@ -6110,7 +6124,8 @@ class ContentRouter(Transform):
                         continue
 
                     # Two-tier compression cache → shared helper
-                    compressed_content, was_compressed = self._compress_block_content(
+                    compression_future = self._shared_executor.submit(
+                        self._compress_block_content,
                         content=tool_text,
                         content_key=hash((tool_text, getattr(self, "_runtime_target_ratio", None))),
                         context=_block_context,
@@ -6124,6 +6139,7 @@ class ContentRouter(Transform):
                         details_prefix="tool",
                         enforce_reversibility=True,
                     )
+                    compressed_content, was_compressed = compression_future.result()
                     if compressed_content is not None:
                         new_blocks.append(
                             {

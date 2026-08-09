@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import threading
 from collections import OrderedDict
+from typing import Any
 
 
 class SessionCcrTracker:
@@ -85,3 +86,16 @@ class SessionCcrTracker:
 
         with self._lock:
             self._sessions.clear()
+
+    def snapshot(self) -> list[dict[str, Any]]:
+        """Return session metadata without exposing the pinned tool bytes."""
+        with self._lock:
+            return [
+                {
+                    "provider": provider,
+                    "session_id": session_id,
+                    "has_done_ccr": has_done_ccr,
+                    "has_golden_tool_bytes": golden_tool_bytes is not None,
+                }
+                for (provider, session_id), (has_done_ccr, golden_tool_bytes) in self._sessions.items()
+            ]

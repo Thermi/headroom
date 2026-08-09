@@ -869,7 +869,7 @@ class TestAppendTextToLatestUserInputItem:
 class TestGetSseEventMaxBytes:
     def test_default(self) -> None:
         with _env(**{_SSE_EVENT_MAX_BYTES_ENV: None}):
-            assert get_sse_event_max_bytes() == 100 * 1024 * 1024
+            assert get_sse_event_max_bytes() == 1 * 1024 * 1024
 
     def test_custom(self) -> None:
         with _env(**{_SSE_EVENT_MAX_BYTES_ENV: "65536"}):
@@ -892,7 +892,7 @@ class TestGetSseEventMaxBytes:
 
     def test_empty_uses_default(self) -> None:
         with _env(**{_SSE_EVENT_MAX_BYTES_ENV: ""}):
-            assert get_sse_event_max_bytes() == 100 * 1024 * 1024
+            assert get_sse_event_max_bytes() == 1 * 1024 * 1024
 
 
 class TestGetBodyTooLargeStatus:

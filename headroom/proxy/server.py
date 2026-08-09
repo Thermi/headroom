@@ -34,6 +34,7 @@ import argparse
 import asyncio
 import concurrent.futures
 import contextlib
+import contextvars
 import hmac
 import importlib.metadata
 import ipaddress
@@ -521,13 +522,11 @@ class CompressionQuarantinedError(asyncio.TimeoutError):
     """
 
 
-class CompressionQuarantinedError(asyncio.TimeoutError):
-    """Compression was skipped while a timed-out worker was still running.
-
-    Inherit from ``asyncio.TimeoutError`` rather than the builtin directly so
-    Python 3.10 callers classify quarantine bypasses exactly like executor
-    timeouts. The two exception classes only became aliases in Python 3.11.
-    """
+# The outer ASGI middleware sets this for the current request. The first
+# handler request ID consumes it so middleware and handler logs share one ID.
+_REQUEST_ID_VAR: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "headroom_request_id", default=None
+)
 
 
 _MULTI_WORKER_CONFIG_ENV = "HEADROOM_PROXY_CONFIG_JSON"
@@ -2169,7 +2168,11 @@ prefer_code_aware_for_code=_get_env_bool("HEADROOM_PREFER_CODE_AWARE_FOR_CODE", 
         await asyncio.shield(emit_request_outcome(self, outcome))
 
     async def _next_request_id(self) -> str:
-        """Generate unique request ID."""
+        """Return the middleware ID once, then generate sub-operation IDs."""
+        request_id = _REQUEST_ID_VAR.get()
+        if request_id is not None:
+            _REQUEST_ID_VAR.set(None)
+            return request_id
         async with self._request_counter_lock:
             self._request_counter += 1
             return f"hr_{int(time.time())}_{self._request_counter:06d}"
@@ -3376,7 +3379,11 @@ def create_app(config: ProxyConfig | None = None) -> FastAPI:
             return
 
         started = time.perf_counter()
-        inbound_id = f"inbound-{time.time_ns()}"
+        async with proxy._request_counter_lock:
+            proxy._request_counter += 1
+            request_id = f"hr_{int(time.time())}_{proxy._request_counter:06d}"
+        scope["headroom_request_id"] = request_id
+        _REQUEST_ID_VAR.set(request_id)
         # Project attribution: an explicit X-Headroom-Project header wins
         # (claude/codex wraps); otherwise a /p/<name> base-URL prefix (aider,
         # Copilot BYOK, Cursor — clients that cannot send custom headers).
@@ -3414,9 +3421,9 @@ def create_app(config: ProxyConfig | None = None) -> FastAPI:
         _log_level = logging.DEBUG if _health_path and _SILENCE_HEALTH_PROBES else logging.INFO
         logger.log(
             _log_level,
-            "event=proxy_inbound_request id=%s method=%s path=%s query=%s client=%s "
+            "event=proxy_inbound_request request_id=%s method=%s path=%s query=%s client=%s "
             "content_length=%s headers=%s",
-            inbound_id,
+            request_id,
             method,
             path,
             query,
@@ -3451,9 +3458,9 @@ def create_app(config: ProxyConfig | None = None) -> FastAPI:
             except Exception:
                 logger.debug("record_inbound_aborted failed", exc_info=True)
             logger.info(
-                "event=proxy_inbound_request_aborted id=%s method=%s path=%s reason=cancelled "
+                "event=proxy_inbound_request_aborted request_id=%s method=%s path=%s reason=cancelled "
                 "duration_ms=%.2f",
-                inbound_id,
+                request_id,
                 method,
                 path,
                 (time.perf_counter() - started) * 1000.0,
@@ -3465,9 +3472,9 @@ def create_app(config: ProxyConfig | None = None) -> FastAPI:
             except Exception:
                 logger.debug("record_inbound_aborted failed", exc_info=True)
             logger.error(
-                "event=proxy_inbound_request_aborted id=%s method=%s path=%s reason=%s "
+                "event=proxy_inbound_request_aborted request_id=%s method=%s path=%s reason=%s "
                 "duration_ms=%.2f",
-                inbound_id,
+                request_id,
                 method,
                 path,
                 type(exc).__name__,
@@ -3485,8 +3492,8 @@ def create_app(config: ProxyConfig | None = None) -> FastAPI:
                     logger.debug("record_inbound_response failed", exc_info=True)
                 logger.log(
                     _log_level,
-                    "event=proxy_inbound_response id=%s method=%s path=%s status=%s duration_ms=%.2f",
-                    inbound_id,
+                    "event=proxy_inbound_response request_id=%s method=%s path=%s status=%s duration_ms=%.2f",
+                    request_id,
                     method,
                     path,
                     status_code,

@@ -54,6 +54,7 @@ from headroom.proxy.beta_header_policy import (
 )
 from headroom.proxy.body_forwarding import (
     BodyMutationTracker as BodyMutationTracker,  # noqa: F401 - compatibility export
+    _PYTHON_FORWARDER_MODE_ENV,
 )
 from headroom.proxy.body_forwarding import (
     PythonForwarderMode as PythonForwarderMode,  # noqa: F401 - compatibility export
@@ -91,6 +92,8 @@ from headroom.proxy.tool_definition_serialization import (
     serialize_tool_definition_canonical as _serialize_tool_definition_canonical,
 )
 from headroom.proxy.tool_injection_config import (
+    TOOL_INJECTION_STICKY_ENV as _TOOL_INJECTION_STICKY_ENV,
+    TOOL_TRACKER_MAX_SESSIONS_ENV as _TOOL_TRACKER_MAX_SESSIONS_ENV,
     ToolInjectionStickyMode,
 )
 from headroom.proxy.tool_injection_config import (
@@ -1447,6 +1450,19 @@ class SessionBetaTracker:
         """Clear all session state (test helper)."""
         with self._lock:
             self._sessions.clear()
+
+    def snapshot(self) -> list[dict[str, Any]]:
+        """Return a redacted snapshot for the dashboard sessions endpoint."""
+        with self._lock:
+            return [
+                {
+                    "provider": provider,
+                    "session_id": session_id,
+                    "beta_tokens": list(tokens),
+                    "token_count": len(tokens),
+                }
+                for (provider, session_id), tokens in self._sessions.items()
+            ]
 
 
 # Process-wide singleton. Lazily replaced by tests via `reset` /

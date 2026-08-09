@@ -112,14 +112,32 @@ class TestMiddlewareRequestId:
         with TestClient(app) as c:
             yield c
 
-    def test_middleware_sets_scope_request_id(self, client, caplog):
+    @pytest.fixture
+    def proxy_records(self):
+        records: list[logging.LogRecord] = []
+
+        class _Handler(logging.Handler):
+            def emit(self, record: logging.LogRecord) -> None:
+                records.append(record)
+
+        logger = logging.getLogger("headroom.proxy")
+        handler = _Handler(level=logging.INFO)
+        previous_level = logger.level
+        logger.setLevel(logging.INFO)
+        logger.addHandler(handler)
+        try:
+            yield records
+        finally:
+            logger.removeHandler(handler)
+            logger.setLevel(previous_level)
+
+    def test_middleware_sets_scope_request_id(self, client, proxy_records):
         _REQUEST_ID_VAR.set(None)
-        with caplog.at_level(logging.INFO):
-            response = client.get("/livez")
+        response = client.get("/livez")
         assert response.status_code == 200
 
         inbound_log = None
-        for record in caplog.records:
+        for record in proxy_records:
             if "event=proxy_inbound_request" in record.getMessage():
                 inbound_log = record.getMessage()
                 break
@@ -129,14 +147,13 @@ class TestMiddlewareRequestId:
             f"Expected request_id=hr_ in log, got: {inbound_log}"
         )
 
-    def test_all_middleware_logs_share_same_request_id(self, client, caplog):
+    def test_all_middleware_logs_share_same_request_id(self, client, proxy_records):
         _REQUEST_ID_VAR.set(None)
-        with caplog.at_level(logging.INFO):
-            response = client.get("/livez")
+        response = client.get("/livez")
         assert response.status_code == 200
 
         request_ids = set()
-        for record in caplog.records:
+        for record in proxy_records:
             msg = record.getMessage()
             if "event=proxy_inbound_" in msg or "event=proxy_inbound_response" in msg:
                 for part in msg.split():
@@ -147,23 +164,21 @@ class TestMiddlewareRequestId:
             f"Expected all middleware logs to share one request_id, got: {request_ids}"
         )
 
-    def test_handler_and_middleware_share_request_id(self, client, caplog):
+    def test_handler_and_middleware_share_request_id(self, client, proxy_records):
         _REQUEST_ID_VAR.set(None)
-        with caplog.at_level(logging.INFO):
-            response = client.get("/livez")
+        response = client.get("/livez")
         assert response.status_code == 200
 
         middleware_id = None
-        for record in caplog.records:
-            msg = record.getMessage()
+        logs = [record.getMessage() for record in proxy_records]
+        for msg in logs:
             if "event=proxy_inbound_request" in msg:
                 for part in msg.split():
                     if part.startswith("request_id="):
                         middleware_id = part.split("=", 1)[1]
 
         status_id = None
-        for record in caplog.records:
-            msg = record.getMessage()
+        for msg in logs:
             if "event=proxy_inbound_response" in msg:
                 for part in msg.split():
                     if part.startswith("request_id="):
@@ -179,9 +194,9 @@ class TestMiddlewareRequestId:
         _REQUEST_ID_VAR.set(None)
         ids = []
         for _ in range(5):
-            with client.get("/livez") as response:
-                proxy = response.request.app.state.proxy
-                ids.append(proxy._request_counter)
+            response = client.get("/livez")
+            proxy = client.app.state.proxy
+            ids.append(proxy._request_counter)
 
         assert len(set(ids)) == 5, (
             f"Expected 5 unique request_ids, got: {ids}"

@@ -48,15 +48,30 @@ from headroom.evals.memory.runner import (
     run_locomo_eval,
     run_locomo_eval_sync,
 )
-from headroom.evals.memory.runner_v2 import (
-    EvalMetrics,
-    LoCoMoEvaluatorV2,
-    MemoryEvalConfigV2,
-    MemoryEvalResultV2,
-    MemoryEvalSuiteResultV2,
-    run_locomo_eval_v2,
-    run_locomo_eval_v2_sync,
-)
+try:
+    from headroom.evals.memory.runner_v2 import (
+        EvalMetrics,
+        LoCoMoEvaluatorV2,
+        MemoryEvalConfigV2,
+        MemoryEvalResultV2,
+        MemoryEvalSuiteResultV2,
+        run_locomo_eval_v2,
+        run_locomo_eval_v2_sync,
+    )
+except ModuleNotFoundError as exc:
+    if exc.name != "litellm":
+        raise
+    _V2_EXPORTS: tuple[str, ...] = ()
+else:
+    _V2_EXPORTS = (
+        "LoCoMoEvaluatorV2",
+        "MemoryEvalConfigV2",
+        "MemoryEvalResultV2",
+        "MemoryEvalSuiteResultV2",
+        "EvalMetrics",
+        "run_locomo_eval_v2",
+        "run_locomo_eval_v2_sync",
+    )
 
 __all__ = [
     # Dataset loading
@@ -76,17 +91,11 @@ __all__ = [
     "MemoryEvalSuiteResult",
     "run_locomo_eval",
     "run_locomo_eval_sync",
-    # V2 Evaluation (LLM-controlled tools)
-    "LoCoMoEvaluatorV2",
-    "MemoryEvalConfigV2",
-    "MemoryEvalResultV2",
-    "MemoryEvalSuiteResultV2",
-    "EvalMetrics",
-    "run_locomo_eval_v2",
-    "run_locomo_eval_v2_sync",
     # LLM Judge
     "create_openai_judge",
     "create_anthropic_judge",
     "create_litellm_judge",
     "simple_judge",
 ]
+
+__all__ += list(_V2_EXPORTS)
