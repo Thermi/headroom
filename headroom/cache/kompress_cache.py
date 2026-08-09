@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import os
 import threading
 from dataclasses import dataclass, replace
@@ -14,6 +15,7 @@ _MAX_LIMIT = 1_000_000_000
 _FIXED_ENTRY_BYTES = 8
 _DEFAULT_SINGLE_FLIGHT_WAIT_SECONDS = 5.0
 _CacheKey = tuple[str, bytes, int]
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -149,6 +151,13 @@ class KompressCache:
             self._entries[key] = entry
             self._entry_bytes += self._estimate(entry)
             self._evict_until_within_limits()
+            logger.info(
+                "Cached Kompress inference result: namespace=%s original_tokens=%d "
+                "compressed_tokens=%d",
+                namespace,
+                original_tokens,
+                compressed_tokens,
+            )
 
     def record_failure(self, content: str, namespace: str = "") -> KompressCacheEntry:
         key = self._key(content, namespace)

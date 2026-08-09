@@ -17,6 +17,18 @@ def test_key_uses_full_sha256_and_input_byte_length():
     assert len(entry.digest) == 32
 
 
+def test_record_success_logs_cached_inference(caplog):
+    cache = KompressCache(max_entries=10, max_bytes=10_000, max_attempts=3)
+
+    with caplog.at_level("INFO", logger="headroom.cache.kompress_cache"):
+        cache.record_success("content", "compressed", 20, 5, namespace="model-a")
+
+    assert "Cached Kompress inference result" in caplog.text
+    assert "namespace=model-a" in caplog.text
+    assert "original_tokens=20" in caplog.text
+    assert "compressed_tokens=5" in caplog.text
+
+
 def test_configuration_namespaces_keep_same_payload_entries_separate():
     cache = KompressCache(max_entries=10, max_bytes=10_000, max_attempts=3)
     content = "same payload"
