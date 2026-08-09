@@ -1138,13 +1138,17 @@ def _setup_file_logging() -> None:
 
     fmt = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
-    stream_handler = logging.StreamHandler()
-    stream_handler.setLevel(logging.INFO)
-    stream_handler.setFormatter(fmt)
-
     headroom_logger = logging.getLogger("headroom")
     headroom_logger.setLevel(logging.INFO)
-    headroom_logger.addHandler(stream_handler)
+    if not any(
+        isinstance(handler, logging.StreamHandler)
+        and not isinstance(handler, RotatingFileHandler)
+        for handler in headroom_logger.handlers
+    ):
+        stream_handler = logging.StreamHandler()
+        stream_handler.setLevel(logging.INFO)
+        stream_handler.setFormatter(fmt)
+        headroom_logger.addHandler(stream_handler)
     headroom_logger.addFilter(_RequestIdFilter())
 
     if not _no_file_log and log_dir is not None:

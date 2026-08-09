@@ -336,6 +336,31 @@ class TestIsAnthropicAuth:
 class TestSetupFileLogging:
     """Tests for _setup_file_logging using the new _headroom_log_dir path."""
 
+    def test_setup_file_logging_does_not_duplicate_stream_handler(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        import logging
+        from logging.handlers import RotatingFileHandler
+
+        from headroom.proxy.helpers import _setup_file_logging
+
+        monkeypatch.setenv("HEADROOM_WORKSPACE_DIR", str(tmp_path))
+        headroom_logger = logging.getLogger("headroom")
+        for handler in headroom_logger.handlers[:]:
+            headroom_logger.removeHandler(handler)
+            handler.close()
+
+        _setup_file_logging()
+        _setup_file_logging()
+
+        stream_handlers = [
+            handler
+            for handler in headroom_logger.handlers
+            if isinstance(handler, logging.StreamHandler)
+            and not isinstance(handler, RotatingFileHandler)
+        ]
+        assert len(stream_handlers) == 1
+
     def test_setup_file_logging_creates_log_dir(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
