@@ -1572,6 +1572,40 @@ class TestPytorchWeightLoading:
         for name, param in model.encoder.state_dict().items():
             assert torch.equal(param, fresh_model.encoder.state_dict()[name])
 
+    def test_merged_checkpoint_load_disables_weights_only_restriction(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        import pytest
+
+        torch = pytest.importorskip("torch")
+        import headroom.transforms.kompress_compressor as kmod
+
+        model = self._make_model(torch)
+        ckpt_path = tmp_path / "merged.pt"
+        torch.save(
+            {
+                "encoder_state_dict": model.encoder.state_dict(),
+                "token_head_state_dict": model.token_head.state_dict(),
+                "span_conv_state_dict": model.span_conv.state_dict(),
+            },
+            ckpt_path,
+        )
+
+        fresh_model = self._make_model(torch)
+        monkeypatch.setattr(kmod, "hf_hub_download_local_first", lambda *a, **k: str(ckpt_path))
+        original_torch_load = torch.load
+        load_kwargs: dict[str, object] = {}
+
+        def recording_load(*args, **kwargs):  # noqa: ANN002, ANN003
+            load_kwargs.update(kwargs)
+            return original_torch_load(*args, **kwargs)
+
+        monkeypatch.setattr(torch, "load", recording_load)
+
+        kmod._load_pytorch_weights(fresh_model, "some/repo", allow_download=True)
+
+        assert load_kwargs["weights_only"] is False
+
     def test_merged_checkpoint_missing_section_raises(self, tmp_path, monkeypatch) -> None:
         import pytest
 

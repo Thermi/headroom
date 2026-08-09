@@ -954,7 +954,10 @@ def _load_merged_state_dict(model: Any, ckpt_path: str, model_id: str) -> None:
     """
     import torch
 
-    ckpt = torch.load(ckpt_path, map_location="cpu")
+    # ``merged.pt`` contains a dictionary of state-dicts. Newer PyTorch
+    # releases default to the restricted weights-only unpickler, which can
+    # reject otherwise valid checkpoints produced by older releases.
+    ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
     missing_sections = [k for k in _MERGED_CHECKPOINT_KEYS if k not in ckpt]
     if missing_sections:
         raise RuntimeError(
