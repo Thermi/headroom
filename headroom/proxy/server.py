@@ -3485,36 +3485,61 @@ def create_app(config: ProxyConfig | None = None) -> FastAPI:
             getattr(config, "host", None),
         )
 
-    def _apply_security_headers(response) -> None:
-        # setdefault: never clobber a header an upstream/handler already set.
-        response.headers.setdefault("X-Content-Type-Options", "nosniff")
-        response.headers.setdefault("X-Frame-Options", "DENY")
-        response.headers.setdefault("Referrer-Policy", "no-referrer")
-        response.headers.setdefault(
-            "Strict-Transport-Security", "max-age=31536000; includeSubDomains"
-        )
+    class _SecurityGateASGI:
+        """Pure ASGI security wrapper that avoids BaseHTTPMiddleware task scopes."""
 
-    def _extract_proxy_token(headers) -> str | None:
-        auth = str(headers.get("authorization") or "")
-        if auth.lower().startswith("bearer "):
-            return auth[7:].strip() or None
-        raw = headers.get("x-headroom-proxy-token")
-        return str(raw) if raw else None
+        def __init__(self, wrapped_app: Any, proxy_token: str | None):
+            self.app = wrapped_app
+            self.proxy_token = proxy_token
+            self.proxy_token_bytes = proxy_token.encode("utf-8") if proxy_token else b""
 
-    @app.middleware("http")
-    async def _security_gate(request, call_next):
-        # 1) Optional inbound auth. When a token is configured, require it on
-        #    non-loopback requests; loopback callers and health probes are
-        #    exempt. Loopback is the same trust boundary the admin/debug
-        #    endpoints already use (see loopback_guard).
-        if _proxy_token:
-            path = request.url.path
-            client = getattr(request, "client", None)
-            client_host = getattr(client, "host", None) if client is not None else None
-            if path not in _AUTH_EXEMPT_PATHS and not is_loopback_host(client_host):
-                provided = _extract_proxy_token(request.headers)
+        @staticmethod
+        def _add_security_headers(message: dict[str, Any]) -> dict[str, Any]:
+            if message.get("type") != "http.response.start":
+                return message
+            existing = {name.lower() for name, _value in message.get("headers", [])}
+            headers = list(message.get("headers", []))
+            for name, value in (
+                (b"x-content-type-options", b"nosniff"),
+                (b"x-frame-options", b"DENY"),
+                (b"referrer-policy", b"no-referrer"),
+                (b"strict-transport-security", b"max-age=31536000; includeSubDomains"),
+            ):
+                if name not in existing:
+                    headers.append((name, value))
+            return {**message, "headers": headers}
+
+        @staticmethod
+        def _proxy_token_from_headers(headers: dict[str, str]) -> str | None:
+            auth = headers.get("authorization", "")
+            if auth.lower().startswith("bearer "):
+                return auth[7:].strip() or None
+            raw = headers.get("x-headroom-proxy-token")
+            return raw or None
+
+        async def __call__(self, scope: dict[str, Any], receive: Any, send: Any) -> None:
+            if scope.get("type") != "http":
+                await self.app(scope, receive, send)
+                return
+
+            request = Request(scope, receive)
+            path = scope.get("path", "")
+            headers = {
+                key.decode("latin-1").lower(): value.decode("latin-1")
+                for key, value in scope.get("headers", [])
+            }
+            client = scope.get("client")
+            client_host = client[0] if client else None
+
+            async def send_with_headers(message: dict[str, Any]) -> None:
+                await send(self._add_security_headers(message))
+
+            if self.proxy_token and path not in _AUTH_EXEMPT_PATHS and not is_loopback_host(
+                client_host
+            ):
+                provided = self._proxy_token_from_headers(headers)
                 if provided is None or not hmac.compare_digest(
-                    provided.encode("utf-8", "replace"), _proxy_token_bytes
+                    provided.encode("utf-8", "replace"), self.proxy_token_bytes
                 ):
                     logger.warning(
                         "event=proxy_auth_rejected path=%s client=%s reason=%s",
@@ -3523,23 +3548,30 @@ def create_app(config: ProxyConfig | None = None) -> FastAPI:
                         "missing_token" if provided is None else "bad_token",
                     )
                     rejection = JSONResponse(status_code=401, content={"error": "unauthorized"})
-                    _apply_security_headers(rejection)
-                    return rejection
+                    await rejection(scope, receive, send_with_headers)
+                    return
 
-        response = await call_next(request)
-        _apply_security_headers(response)
+            status_code: int | None = None
 
-        # 2) Audit trail for admin / state-mutating endpoints.
-        try:
-            if is_auditable_path(request.url.path):
-                record_admin_action(
-                    request=request,
-                    action="admin_request",
-                    status_code=response.status_code,
-                )
-        except Exception:
-            logger.debug("admin audit emission failed", exc_info=True)
-        return response
+            async def tracking_send(message: dict[str, Any]) -> None:
+                nonlocal status_code
+                if message.get("type") == "http.response.start":
+                    status_code = message.get("status")
+                await send_with_headers(message)
+
+            await self.app(scope, receive, tracking_send)
+
+            try:
+                if is_auditable_path(path):
+                    record_admin_action(
+                        request=request,
+                        action="admin_request",
+                        status_code=status_code or 500,
+                    )
+            except Exception:
+                logger.debug("admin audit emission failed", exc_info=True)
+
+    app.add_middleware(_SecurityGateASGI, proxy_token=_proxy_token)
 
     # Third-party proxy extensions (Enterprise, custom plugins). Discovered via
     # the `headroom.proxy_extension` entry-point group, but **opt-in only**:
@@ -5416,13 +5448,17 @@ def create_app(config: ProxyConfig | None = None) -> FastAPI:
         app.router.add_event_handler("startup", _start_mcp_session_manager)
         app.router.add_event_handler("shutdown", _stop_mcp_session_manager)
 
+        class _TransportHandledResponse(Response):
+            async def __call__(self, scope, receive, send):
+                return None
+
         @app.api_route("/v1/mcp", methods=["GET", "POST", "DELETE"])
         async def mcp_handler(request: Request):
             """Handle MCP messages via the Streamable HTTP transport."""
             if _mcp_session_manager is None:
                 await _start_mcp_session_manager()
             await _mcp_session_manager.handle_request(request.scope, request.receive, request._send)
-            return Response()
+            return _TransportHandledResponse()
 
         logger.info("MCP Streamable HTTP endpoint: /v1/mcp")
 
