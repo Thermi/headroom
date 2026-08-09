@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from types import SimpleNamespace
 
 import pytest
@@ -114,6 +115,63 @@ def test_router_result_helpers_and_summary() -> None:
     )
     assert mixed.routing_log[0].compression_ratio == 1.0
     assert mixed.summary().startswith("Mixed content: 2 sections, routed to ")
+
+
+def test_kompress_registry_adapter_returns_text_not_result_tuple(monkeypatch):
+    router = ContentRouter(ContentRouterConfig(enable_code_aware=False))
+    monkeypatch.setattr(router, "_try_ml_compressor", lambda *args: ("compressed text", 2))
+
+    output = router._registry_compress(
+        "kompress",
+        CompressionStrategy.TEXT,
+        "original text",
+        "",
+        1.0,
+    )
+
+    assert output is not None
+    assert output.content == "compressed text"
+    assert isinstance(output.content, str)
+
+
+def test_net_cost_diagnostics_are_debug_only(caplog):
+    router = ContentRouter()
+
+    with caplog.at_level(logging.DEBUG, logger=content_router_module.logger.name):
+        router._net_cost_allows(
+            slot_idx=0,
+            original_tokens=100,
+            compressed_tokens=50,
+            suffix_tokens=[0, 20],
+            route_counts={},
+            transforms_applied=[],
+        )
+
+    records = [
+        record
+        for record in caplog.records
+        if record.name == content_router_module.logger.name and "NetCostPolicy" in record.message
+    ]
+    pre_calc = [record for record in records if "pre-calc" in record.message]
+    slot = [record for record in records if "slot=" in record.message]
+    assert pre_calc and slot
+    assert all(record.levelno == logging.DEBUG for record in pre_calc + slot)
+
+
+def test_text_crusher_tuple_result_is_normalized_to_text(monkeypatch):
+    router = ContentRouter(ContentRouterConfig(enable_code_aware=False))
+    router._kompress_max_tokens = 1
+
+    class FakeTextCrusher:
+        def compress(self, content, context=""):
+            return SimpleNamespace(compressed=("compressed text", True))
+
+    monkeypatch.setattr(router, "_get_text_crusher", lambda: FakeTextCrusher())
+
+    compressed, _tokens = router._try_ml_compressor("original text", "")
+
+    assert compressed == "compressed text"
+    assert isinstance(compressed, str)
 
 
 def test_content_signature_and_detection_helpers(monkeypatch: pytest.MonkeyPatch) -> None:

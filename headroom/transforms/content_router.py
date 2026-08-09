@@ -3663,7 +3663,14 @@ class ContentRouter(Transform):
             crusher = self._get_text_crusher()
             if crusher is not None:
                 try:
-                    out = crusher.compress(text_to_compress, context=context or "").compressed
+                    crushed: Any = crusher.compress(
+                        text_to_compress, context=context or ""
+                    ).compressed
+                    if isinstance(crushed, tuple):
+                        crushed = crushed[0]
+                    if not isinstance(crushed, str):
+                        raise TypeError("TextCrusher returned non-text compressed content")
+                    out = crushed
                 except Exception as e:
                     logger.warning(
                         "Kompress size-gate -> TextCrusher failed (%s); passing through", e
@@ -4511,13 +4518,13 @@ class ContentRouter(Transform):
                 logger.warning("HEADROOM_NET_COST_P_ALIVE malformed; using 1.0")
         w = 1.25  # CACHE_WRITE_MULTIPLIER
         r = 0.1   # CACHE_READ_MULTIPLIER
-        logger.info(
+        logger.debug(
             "NetCostPolicy pre-calc model=%s w=%.2f r=%.2f delta_t=%d suffix=%d reads=%.1f p_alive=%.2f",
             model, w, r, delta_t, suffix, reads, p_alive,
         )
         gain = float(policy.net_mutation_gain(delta_t, suffix, reads, p_alive))
         allowed = gain > 0.0
-        logger.info(
+        logger.debug(
             "NetCostPolicy slot=%d delta_t=%d suffix=%d reads=%.1f p_alive=%.2f "
             "idle_derived=%s gain=%.0f batch_reclaim=%s -> %s",
             slot_idx,
