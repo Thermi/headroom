@@ -334,8 +334,16 @@ class TestContentRouterConfig:
         assert config.enable_smart_crusher is True
         assert config.enable_search_compressor is True
         assert config.enable_log_compressor is True
+        assert config.log_compressor is None
         assert config.min_section_tokens == 20
         assert config.fallback_strategy == CompressionStrategy.KOMPRESS
+
+    def test_log_compressor_config_override(self):
+        compressor_config = object()
+
+        config = ContentRouterConfig(log_compressor=compressor_config)
+
+        assert config.log_compressor is compressor_config
 
     def test_custom_values(self):
         """Custom config values are applied."""

@@ -263,6 +263,7 @@ async def test_proxy_startup_does_not_enter_cached_kompress_native_loader(monkey
     router = _router_kompress_only()
     stub = _FatalPreloadCompressor(cached=True)
     monkeypatch.setattr(router, "_get_kompress", lambda: stub)
+    monkeypatch.setattr(router, "_prefetch_kompress_artifacts_async", lambda _cfg: False)
     proxy.anthropic_pipeline.transforms = [router]
     proxy.openai_pipeline.transforms = [router]
 
@@ -270,5 +271,38 @@ async def test_proxy_startup_does_not_enter_cached_kompress_native_loader(monkey
     try:
         assert stub.preload_calls == []
         assert proxy.warmup.kompress.info["source_status"] == "deferred"
+    finally:
+        await proxy.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_proxy_startup_prefetches_kompress_when_eager_preload_is_disabled(monkeypatch):
+    pytest.importorskip("httpx")
+    from headroom.proxy.server import HeadroomProxy, ProxyConfig
+
+    proxy = HeadroomProxy(
+        ProxyConfig(
+            optimize=False,
+            kompress_enabled=True,
+            cache_enabled=False,
+            rate_limit_enabled=False,
+            cost_tracking_enabled=False,
+            code_aware_enabled=False,
+        )
+    )
+    router = _router_kompress_only()
+    prefetch_calls: list[int] = []
+    monkeypatch.setattr(
+        router,
+        "start_background_kompress_prefetch",
+        lambda: (prefetch_calls.append(1), True)[1],
+        raising=False,
+    )
+    proxy.anthropic_pipeline.transforms = [router]
+    proxy.openai_pipeline.transforms = [router]
+
+    await proxy.startup()
+    try:
+        assert prefetch_calls == [1]
     finally:
         await proxy.shutdown()

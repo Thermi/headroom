@@ -1465,6 +1465,7 @@ class ContentRouterConfig:
         enable_smart_crusher: Enable JSON array compression.
         enable_search_compressor: Enable search result compression.
         enable_log_compressor: Enable build/test log compression.
+        log_compressor: Optional LogCompressorConfig override.
         enable_tabular_compressor: Enable CSV/TSV/markdown-table compression.
         enable_config_compressor: Enable YAML/TOML/INI config compression.
         enable_image_optimizer: Enable image token optimization.
@@ -1482,6 +1483,7 @@ class ContentRouterConfig:
     enable_smart_crusher: bool = True
     enable_search_compressor: bool = True
     enable_log_compressor: bool = True
+    log_compressor: Any | None = None
     enable_tabular_compressor: bool = True  # CSV/TSV/markdown tables via SmartCrusher
     enable_config_compressor: bool = True  # YAML/TOML/INI structural compression
     enable_html_extractor: bool = True  # HTML content extraction
@@ -4062,6 +4064,15 @@ class ContentRouter(Transform):
             logger.debug("Kompress artifact prefetch skipped: %s", e)
             return False
 
+    def start_background_kompress_prefetch(self) -> bool:
+        """Start the file-only Kompress prefetch for this router."""
+        if not self.config.enable_kompress:
+            return False
+        compressor = self._get_kompress()
+        if compressor is None or not hasattr(compressor, "preload"):
+            return False
+        return self._prefetch_kompress_artifacts_async(getattr(compressor, "config", None))
+
     def eager_load_compressors(self) -> dict[str, str]:
         """Pre-load compressors at startup to avoid first-request latency.
 
@@ -4096,9 +4107,11 @@ class ContentRouter(Transform):
                     status["kompress_backend"] = "unknown"
                 else:
                     status["kompress"] = "deferred"
-                    if self._prefetch_kompress_artifacts_async(getattr(compressor, "config", None)):
+                    if self.start_background_kompress_prefetch():
                         status["kompress_artifacts"] = "prefetching"
-                    logger.info("Kompress model preload deferred until first request")
+                    logger.info(
+                        "Kompress native model preload deferred; artifact prefetch runs in background"
+                    )
             else:
                 status["kompress"] = "unavailable"
 
