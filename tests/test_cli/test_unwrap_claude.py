@@ -231,10 +231,13 @@ def test_unwrap_claude_restores_all_base_url_modes(runner: CliRunner) -> None:
         )
 
     assert result.exit_code == 0, result.output
-    assert restore_calls == [
-        {"previous": None},
-        {"previous": None, "foundry_mode": True},
-        {"previous": None, "vertex_mode": True},
+    assert [
+        {key: value for key, value in call.items() if key != "settings_path"}
+        for call in restore_calls
+    ] == [
+        {"previous": None, "foundry_mode": False, "vertex_mode": False},
+        {"previous": None, "foundry_mode": True, "vertex_mode": False},
+        {"previous": None, "foundry_mode": False, "vertex_mode": True},
     ]
 
 
