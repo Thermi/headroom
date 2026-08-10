@@ -13,6 +13,7 @@ LiteLLM handles all the auth and format translation internally.
 from __future__ import annotations
 
 import json
+import importlib.util
 import logging
 import os
 import uuid
@@ -600,6 +601,15 @@ class LiteLLMBackend(Backend):
         if not LITELLM_AVAILABLE:
             raise ImportError(
                 "litellm is required for LiteLLMBackend. Install with: pip install litellm"
+            )
+        if (
+            provider == "bedrock"
+            and os.environ.get("AWS_SESSION_TOKEN")
+            and importlib.util.find_spec("botocore") is None
+        ):
+            raise ImportError(
+                "botocore is required for Bedrock session-token credentials. "
+                "Install with: pip install headroom-ai[bedrock]"
             )
 
         self.provider = provider
