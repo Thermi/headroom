@@ -95,6 +95,13 @@ class SQLiteMemoryStore:
             self._local.conn = conn
         return conn
 
+    async def close(self) -> None:
+        """Close the connection owned by the current thread."""
+        conn: sqlite3.Connection | None = getattr(self._local, "conn", None)
+        if conn is not None:
+            conn.close()
+            del self._local.conn
+
     def _init_db(self) -> None:
         """Initialize the database schema with indexes."""
         with self._get_conn() as conn:

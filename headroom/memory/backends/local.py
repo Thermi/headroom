@@ -146,22 +146,20 @@ class LocalBackend:
         cleanly and ``CancelledError`` is re-raised rather than leaving the
         backend half-built.
         """
-        if not self._initialized:
-            Path(self._config.db_path).parent.mkdir(parents=True, exist_ok=True)
+        if self._initialized:
+            return
 
-            from headroom.memory.config import EmbedderBackend
-
-            # Map string embedder_backend to enum
-            embedder_backend_map = {
-                "local": EmbedderBackend.LOCAL,
-                "onnx": EmbedderBackend.ONNX,
-                "openai": EmbedderBackend.OPENAI,
-                "ollama": EmbedderBackend.OLLAMA,
-                "none": EmbedderBackend.NONE,
-            }
-            _embedder_backend = embedder_backend_map.get(
-                self._config.embedder_backend, EmbedderBackend.LOCAL
-            )
+        lock = self._get_init_lock()
+        async with lock:
+            if self._initialized:
+                return
+            try:
+                await self._init_locked()
+            except asyncio.CancelledError:
+                self._hierarchical_memory = None
+                self._graph = None
+                self._initialized = False
+                raise
 
     async def _init_locked(self) -> None:
         """Actual init body. Must be called with ``_init_lock`` held."""
@@ -194,13 +192,13 @@ class LocalBackend:
 
         # Choose graph store based on config
         if self._config.graph_persist:
+            from headroom.memory.adapters.graph import InMemoryGraphStore
+
             # Derive graph db path from main db path if not specified
             if self._config.graph_db_path:
                 _graph_db_path = self._config.graph_db_path
             else:
                 import os as _os
-
-                from headroom.memory.adapters.graph import InMemoryGraphStore
 
                 _max_e = int(_os.environ.get("HEADROOM_GRAPH_MAX_ENTITIES", "50000"))
                 _max_r = int(_os.environ.get("HEADROOM_GRAPH_MAX_RELATIONSHIPS", "100000"))
@@ -417,7 +415,7 @@ class LocalBackend:
         Returns:
             List of MemorySearchResult objects with scores and related entities.
         """
-        if not Path(self._config.db_path).exists():
+        if not self._initialized and not Path(self._config.db_path).exists():
             return []
 
         await self._ensure_initialized()
@@ -630,7 +628,7 @@ class LocalBackend:
         Returns:
             The Memory if found, None otherwise.
         """
-        if not Path(self._config.db_path).exists():
+        if not self._initialized and not Path(self._config.db_path).exists():
             return None
 
         await self._ensure_initialized()
@@ -700,7 +698,7 @@ class LocalBackend:
         Returns:
             Subgraph containing reachable entities and relationships.
         """
-        if not Path(self._config.db_path).exists():
+        if not self._initialized and not Path(self._config.db_path).exists():
             return Subgraph(entities=[], relationships=[], root_entity_ids=[])
 
         await self._ensure_initialized()
@@ -739,7 +737,7 @@ class LocalBackend:
         Returns:
             List of memories for the user.
         """
-        if not Path(self._config.db_path).exists():
+        if not self._initialized and not Path(self._config.db_path).exists():
             return []
 
         await self._ensure_initialized()
@@ -802,7 +800,7 @@ class LocalBackend:
         Returns:
             List of MemorySearchResult objects.
         """
-        if not Path(self._config.db_path).exists():
+        if not self._initialized and not Path(self._config.db_path).exists():
             return []
 
         await self._ensure_initialized()
@@ -858,7 +856,7 @@ class LocalBackend:
         Returns:
             List of MemorySearchResult objects sorted by combined score.
         """
-        if not Path(self._config.db_path).exists():
+        if not self._initialized and not Path(self._config.db_path).exists():
             return []
 
         await self._ensure_initialized()
