@@ -164,7 +164,7 @@ def _estimate_tokens(text: str) -> int:
 
 def _coerce_compressed_text(value: Any) -> str:
     """Normalize native compressor result shapes to the router text contract."""
-    if isinstance(value, tuple):
+    while isinstance(value, tuple):
         if not value:
             raise TypeError("compressor returned an empty tuple")
         value = value[0]
@@ -273,7 +273,10 @@ _BUILTIN_COMPRESSOR_DESCRIPTORS: tuple[CompressorDescriptor, ...] = (
 # they change no routing. Each invoker takes the owning router plus the pure-data
 # :class:`CompressInput` and returns the compressed string, or ``None`` when the
 # built-in is unavailable / not applicable to this str input (→ passthrough).
-_BuiltinInvoke = Callable[["ContentRouter", CompressInput], "str | None"]
+# A few legacy compressor methods return ``(text, metadata...)`` tuples; adapters
+# normalize those values before constructing the typed ``CompressOutput``.
+_RawCompressedText = str | tuple[Any, ...]
+_BuiltinInvoke = Callable[["ContentRouter", CompressInput], _RawCompressedText | None]
 
 
 def _adapter_bias(inp: CompressInput) -> float:
@@ -442,7 +445,7 @@ class _BuiltinCompressorEntry:
 
     def compress(self, inp: CompressInput) -> CompressOutput:
         tokens_before = _estimate_tokens(inp.content)
-        raw: str | None = None
+        raw: _RawCompressedText | None = None
         if self._router is not None:
             raw = self._invoke(self._router, inp)
         # A ``None`` from the invoker means the built-in did not compress — it
@@ -454,7 +457,7 @@ class _BuiltinCompressorEntry:
         # result. A non-``None`` result is a real compression → ``compressed``
         # stays True and byte-identical to before.
         did_compress = raw is not None
-        content = raw if raw is not None else inp.content
+        content = _coerce_compressed_text(raw) if raw is not None else inp.content
         return CompressOutput(
             content=content,
             tokens_before=tokens_before,
@@ -3475,7 +3478,7 @@ class ContentRouter(Transform):
         except Exception as e:
             error = f"{type(e).__name__}: {e}"
             decision_reason = "compression_exception"
-            logger.warning("Compression with %s failed: %s", strategy.value, e)
+            logger.info("Compression with %s failed: %s", strategy.value, e)
 
         # If compression succeeded, record to TOIN
         if compressed is not None and compressed_tokens is not None:
@@ -3744,7 +3747,9 @@ class ContentRouter(Transform):
                         )
                         out = text_to_compress
             if protected:
-                out = restore_tags(out, protected)
+                out, had_tag_loss = restore_tags(out, protected)
+                if had_tag_loss:
+                    out = content
             return out, _estimate_tokens(out)
 
         # Reached only when the gate is enabled and this eligible block is

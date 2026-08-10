@@ -192,6 +192,12 @@ def test_kompress_tuple_result_is_normalized_to_text(monkeypatch):
     assert isinstance(compressed, str)
 
 
+def test_nested_compressor_tuple_is_normalized_to_text():
+    assert content_router_module._coerce_compressed_text((("compressed text", True), 2)) == (
+        "compressed text"
+    )
+
+
 def test_registry_output_tuple_is_normalized_before_text_routing(monkeypatch):
     router = ContentRouter(ContentRouterConfig(enable_code_aware=False))
 
