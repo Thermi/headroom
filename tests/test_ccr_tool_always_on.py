@@ -237,10 +237,11 @@ def test_no_session_id_falls_back_to_per_turn_decision():
 # cache key).
 _ANTHROPIC_CCR_TOOL_SNAPSHOT_BYTES = (
     b'{"name":"headroom_retrieve",'
-    b'"description":"Retrieve original uncompressed content that was '
-    b"compressed to save tokens. Use this when you need more data than "
-    b"what's shown in compressed tool results. The hash is provided in "
-    b'compression markers like [N items compressed... hash=abc123].",'
+    b'"description":"Retrieve original uncompressed content that the proxy '
+    b'compressed to save tokens. The proxy transparently compresses large tool '
+    b'outputs, diffs, JSON arrays, and search results \xe2\x80\x94 the original is stored '
+    b'here. Use this when you need more data than what\'s shown in compressed '
+    b'tool results. Hashes appear in markers like [N items compressed... hash=abc123].",'
     b'"input_schema":{"type":"object",'
     b'"properties":{'
     b'"hash":{"type":"string",'
@@ -252,10 +253,11 @@ _ANTHROPIC_CCR_TOOL_SNAPSHOT_BYTES = (
 _OPENAI_CCR_TOOL_SNAPSHOT_BYTES = (
     b'{"type":"function",'
     b'"function":{"name":"headroom_retrieve",'
-    b'"description":"Retrieve original uncompressed content that was '
-    b"compressed to save tokens. Use this when you need more data than "
-    b"what's shown in compressed tool results. The hash is provided in "
-    b'compression markers like [N items compressed... hash=abc123].",'
+    b'"description":"Retrieve original uncompressed content that the proxy '
+    b'compressed to save tokens. The proxy transparently compresses large tool '
+    b'outputs, diffs, JSON arrays, and search results \xe2\x80\x94 the original is stored '
+    b'here. Use this when you need more data than what\'s shown in compressed '
+    b'tool results. Hashes appear in markers like [N items compressed... hash=abc123].",'
     b'"parameters":{"type":"object",'
     b'"properties":{'
     b'"hash":{"type":"string",'
