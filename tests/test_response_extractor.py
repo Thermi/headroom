@@ -62,7 +62,9 @@ class TestExtractInline:
         assert result.memories[0].importance == 0.5
 
     def test_with_importance(self) -> None:
-        response = '<memory>{"memories": [{"content": "Important fact", "importance": 0.9}]}</memory>'
+        response = (
+            '<memory>{"memories": [{"content": "Important fact", "importance": 0.9}]}</memory>'
+        )
         result = extract_inline(response)
         assert len(result.memories) == 1
         assert result.memories[0].content == "Important fact"
@@ -81,9 +83,7 @@ class TestExtractInline:
         assert result.memories == []
 
     def test_multiple_memories(self) -> None:
-        response = (
-            '<memory>{"memories": [{"content": "Fact 1"}, {"content": "Fact 2"}]}</memory>'
-        )
+        response = '<memory>{"memories": [{"content": "Fact 1"}, {"content": "Fact 2"}]}</memory>'
         result = extract_inline(response)
         assert len(result.memories) == 2
         assert result.memories[0].content == "Fact 1"

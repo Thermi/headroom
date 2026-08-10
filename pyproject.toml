@@ -425,6 +425,7 @@ select = [
 ]
 ignore = [
     "E501",  # line too long (handled by formatter)
+    "E402",  # server imports intentionally follow runtime path/bootstrap setup
     "B008",  # do not perform function calls in argument defaults
     "B905",  # zip without strict parameter
 ]
@@ -488,7 +489,7 @@ module = [
     "headroom.transforms.tag_protector",
     "headroom.memory.adapters.watchdog",
 ]
-disable_error_code = ["call-arg", "attr-defined", "union-attr", "assignment", "misc", "no-any-return", "str-unpack", "arg-type"]
+ disable_error_code = ["call-arg", "attr-defined", "union-attr", "assignment", "misc", "no-any-return", "arg-type"]
 
 # _json.py assigns both orjson and stdlib json to JSONDecodeError
 [[tool.mypy.overrides]]

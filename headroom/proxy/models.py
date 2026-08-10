@@ -6,8 +6,8 @@ Extracted from server.py to keep the codebase maintainable.
 
 from __future__ import annotations
 
-import os
 import logging
+import os
 from dataclasses import InitVar, dataclass, field
 from datetime import datetime
 from typing import Any, Literal
@@ -169,6 +169,7 @@ class ProxyConfig:
 
     # Optimization
     optimize: bool = True
+    compress_passthrough: bool = False
     kompress_enabled: bool = True
     image_optimize: bool = True
     min_tokens_to_crush: int = 500
@@ -309,7 +310,9 @@ class ProxyConfig:
     # memory under high session churn; higher for long-lived many-session deployments.
     # CLI: --compression-cache-max-sessions; env: HEADROOM_COMPRESSION_CACHE_MAX_SESSIONS.
     compression_cache_max_sessions: int = field(
-        default_factory=lambda: int(os.environ.get("HEADROOM_COMPRESSION_CACHE_MAX_SESSIONS", "500"))
+        default_factory=lambda: int(
+            os.environ.get("HEADROOM_COMPRESSION_CACHE_MAX_SESSIONS", "500")
+        )
     )
 
     # Max prefix-frozen session trackers before evicting oldest (def: 1000)

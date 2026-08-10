@@ -117,7 +117,18 @@ class TestKompressBackendSelection:
         import headroom.transforms.kompress_compressor as kmod
 
         with caplog.at_level(logging.WARNING, logger=kmod.logger.name):
-            for value in ("auto", "onnx", "cpu", "coreml", "mps", "torch", "gpu", "cuda", "onnx-gpu", "ONNX-CPU"):
+            for value in (
+                "auto",
+                "onnx",
+                "cpu",
+                "coreml",
+                "mps",
+                "torch",
+                "gpu",
+                "cuda",
+                "onnx-gpu",
+                "ONNX-CPU",
+            ):
                 monkeypatch.setenv("HEADROOM_KOMPRESS_BACKEND", value)
                 kmod._selected_backend()
             monkeypatch.delenv("HEADROOM_KOMPRESS_BACKEND", raising=False)
@@ -197,8 +208,7 @@ class TestKompressBackendSelection:
             kmod,
             "_create_onnx_session",
             lambda model_id, providers, *, allow_download=True: (
-                captured_providers.append(providers)
-                or MagicMock()
+                captured_providers.append(providers) or MagicMock()
             ),
         )
         monkeypatch.setattr(
@@ -451,8 +461,12 @@ class TestKompressResultCache:
             ), "success"
 
         monkeypatch.setattr(compressor, "_compress_uncached", fake_inference)
-        owner_thread = threading.Thread(target=lambda: owner_result.append(compressor.compress(text)))
-        waiter_thread = threading.Thread(target=lambda: waiter_result.append(compressor.compress(text)))
+        owner_thread = threading.Thread(
+            target=lambda: owner_result.append(compressor.compress(text))
+        )
+        waiter_thread = threading.Thread(
+            target=lambda: waiter_result.append(compressor.compress(text))
+        )
         owner_thread.start()
         assert inference_started.wait(timeout=1)
         waiter_thread.start()
@@ -591,7 +605,9 @@ class TestKompressResultCache:
             "_load_kompress",
             lambda *args, **kwargs: (FailingGpuModel(), BatchTokenizer(), "onnx_gpu"),
         )
-        monkeypatch.setattr(compressor, "_should_batch_single_content", lambda *args, **kwargs: True)
+        monkeypatch.setattr(
+            compressor, "_should_batch_single_content", lambda *args, **kwargs: True
+        )
         monkeypatch.setattr(compressor, "_should_use_sequential_fallback", lambda: False)
 
         first = compressor.compress(text)
@@ -677,7 +693,9 @@ class TestKompressResultCache:
             "_load_kompress",
             lambda *args, **kwargs: (BatchModel(), BatchTokenizer(), "onnx_gpu"),
         )
-        monkeypatch.setattr(compressor, "_should_batch_single_content", lambda *args, **kwargs: True)
+        monkeypatch.setattr(
+            compressor, "_should_batch_single_content", lambda *args, **kwargs: True
+        )
         monkeypatch.setattr(compressor, "_should_use_sequential_fallback", lambda: False)
         monkeypatch.setenv("HEADROOM_KOMPRESS_EXECUTION_TIMEOUT_MS", "0")
         monkeypatch.setenv("HEADROOM_KOMPRESS_MAX_CONCURRENT", "1")
@@ -714,7 +732,9 @@ class TestKompressResultCache:
                 ),
             ]
         )
-        monkeypatch.setattr(compressor, "_compress_uncached", lambda *args, **kwargs: next(outcomes))
+        monkeypatch.setattr(
+            compressor, "_compress_uncached", lambda *args, **kwargs: next(outcomes)
+        )
 
         assert compressor.compress(text).compressed == text
         assert compressor.compress(text).compressed == "one two three"
@@ -938,7 +958,9 @@ class TestKompressCompressorBatch:
             monkeypatch.setattr(compressor, "_should_use_sequential_fallback", lambda: False)
 
         first_thread = threading.Thread(target=lambda: results.append(first.compress_batch([text])))
-        second_thread = threading.Thread(target=lambda: results.append(second.compress_batch([text])))
+        second_thread = threading.Thread(
+            target=lambda: results.append(second.compress_batch([text]))
+        )
         first_thread.start()
         assert inference_started.wait(timeout=1)
         second_thread.start()
@@ -1000,7 +1022,9 @@ class TestKompressCompressorBatch:
         text = "one two three four five six seven eight nine ten eleven twelve"
         cache.record_failure(text)
         monkeypatch.setattr(kc, "get_kompress_cache", lambda: cache)
-        monkeypatch.setattr(kc, "_load_kompress", lambda *args, **kwargs: (object(), object(), "onnx_gpu"))
+        monkeypatch.setattr(
+            kc, "_load_kompress", lambda *args, **kwargs: (object(), object(), "onnx_gpu")
+        )
         compressor = kc.KompressCompressor(kc.KompressConfig(enable_ccr=False))
         monkeypatch.setattr(compressor, "_should_use_sequential_fallback", lambda: False)
         remaining = iter((0.05, 0.0))
@@ -1027,7 +1051,9 @@ class TestKompressCompressorBatch:
         assert waits == [0.05]
         assert cache.stats()["failures"] == 1
 
-    def test_batch_preserves_cached_long_result_when_other_input_is_short(self, monkeypatch) -> None:
+    def test_batch_preserves_cached_long_result_when_other_input_is_short(
+        self, monkeypatch
+    ) -> None:
         cache = KompressCache(max_entries=10, max_bytes=100_000, max_attempts=2)
         monkeypatch.setattr(kc, "get_kompress_cache", lambda: cache)
         monkeypatch.setattr(kc, "_kompress_cache", {})
@@ -1095,6 +1121,7 @@ class TestKompressCompressorBatch:
 
         cache = KompressCache(max_entries=10, max_bytes=100_000, max_attempts=2)
         monkeypatch.setattr(kc, "get_kompress_cache", lambda: cache)
+
         class SaturationModel:
             def get_scores(self, input_ids, attention_mask):
                 return [[1.0] + [0.0] * (len(row) - 1) for row in input_ids]
@@ -1227,9 +1254,7 @@ class TestKompressCompressorBatch:
         monkeypatch.setattr(
             kc,
             "_load_kompress",
-            lambda *args, **kwargs: (_ for _ in ()).throw(
-                kc.KompressModelNotCached("not cached")
-            ),
+            lambda *args, **kwargs: (_ for _ in ()).throw(kc.KompressModelNotCached("not cached")),
         )
 
         [result] = compressor.compress_batch([content])
@@ -1237,7 +1262,9 @@ class TestKompressCompressorBatch:
         assert result.compressed == content
         assert cache.lookup(content) is None
 
-    def test_batch_generic_model_load_failure_retries_without_cache_entry(self, monkeypatch) -> None:
+    def test_batch_generic_model_load_failure_retries_without_cache_entry(
+        self, monkeypatch
+    ) -> None:
         content = "batch model failed " * 20
         cache = KompressCache(max_entries=10, max_bytes=100_000, max_attempts=2)
         monkeypatch.setattr(kc, "get_kompress_cache", lambda: cache)

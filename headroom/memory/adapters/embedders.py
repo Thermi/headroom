@@ -335,10 +335,11 @@ class LocalEmbedder:
         # Get actual dimension from loaded model. sentence-transformers renamed
         # get_sentence_embedding_dimension() -> get_embedding_dimension(); prefer
         # the new name and fall back for older versions to avoid a FutureWarning.
-        if hasattr(self._model, "get_embedding_dimension"):
-            self._dimension = self._model.get_embedding_dimension()
+        model = cast(Any, self._model)
+        if hasattr(model, "get_embedding_dimension"):
+            self._dimension = model.get_embedding_dimension()
         else:
-            self._dimension = self._model.get_sentence_embedding_dimension()
+            self._dimension = model.get_sentence_embedding_dimension()
         logger.info(
             f"Model loaded (shared): {self._model_name}, dimension={self._dimension}, device={self._device}"
         )

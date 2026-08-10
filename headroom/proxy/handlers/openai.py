@@ -2744,11 +2744,8 @@ class OpenAIHandlerMixin:
         if _bypass:
             logger.info(f"[{request_id}] Bypass: skipping compression (header)")
 
-        _no_inline_tools = (
-            self.config.no_inline_tools
-            or _headroom_no_inline_tool_injection(
-                request.headers, dict(request.query_params)
-            )
+        _no_inline_tools = self.config.no_inline_tools or _headroom_no_inline_tool_injection(
+            request.headers, dict(request.query_params)
         )
 
         # Image compression: tile alignment + ML-based technique routing.
@@ -3344,7 +3341,7 @@ class OpenAIHandlerMixin:
                     session_id=openai_session_id,
                     request_id=request_id,
                     existing_tools=tools,
-has_compressed_content_this_turn=has_new_compressed_content,
+                    has_compressed_content_this_turn=has_new_compressed_content,
                     disable_inline_tool_injection=_no_inline_tools,
                 )
                 if ccr_tool_injected:

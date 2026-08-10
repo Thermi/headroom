@@ -164,8 +164,10 @@ def _try_pricing_headers(
             data = json.loads(raw) if isinstance(raw, str) else raw
             if isinstance(data, dict):
                 input_cost_per_1m = _as_float(data.get("input", data.get("input_cost", 0))) or 0.0
-                output_cost_per_1m = _as_float(data.get("output", data.get("output_cost", 0))) or 0.0
-                result : dict[str, Any] = {
+                output_cost_per_1m = (
+                    _as_float(data.get("output", data.get("output_cost", 0))) or 0.0
+                )
+                result: dict[str, Any] = {
                     "input_cost_per_token": input_cost_per_1m / 1_000_000,
                     "output_cost_per_token": output_cost_per_1m / 1_000_000,
                     "litellm_provider": provider or "openrouter",

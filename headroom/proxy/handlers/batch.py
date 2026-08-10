@@ -235,7 +235,14 @@ class BatchHandlerMixin:
                         f"(saved {tokens_saved:,})"
                     )
 
-                return (idx, compressed_req, original_tokens, optimized_tokens, tokens_saved, result.timing)
+                return (
+                    idx,
+                    compressed_req,
+                    original_tokens,
+                    optimized_tokens,
+                    tokens_saved,
+                    result.timing,
+                )
 
             except Exception as e:
                 logger.warning(
@@ -1009,20 +1016,26 @@ class BatchHandlerMixin:
                 },
             )
 
-    async def _download_openai_file(self, file_id: str, headers: dict, request_id: str = "") -> str | None:
+    async def _download_openai_file(
+        self, file_id: str, headers: dict, request_id: str = ""
+    ) -> str | None:
         """Download file content from OpenAI."""
         url = f"{self.OPENAI_API_URL}/v1/files/{file_id}/content"
         try:
             response = await self.http_client.get(url, headers=headers)  # type: ignore[union-attr]
             if response.status_code == 200:
                 return str(response.text)
-            logger.error(f"[{request_id}] Failed to download file {file_id}: {response.status_code}")
+            logger.error(
+                f"[{request_id}] Failed to download file {file_id}: {response.status_code}"
+            )
             return None
         except Exception as e:
             logger.error(f"[{request_id}] Error downloading file {file_id}: {e}")
             return None
 
-    async def _upload_openai_file(self, content: str, filename: str, headers: dict, request_id: str = "") -> str | None:
+    async def _upload_openai_file(
+        self, content: str, filename: str, headers: dict, request_id: str = ""
+    ) -> str | None:
         """Upload a file to OpenAI for batch processing."""
         url = f"{self.OPENAI_API_URL}/v1/files"
 
@@ -1046,7 +1059,9 @@ class BatchHandlerMixin:
                 result = response.json()
                 file_id: str | None = result.get("id")
                 return file_id
-            logger.error(f"[{request_id}] Failed to upload file: {response.status_code} - {response.text}")
+            logger.error(
+                f"[{request_id}] Failed to upload file: {response.status_code} - {response.text}"
+            )
             return None
         except Exception as e:
             logger.error(f"[{request_id}] Error uploading file: {e}")
@@ -1078,9 +1093,7 @@ class BatchHandlerMixin:
             _batch_parallelism_j = int(os.getenv("HEADROOM_BATCH_PARALLELISM", "8"))
             _executor_j = concurrent.futures.ThreadPoolExecutor(max_workers=_batch_parallelism_j)
 
-        def _process_jsonl_line(
-            i: int, line: str
-        ) -> tuple[int, str | None, int, int, bool]:
+        def _process_jsonl_line(i: int, line: str) -> tuple[int, str | None, int, int, bool]:
             """Process one JSONL line.
 
             Returns (idx, line_or_None, orig_tok, comp_tok, is_json_error).

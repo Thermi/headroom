@@ -1078,15 +1078,24 @@ def test_anthropic_disabled_routes_fall_through_to_catchall() -> None:
         with TestClient(_app_disabled()) as client:
             client.post(
                 "/v1/messages",
-                json={"model": "claude-sonnet-4-6", "messages": [{"role": "user", "content": "hi"}]},
+                json={
+                    "model": "claude-sonnet-4-6",
+                    "messages": [{"role": "user", "content": "hi"}],
+                },
             )
             client.post(
                 "/v1/messages/count_tokens",
-                json={"model": "claude-sonnet-4-6", "messages": [{"role": "user", "content": "hi"}]},
+                json={
+                    "model": "claude-sonnet-4-6",
+                    "messages": [{"role": "user", "content": "hi"}],
+                },
             )
             client.post(
                 "/v1/messages/batches",
-                json={"model": "claude-sonnet-4-6", "messages": [{"role": "user", "content": "hi"}]},
+                json={
+                    "model": "claude-sonnet-4-6",
+                    "messages": [{"role": "user", "content": "hi"}],
+                },
             )
             client.get("/v1/messages/batches")
             client.get("/v1/messages/batches/batch-123")

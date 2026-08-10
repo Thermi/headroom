@@ -22,10 +22,7 @@ from headroom.tokenizers.huggingface import get_tokenizer_name
 
 def test_huggingface_tokenizer_unwraps_provider_prefixed_deepseek_model() -> None:
     """Provider prefixes must not select the generic legacy DeepSeek tokenizer."""
-    assert (
-        get_tokenizer_name("deepseek/deepseek-v4-flash-0731")
-        == "deepseek-ai/DeepSeek-V4-Flash"
-    )
+    assert get_tokenizer_name("deepseek/deepseek-v4-flash-0731") == "deepseek-ai/DeepSeek-V4-Flash"
 
 
 class TestTiktokenCounter:

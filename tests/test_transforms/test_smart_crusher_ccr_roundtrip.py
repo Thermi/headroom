@@ -158,9 +158,7 @@ def test_shim_mirrors_opaque_ccr_with_token_metadata(monkeypatch) -> None:
     fake_rust.ccr_get_metadata.return_value = {"original_tokens": 0, "compressed_tokens": 0}
     crusher._rust = fake_rust
     store = MagicMock()
-    monkeypatch.setattr(
-        "headroom.cache.compression_store.get_compression_store", lambda: store
-    )
+    monkeypatch.setattr("headroom.cache.compression_store.get_compression_store", lambda: store)
 
     crusher._mirror_single_hash_to_python_store(
         "abc123",

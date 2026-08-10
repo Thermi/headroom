@@ -22,6 +22,7 @@ try:
     from headroom._core import (
         TextCrusherConfig as _RustTextCrusherConfig,  # type: ignore[attr-defined]
     )
+
     _HAS_RUST_TEXTRUSHER = True
 except ImportError:
     _RustTextCrusher = None  # type: ignore[assignment]
@@ -70,5 +71,7 @@ class TextCrusher:
         ``.kept_segments``, ``.total_segments``."""
         if self._rust is None:
             cls: Any = type(self)
-            raise RuntimeError(f"{cls.__name__} requires headroom._core.TextCrusher (stale _core.pyd)")
+            raise RuntimeError(
+                f"{cls.__name__} requires headroom._core.TextCrusher (stale _core.pyd)"
+            )
         return self._rust.compress(content, context, target_ratio)

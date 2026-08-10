@@ -248,7 +248,9 @@ def _make_anthropic_app(**config_overrides) -> tuple[TestClient, _CapturingTrans
 
     fake_tracker = _FakePrefixTracker(frozen_count=0)
     proxy.session_tracker_store.compute_session_id = lambda request, model, messages: "s1"
-    proxy.session_tracker_store.get_or_create = lambda session_id, provider, project=None: fake_tracker
+    proxy.session_tracker_store.get_or_create = lambda session_id, provider, project=None: (
+        fake_tracker
+    )
 
     return TestClient(app), transport
 
@@ -449,7 +451,9 @@ def test_inbound_read_path_still_reads_x_headroom_bypass() -> None:
 
     fake_tracker = _FakePrefixTracker(frozen_count=0)
     proxy.session_tracker_store.compute_session_id = lambda request, model, messages: "s_bypass"
-    proxy.session_tracker_store.get_or_create = lambda session_id, provider, project=None: fake_tracker
+    proxy.session_tracker_store.get_or_create = lambda session_id, provider, project=None: (
+        fake_tracker
+    )
 
     client = TestClient(app)
 

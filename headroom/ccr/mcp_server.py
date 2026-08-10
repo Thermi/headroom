@@ -1132,9 +1132,7 @@ class HeadroomMCPServer:
         self._memory_backend = backend
         return backend
 
-    async def _handle_memory_search(
-        self, arguments: dict[str, Any]
-    ) -> list[TextContent]:
+    async def _handle_memory_search(self, arguments: dict[str, Any]) -> list[TextContent]:
         backend = await self._get_memory_backend()
         if backend is None:
             return [
@@ -1147,9 +1145,7 @@ class HeadroomMCPServer:
 
         return await _handle_search(backend, arguments, self.memory_user_id)
 
-    async def _handle_memory_save(
-        self, arguments: dict[str, Any]
-    ) -> list[TextContent]:
+    async def _handle_memory_save(self, arguments: dict[str, Any]) -> list[TextContent]:
         backend = await self._get_memory_backend()
         if backend is None:
             return [
@@ -1162,9 +1158,7 @@ class HeadroomMCPServer:
 
         return await _handle_save(backend, arguments, self.memory_user_id)
 
-    async def _handle_memory_analyze(
-        self, arguments: dict[str, Any]
-    ) -> list[TextContent]:
+    async def _handle_memory_analyze(self, arguments: dict[str, Any]) -> list[TextContent]:
         backend = await self._get_memory_backend()
         if backend is None:
             return [
@@ -1177,9 +1171,7 @@ class HeadroomMCPServer:
 
         return await _handle_analyze(backend, arguments, self.memory_user_id)
 
-    async def _handle_memory_delete(
-        self, arguments: dict[str, Any]
-    ) -> list[TextContent]:
+    async def _handle_memory_delete(self, arguments: dict[str, Any]) -> list[TextContent]:
         backend = await self._get_memory_backend()
         if backend is None:
             return [

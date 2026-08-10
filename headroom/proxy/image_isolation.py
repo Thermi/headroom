@@ -29,7 +29,7 @@ def _get_worker_compressor() -> Any:
     if _WORKER_COMPRESSOR is None:
         from headroom.image import ImageCompressor
 
-        instance = ImageCompressor()
+        instance: Any = ImageCompressor()
         # Shared across calls in this worker: don't let a per-call close() unload
         # the models the next call reuses.
         instance._is_singleton = True

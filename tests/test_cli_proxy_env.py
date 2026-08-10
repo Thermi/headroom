@@ -803,9 +803,7 @@ class TestCLIProxyAnthropicEnabled:
             captured_config["config"] = config
 
         with patch("headroom.proxy.server.run_server", mock_run_server):
-            result = runner.invoke(
-                main, ["proxy", "--no-anthropic"], catch_exceptions=False
-            )
+            result = runner.invoke(main, ["proxy", "--no-anthropic"], catch_exceptions=False)
 
         assert result.exit_code == 0, result.output
         assert captured_config["config"].anthropic_enabled is False

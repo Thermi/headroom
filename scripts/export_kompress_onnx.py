@@ -83,9 +83,7 @@ def export(
             super().__init__()
             self.inner = inner
 
-        def forward(
-            self, input_ids: torch.Tensor, attention_mask: torch.Tensor
-        ) -> torch.Tensor:
+        def forward(self, input_ids: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor:
             with torch.no_grad():
                 hidden = self.inner.encoder(
                     input_ids, attention_mask=attention_mask
@@ -160,8 +158,10 @@ def export(
         sys.exit(1)
 
     print(f"Done — saved to {output_path}")
-    print(f"To use this export, set:\n"
-          f"  export HEADROOM_KOMPRESS_ONNX_PATH={os.path.abspath(output_path)}")
+    print(
+        f"To use this export, set:\n"
+        f"  export HEADROOM_KOMPRESS_ONNX_PATH={os.path.abspath(output_path)}"
+    )
 
 
 if __name__ == "__main__":
@@ -169,16 +169,15 @@ if __name__ == "__main__":
         description="Re-export Kompress ONNX model with GPU-optimized settings"
     )
     parser.add_argument(
-        "--output", default="onnx/kompress-int8.onnx",
-        help="Output path for the ONNX file (default: onnx/kompress-int8.onnx)"
+        "--output",
+        default="onnx/kompress-int8.onnx",
+        help="Output path for the ONNX file (default: onnx/kompress-int8.onnx)",
     )
     parser.add_argument(
-        "--opset", type=int, default=17,
-        help="ONNX opset version (default: 17, range: 14-21)"
+        "--opset", type=int, default=17, help="ONNX opset version (default: 17, range: 14-21)"
     )
     parser.add_argument(
-        "--no-quantize", action="store_true",
-        help="Skip INT8 quantization (keep FP32)"
+        "--no-quantize", action="store_true", help="Skip INT8 quantization (keep FP32)"
     )
     args = parser.parse_args()
 

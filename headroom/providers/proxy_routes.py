@@ -63,7 +63,6 @@ from headroom.providers.vertex import (
 from headroom.proxy.passthrough import (
     custom_base_passthrough_telemetry as _custom_base_passthrough_telemetry,
 )
-from headroom.proxy.request_scope import normalize_request_path
 
 logger = logging.getLogger("headroom.proxy.routes")
 

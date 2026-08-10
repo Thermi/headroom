@@ -551,9 +551,7 @@ class ImageCompressor:
             elif item.get("type") == "image" and provider == "anthropic":
                 if image_data:
                     try:
-                        resized_data, media_type = self._resize_image(
-                            image_data, max_dimension=512
-                        )
+                        resized_data, media_type = self._resize_image(image_data, max_dimension=512)
                         return {
                             "type": "image",
                             "source": {
@@ -568,9 +566,7 @@ class ImageCompressor:
             elif "inlineData" in item and provider == "google":
                 if image_data:
                     try:
-                        resized_data, media_type = self._resize_image(
-                            image_data, max_dimension=768
-                        )
+                        resized_data, media_type = self._resize_image(image_data, max_dimension=768)
                         return {
                             "inlineData": {
                                 "mimeType": media_type,
@@ -612,9 +608,7 @@ class ImageCompressor:
                     continue
 
                 image_data = self._extract_image_data_from_block(item)
-                compressed_item = self._compress_image_block(
-                    item, technique, provider, image_data
-                )
+                compressed_item = self._compress_image_block(item, technique, provider, image_data)
                 new_content.append(compressed_item)
 
             compressed.append({**message, "content": new_content})
@@ -710,8 +704,9 @@ class ImageCompressor:
         max_workers = min(int(os.environ.get("HEADROOM_IMAGE_PARALLELISM", "4")), 16)
 
         # Per-image results: (compressed_item, technique, confidence, image_data)
-        results: list[tuple[dict[str, Any], Technique, float, bytes | None]
-                       | None] = [None] * len(image_blocks)
+        results: list[tuple[dict[str, Any], Technique, float, bytes | None] | None] = [None] * len(
+            image_blocks
+        )
 
         def _classify_and_compress(
             idx: int,
@@ -756,9 +751,7 @@ class ImageCompressor:
                 except Exception:
                     pass
 
-            compressed_item = self._compress_image_block(
-                item, technique, provider, image_data
-            )
+            compressed_item = self._compress_image_block(item, technique, provider, image_data)
             return idx, compressed_item, technique, confidence, image_data
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -807,7 +800,9 @@ class ImageCompressor:
             if image_data:
                 original_tokens_total += self._estimate_tokens(image_data, "high")
                 # Count tokens for this single compressed block
-                if compressed_item.get("type") == "text" and "[OCR from image]" in compressed_item.get("text", ""):
+                if compressed_item.get(
+                    "type"
+                ) == "text" and "[OCR from image]" in compressed_item.get("text", ""):
                     compressed_tokens_total += max(1, len(compressed_item["text"]) // 4)
                 elif compressed_item.get("type") == "image_url":
                     detail = compressed_item.get("image_url", {}).get("detail", "high")

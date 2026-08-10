@@ -25,11 +25,6 @@ Usage:
 
 from __future__ import annotations
 
-# Apply memory budget before any other imports so component-level
-# constants (class defaults, module constants) see the scaled values
-# when HEADROOM_MEMORY_MODE is set.
-import headroom.memory.budget  # noqa: F401 — side-effect: sets os.environ
-
 import argparse
 import asyncio
 import concurrent.futures
@@ -53,6 +48,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, TypedDict, cast
 from urllib.parse import urlsplit
 
+# Apply memory budget before any other imports so component-level
+# constants (class defaults, module constants) see the scaled values
+# when HEADROOM_MEMORY_MODE is set.
+import headroom.memory.budget  # noqa: F401 — side-effect: sets os.environ
+
 LoopExceptionHandler = Callable[[asyncio.AbstractEventLoop, dict[str, Any]], object]
 
 
@@ -65,6 +65,7 @@ class LoopHealthState(TypedDict):
     status: str
     known_failures: int
     last_known_failure: LoopFailureDetails | None
+
 
 if TYPE_CHECKING:
     from ..backends.base import Backend
@@ -93,6 +94,7 @@ def _ojson_version(module: Any) -> str:
         return importlib.metadata.version("ojson")
     except Exception:
         return "unknown"
+
 
 try:
     import uvicorn
@@ -153,7 +155,6 @@ from headroom.providers.registry import (
 )
 from headroom.proxy import runtime_env
 from headroom.proxy.audit import is_auditable_path, record_admin_action
-from headroom.proxy.auth_mode import should_stamp_codex_client
 from headroom.proxy.background_compression import BackgroundCompressor
 from headroom.proxy.budget_basis_policy import resolve_estimated_basis_policy
 
@@ -511,7 +512,12 @@ logging.basicConfig(
 )
 logger = logging.getLogger("headroom.proxy")
 
-_SILENCE_HEALTH_PROBES = os.environ.get("HEADROOM_SILENCE_HEALTH_PROBES", "").lower() in ("1", "true", "yes")
+_SILENCE_HEALTH_PROBES = os.environ.get("HEADROOM_SILENCE_HEALTH_PROBES", "").lower() in (
+    "1",
+    "true",
+    "yes",
+)
+
 
 class CompressionQuarantinedError(asyncio.TimeoutError):
     """Compression was skipped while a timed-out worker was still running.
@@ -867,7 +873,9 @@ class HeadroomProxy(
 
                 result = subprocess.run(
                     ["git", "rev-parse", "--short", "HEAD"],
-                    capture_output=True, text=True, timeout=2,
+                    capture_output=True,
+                    text=True,
+                    timeout=2,
                 )
                 if result.returncode == 0:
                     self._build_info["git_commit"] = result.stdout.strip()
@@ -930,7 +938,7 @@ class HeadroomProxy(
         profile_kwargs = proxy_pipeline_kwargs(config)
         router_config = ContentRouterConfig(
             enable_code_aware=config.code_aware_enabled,
-prefer_code_aware_for_code=_get_env_bool("HEADROOM_PREFER_CODE_AWARE_FOR_CODE", True),
+            prefer_code_aware_for_code=_get_env_bool("HEADROOM_PREFER_CODE_AWARE_FOR_CODE", True),
             enable_kompress=config.kompress_enabled,
             tool_profiles=config.tool_profiles,
             read_lifecycle=ReadLifecycleConfig(enabled=config.read_lifecycle),
@@ -1436,7 +1444,9 @@ prefer_code_aware_for_code=_get_env_bool("HEADROOM_PREFER_CODE_AWARE_FOR_CODE", 
                 min_evidence=config.traffic_learning_min_evidence,
                 max_memory_bytes=config.traffic_learning_max_memory_bytes,
                 max_patterns=int(os.environ.get("HEADROOM_TRAFFIC_LEARNER_MAX_PATTERNS", "5000")),
-                max_persisted_ids=int(os.environ.get("HEADROOM_TRAFFIC_LEARNER_MAX_PERSISTED_IDS", "5000")),
+                max_persisted_ids=int(
+                    os.environ.get("HEADROOM_TRAFFIC_LEARNER_MAX_PERSISTED_IDS", "5000")
+                ),
             )
 
         # Code graph file watcher (live reindex on file changes)
@@ -1959,7 +1969,11 @@ prefer_code_aware_for_code=_get_env_bool("HEADROOM_PREFER_CODE_AWARE_FOR_CODE", 
                 await self.memory_handler.ensure_initialized()
             except Exception as exc:  # pragma: no cover - defensive
                 self.warmup.memory_backend.mark_error(str(exc))
-                logger.error("Memory: backend initialization failed (startup continues): %s: %s", type(exc).__name__, exc)
+                logger.error(
+                    "Memory: backend initialization failed (startup continues): %s: %s",
+                    type(exc).__name__,
+                    exc,
+                )
             memory_status = self.memory_handler.health_status()
             if memory_status.get("initialized"):
                 self.warmup.memory_backend.mark_loaded(
@@ -3573,8 +3587,10 @@ def create_app(config: ProxyConfig | None = None) -> FastAPI:
             async def send_with_headers(message: dict[str, Any]) -> None:
                 await send(self._add_security_headers(message))
 
-            if self.proxy_token and path not in _AUTH_EXEMPT_PATHS and not is_loopback_host(
-                client_host
+            if (
+                self.proxy_token
+                and path not in _AUTH_EXEMPT_PATHS
+                and not is_loopback_host(client_host)
             ):
                 provided = self._proxy_token_from_headers(headers)
                 if provided is None or not hmac.compare_digest(
@@ -3587,7 +3603,7 @@ def create_app(config: ProxyConfig | None = None) -> FastAPI:
                         "missing_token" if provided is None else "bad_token",
                     )
                     rejection = JSONResponse(status_code=401, content={"error": "unauthorized"})
-                    await rejection(scope, receive, send_with_headers)
+                    await rejection(scope, receive, send_with_headers)  # type: ignore[arg-type]
                     return
 
             status_code: int | None = None
@@ -4730,20 +4746,22 @@ def create_app(config: ProxyConfig | None = None) -> FastAPI:
                 if dedup_key in seen:
                     continue
                 seen.add(dedup_key)
-                entries.append({
-                    "session_id": sid,
-                    "provider": None,
-                    "type": "websocket",
-                    "source": "ws_registry",
-                    "display": {
-                        "age_seconds": snap.get("age_seconds", 0),
-                        "idle_seconds": snap.get("idle_seconds", 0),
-                        "relay_task_count": snap.get("relay_task_count", 0),
-                        "client_addr": snap.get("client_addr"),
-                        "upstream_url": snap.get("upstream_url"),
-                        "request_id": snap.get("request_id"),
-                    },
-                })
+                entries.append(
+                    {
+                        "session_id": sid,
+                        "provider": None,
+                        "type": "websocket",
+                        "source": "ws_registry",
+                        "display": {
+                            "age_seconds": snap.get("age_seconds", 0),
+                            "idle_seconds": snap.get("idle_seconds", 0),
+                            "relay_task_count": snap.get("relay_task_count", 0),
+                            "client_addr": snap.get("client_addr"),
+                            "upstream_url": snap.get("upstream_url"),
+                            "request_id": snap.get("request_id"),
+                        },
+                    }
+                )
 
         # 2. Prefix-cache tracker sessions (cache-aware compression state)
         sts = getattr(proxy, "session_tracker_store", None)
@@ -4753,20 +4771,22 @@ def create_app(config: ProxyConfig | None = None) -> FastAPI:
                 if dedup_key in seen:
                     continue
                 seen.add(dedup_key)
-                entries.append({
-                    "session_id": sid,
-                    "provider": info.get("provider"),
-                    "type": "prefix_cache",
-                    "source": "session_tracker_store",
-                    "display": {
-                        "turn_number": info.get("turn_number", 0),
-                        "cached_token_count": info.get("cached_token_count", 0),
-                        "cached_message_count": info.get("cached_message_count", 0),
-                        "frozen_message_count": info.get("frozen_message_count", 0),
-                        "idle_seconds": info.get("idle_seconds", 0),
-                        "expired": info.get("expired", False),
-                    },
-                })
+                entries.append(
+                    {
+                        "session_id": sid,
+                        "provider": info.get("provider"),
+                        "type": "prefix_cache",
+                        "source": "session_tracker_store",
+                        "display": {
+                            "turn_number": info.get("turn_number", 0),
+                            "cached_token_count": info.get("cached_token_count", 0),
+                            "cached_message_count": info.get("cached_message_count", 0),
+                            "frozen_message_count": info.get("frozen_message_count", 0),
+                            "idle_seconds": info.get("idle_seconds", 0),
+                            "expired": info.get("expired", False),
+                        },
+                    }
+                )
 
         # 3. Beta-header tracker sessions (sticky beta tokens)
         beta = get_session_beta_tracker()
@@ -4777,16 +4797,18 @@ def create_app(config: ProxyConfig | None = None) -> FastAPI:
             if dedup_key in seen:
                 continue
             seen.add(dedup_key)
-            entries.append({
-                "session_id": sid,
-                "provider": prov,
-                "type": "beta_header",
-                "source": "session_beta_tracker",
-                "display": {
-                    "beta_tokens": b.get("beta_tokens", []),
-                    "token_count": b.get("token_count", 0),
-                },
-            })
+            entries.append(
+                {
+                    "session_id": sid,
+                    "provider": prov,
+                    "type": "beta_header",
+                    "source": "session_beta_tracker",
+                    "display": {
+                        "beta_tokens": b.get("beta_tokens", []),
+                        "token_count": b.get("token_count", 0),
+                    },
+                }
+            )
 
         # 4. Memory-tool injection tracker sessions (sticky tool definitions)
         tool = get_session_tool_tracker()
@@ -4797,16 +4819,18 @@ def create_app(config: ProxyConfig | None = None) -> FastAPI:
             if dedup_key in seen:
                 continue
             seen.add(dedup_key)
-            entries.append({
-                "session_id": sid,
-                "provider": prov,
-                "type": "memory_tool",
-                "source": "session_tool_tracker",
-                "display": {
-                    "tool_count": t.get("tool_count", 0),
-                    "tool_names": t.get("tool_names", []),
-                },
-            })
+            entries.append(
+                {
+                    "session_id": sid,
+                    "provider": prov,
+                    "type": "memory_tool",
+                    "source": "session_tool_tracker",
+                    "display": {
+                        "tool_count": t.get("tool_count", 0),
+                        "tool_names": t.get("tool_names", []),
+                    },
+                }
+            )
 
         # 5. CCR tracker sessions (compression-context retrieval state)
         ccr = get_session_ccr_tracker()
@@ -4817,41 +4841,47 @@ def create_app(config: ProxyConfig | None = None) -> FastAPI:
             if dedup_key in seen:
                 continue
             seen.add(dedup_key)
-            entries.append({
-                "session_id": sid,
-                "provider": prov,
-                "type": "ccr",
-                "source": "session_ccr_tracker",
-                "display": {
-                    "has_done_ccr": c.get("has_done_ccr", False),
-                    "has_golden_tool_bytes": c.get("has_golden_tool_bytes", False),
-                },
-            })
+            entries.append(
+                {
+                    "session_id": sid,
+                    "provider": prov,
+                    "type": "ccr",
+                    "source": "session_ccr_tracker",
+                    "display": {
+                        "has_done_ccr": c.get("has_done_ccr", False),
+                        "has_golden_tool_bytes": c.get("has_golden_tool_bytes", False),
+                    },
+                }
+            )
 
         # 6. Display session from SavingsTracker (active rolling window)
-        savings = getattr(proxy.metrics, "savings_tracker", None) if hasattr(proxy, "metrics") else None
+        savings = (
+            getattr(proxy.metrics, "savings_tracker", None) if hasattr(proxy, "metrics") else None
+        )
         if savings is not None:
             snap = savings.snapshot()
             ds = snap.get("display_session", {})
             if ds.get("requests", 0) > 0:
-                entries.append({
-                    "session_id": "_display_session",
-                    "provider": None,
-                    "type": "display_session",
-                    "source": "savings_tracker",
-                    "display": {
-                        "requests": ds.get("requests", 0),
-                        "tokens_saved": ds.get("tokens_saved", 0),
-                        "compression_savings_usd": ds.get("compression_savings_usd", 0.0),
-                        "total_input_tokens": ds.get("total_input_tokens", 0),
-                        "savings_percent": ds.get("savings_percent", 0.0),
-                        "started_at": ds.get("started_at", ""),
-                        "last_activity_at": ds.get("last_activity_at", ""),
-                        "rollover_inactivity_minutes": snap.get("display_session_policy", {}).get(
-                            "rollover_inactivity_minutes", 60
-                        ),
-                    },
-                })
+                entries.append(
+                    {
+                        "session_id": "_display_session",
+                        "provider": None,
+                        "type": "display_session",
+                        "source": "savings_tracker",
+                        "display": {
+                            "requests": ds.get("requests", 0),
+                            "tokens_saved": ds.get("tokens_saved", 0),
+                            "compression_savings_usd": ds.get("compression_savings_usd", 0.0),
+                            "total_input_tokens": ds.get("total_input_tokens", 0),
+                            "savings_percent": ds.get("savings_percent", 0.0),
+                            "started_at": ds.get("started_at", ""),
+                            "last_activity_at": ds.get("last_activity_at", ""),
+                            "rollover_inactivity_minutes": snap.get(
+                                "display_session_policy", {}
+                            ).get("rollover_inactivity_minutes", 60),
+                        },
+                    }
+                )
 
         return {
             "sessions": entries,
@@ -5539,9 +5569,9 @@ def _proxy_config_from_env() -> ProxyConfig:
                 "Invalid %s; falling back to HEADROOM_* env vars", _MULTI_WORKER_CONFIG_ENV
             )
 
-    anthropic_enabled = os.environ.get("HEADROOM_ANTHROPIC_ENABLED", "true").strip().lower() not in (
-        "false", "0", "no", "off"
-    )
+    anthropic_enabled = os.environ.get(
+        "HEADROOM_ANTHROPIC_ENABLED", "true"
+    ).strip().lower() not in ("false", "0", "no", "off")
 
     return ProxyConfig(
         host=_get_env_str("HEADROOM_HOST", "127.0.0.1"),
@@ -5619,7 +5649,9 @@ def _get_build_info_value(key: str) -> str:
 
             r = subprocess.run(
                 ["git", "rev-parse", "--short", "HEAD"],
-                capture_output=True, text=True, timeout=2,
+                capture_output=True,
+                text=True,
+                timeout=2,
             )
             if r.returncode == 0:
                 return r.stdout.strip()
@@ -5627,7 +5659,7 @@ def _get_build_info_value(key: str) -> str:
             pass
     elif key == "build_time":
         try:
-            return __import__("datetime").datetime.now().isoformat()
+            return datetime.now().isoformat()
         except Exception:
             pass
     return "unknown"
@@ -6276,10 +6308,7 @@ if __name__ == "__main__":
         args.protect_tool_results or os.environ.get("HEADROOM_PROTECT_TOOL_RESULTS")
     )
 
-    anthropic_enabled = (
-        not args.no_anthropic
-        and _get_env_bool("HEADROOM_ANTHROPIC_ENABLED", True)
-    )
+    anthropic_enabled = not args.no_anthropic and _get_env_bool("HEADROOM_ANTHROPIC_ENABLED", True)
 
     config = ProxyConfig(
         host=_get_env_str("HEADROOM_HOST", args.host),

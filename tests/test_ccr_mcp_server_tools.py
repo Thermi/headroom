@@ -11,6 +11,7 @@ import pytest
 
 pytest.importorskip("mcp")
 
+from headroom.accounting import reset_model_accounting
 from headroom.ccr import mcp_server
 from headroom.ccr.mcp_server import (
     CCR_TOOL_NAME,
@@ -21,12 +22,12 @@ from headroom.ccr.mcp_server import (
     SessionStats,
     _format_session_summary,
 )
-from headroom.accounting import reset_model_accounting
 from headroom.compress import CompressResult
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_server(**kwargs) -> HeadroomMCPServer:
     kwargs.setdefault("check_proxy", False)
@@ -37,6 +38,7 @@ def _make_server(**kwargs) -> HeadroomMCPServer:
 @pytest.fixture(autouse=True)
 def _no_real_compress():
     """Prevent real compression pipeline from being triggered."""
+
     def fake_compress(*args, **kwargs):
         return CompressResult(
             messages=[{"role": "tool", "content": "compressed content"}],
@@ -46,6 +48,7 @@ def _no_real_compress():
             compression_ratio=0.7,
             transforms_applied=["test_transform"],
         )
+
     patcher = patch("headroom.compress.compress", fake_compress)
     patcher.start()
     yield
@@ -237,9 +240,7 @@ class TestCompressContent:
                 transforms_applied=["test_kompress"],
             )
 
-            with patch(
-                "headroom.cache.compression_store.CompressionStore"
-            ) as MockStore:
+            with patch("headroom.cache.compression_store.CompressionStore") as MockStore:
                 mock_store = MockStore.return_value
                 mock_store.store.return_value = "fakehash123"
 
@@ -259,12 +260,13 @@ class TestCompressContent:
         with patch("headroom.compress.compress") as mock_compress:
             mock_compress.return_value = CompressResult(
                 messages=[{"role": "tool", "content": ""}],
-                tokens_before=0, tokens_after=0, tokens_saved=0,
-                compression_ratio=0.0, transforms_applied=[],
+                tokens_before=0,
+                tokens_after=0,
+                tokens_saved=0,
+                compression_ratio=0.0,
+                transforms_applied=[],
             )
-            with patch(
-                "headroom.cache.compression_store.CompressionStore"
-            ) as MockStore:
+            with patch("headroom.cache.compression_store.CompressionStore") as MockStore:
                 mock_store = MockStore.return_value
                 mock_store.store.return_value = "emptyhash"
                 result = server._compress_content("")
@@ -283,9 +285,7 @@ class TestHandleCompress:
         server = _make_server()
         with (
             patch.object(server, "_compress_content") as mock_cc,
-            patch(
-                "headroom.cache.compression_store.CompressionStore"
-            ),
+            patch("headroom.cache.compression_store.CompressionStore"),
         ):
             mock_cc.return_value = {"compressed": "x", "hash": "h1"}
             result = await server._handle_compress({"content": "hello world"})
@@ -318,9 +318,7 @@ class TestHandleCompress:
 class TestHandleRetrieve:
     async def test_retrieve_local_hit(self):
         server = _make_server()
-        with patch(
-            "headroom.cache.compression_store.CompressionStore"
-        ) as MockStore:
+        with patch("headroom.cache.compression_store.CompressionStore") as MockStore:
             mock_store = MockStore.return_value
             entry = MagicMock()
             entry.original_content = "full original text"
@@ -339,9 +337,7 @@ class TestHandleRetrieve:
 
     async def test_retrieve_local_hit_with_query(self):
         server = _make_server()
-        with patch(
-            "headroom.cache.compression_store.CompressionStore"
-        ) as MockStore:
+        with patch("headroom.cache.compression_store.CompressionStore") as MockStore:
             mock_store = MockStore.return_value
             mock_store.search.return_value = [{"item": "matched"}]
 
@@ -355,9 +351,7 @@ class TestHandleRetrieve:
     async def test_retrieve_local_miss_then_proxy_hit(self):
         server = _make_server(check_proxy=True)
         with (
-            patch(
-                "headroom.cache.compression_store.CompressionStore"
-            ) as MockStore,
+            patch("headroom.cache.compression_store.CompressionStore") as MockStore,
         ):
             mock_store = MockStore.return_value
             mock_store.retrieve.return_value = None
@@ -377,9 +371,7 @@ class TestHandleRetrieve:
 
     async def test_retrieve_not_found_anywhere(self):
         server = _make_server(check_proxy=False)
-        with patch(
-            "headroom.cache.compression_store.CompressionStore"
-        ) as MockStore:
+        with patch("headroom.cache.compression_store.CompressionStore") as MockStore:
             MockStore.return_value.retrieve.return_value = None
             result = await server._handle_retrieve({"hash": "nonexistent"})
 
@@ -396,9 +388,7 @@ class TestHandleRetrieve:
     async def test_retrieve_proxy_404(self):
         server = _make_server(check_proxy=True)
         with (
-            patch(
-                "headroom.cache.compression_store.CompressionStore"
-            ) as MockStore,
+            patch("headroom.cache.compression_store.CompressionStore") as MockStore,
             patch.object(server, "_http_client") as mock_client,
         ):
             MockStore.return_value.retrieve.return_value = None
@@ -415,9 +405,7 @@ class TestHandleRetrieve:
     async def test_retrieve_proxy_unreachable(self):
         server = _make_server(check_proxy=True)
         with (
-            patch(
-                "headroom.cache.compression_store.CompressionStore"
-            ) as MockStore,
+            patch("headroom.cache.compression_store.CompressionStore") as MockStore,
             patch.object(server, "_http_client") as mock_client,
         ):
             MockStore.return_value.retrieve.return_value = None
@@ -442,7 +430,8 @@ class TestHandleStats:
 
         mock_store_instance = MagicMock()
         mock_store_instance.get_stats.return_value = {
-            "entry_count": 2, "max_entries": 500,
+            "entry_count": 2,
+            "max_entries": 500,
         }
         server._local_store = mock_store_instance
 
@@ -462,17 +451,21 @@ class TestHandleStats:
         monkeypatch.setattr(mcp_server.os, "getpid", lambda: 111)
 
         fake_events = [
-            {"type": "compress", "timestamp": time.time(), "pid": 222,
-             "input_tokens": 500, "output_tokens": 100},
+            {
+                "type": "compress",
+                "timestamp": time.time(),
+                "pid": 222,
+                "input_tokens": 500,
+                "output_tokens": 100,
+            },
         ]
         with (
             patch.object(mcp_server, "_read_shared_events", return_value=fake_events),
-            patch(
-                "headroom.cache.compression_store.CompressionStore"
-            ) as MockStore,
+            patch("headroom.cache.compression_store.CompressionStore") as MockStore,
         ):
             MockStore.return_value.get_stats.return_value = {
-                "entry_count": 0, "max_entries": 500,
+                "entry_count": 0,
+                "max_entries": 500,
             }
             server = _make_server(check_proxy=False)
             result = await server._handle_stats()
@@ -494,14 +487,12 @@ class TestHandleStats:
         }
 
         with (
-            patch.object(server, "_fetch_full_proxy_stats",
-                         return_value=mock_proxy_data),
-            patch(
-                "headroom.cache.compression_store.CompressionStore"
-            ) as MockStore,
+            patch.object(server, "_fetch_full_proxy_stats", return_value=mock_proxy_data),
+            patch("headroom.cache.compression_store.CompressionStore") as MockStore,
         ):
             MockStore.return_value.get_stats.return_value = {
-                "entry_count": 0, "max_entries": 500,
+                "entry_count": 0,
+                "max_entries": 500,
             }
             result = await server._handle_stats()
 
@@ -511,14 +502,12 @@ class TestHandleStats:
     async def test_stats_proxy_unreachable(self):
         server = _make_server(check_proxy=True)
         with (
-            patch.object(server, "_fetch_full_proxy_stats",
-                         return_value=None),
-            patch(
-                "headroom.cache.compression_store.CompressionStore"
-            ) as MockStore,
+            patch.object(server, "_fetch_full_proxy_stats", return_value=None),
+            patch("headroom.cache.compression_store.CompressionStore") as MockStore,
         ):
             MockStore.return_value.get_stats.return_value = {
-                "entry_count": 0, "max_entries": 500,
+                "entry_count": 0,
+                "max_entries": 500,
             }
             result = await server._handle_stats()
 
@@ -537,7 +526,8 @@ class TestHandleStats:
 
         mock_store_instance = MagicMock()
         mock_store_instance.get_stats.return_value = {
-            "entry_count": 1, "max_entries": 500,
+            "entry_count": 1,
+            "max_entries": 500,
         }
         server._local_store = mock_store_instance
 
@@ -559,7 +549,8 @@ class TestHandleStats:
 
         mock_store_instance = MagicMock()
         mock_store_instance.get_stats.return_value = {
-            "entry_count": 0, "max_entries": 500,
+            "entry_count": 0,
+            "max_entries": 500,
         }
         server._local_store = mock_store_instance
 
@@ -584,7 +575,8 @@ class TestHandleStats:
 
         mock_store_instance = MagicMock()
         mock_store_instance.get_stats.return_value = {
-            "entry_count": 0, "max_entries": 500,
+            "entry_count": 0,
+            "max_entries": 500,
         }
         server._local_store = mock_store_instance
 
@@ -620,9 +612,7 @@ class TestHandleRead:
         test_file = tmp_path / "test.txt"
         test_file.write_text("line one\nline two\nline three\n")
 
-        with patch(
-            "headroom.cache.compression_store.CompressionStore"
-        ) as MockStore:
+        with patch("headroom.cache.compression_store.CompressionStore") as MockStore:
             MockStore.return_value.store.return_value = "readhash"
 
             result = await server._handle_read({"file_path": str(test_file)})
@@ -642,12 +632,11 @@ class TestHandleRead:
         import hashlib
 
         from headroom.proxy.helpers import safe_decode_for_logging
+
         content = safe_decode_for_logging(test_file.read_bytes())
         content_hash = hashlib.sha256(content.encode()).hexdigest()[:24]
 
-        with patch(
-            "headroom.cache.compression_store.CompressionStore"
-        ) as MockStore:
+        with patch("headroom.cache.compression_store.CompressionStore") as MockStore:
             mock_store = MockStore.return_value
             mock_store.store.return_value = "readhash"
             mock_store.exists.return_value = True
@@ -1050,18 +1039,14 @@ class TestCallToolMemoryDispatch:
         server = _make_server()
         with patch.object(server, "_handle_memory_analyze") as mock_h:
             mock_h.return_value = [MagicMock(text='{"ok":true}')]
-            await server._call_tool_handler(
-                "memory_analyze", {"messages": [], "response_text": ""}
-            )
+            await server._call_tool_handler("memory_analyze", {"messages": [], "response_text": ""})
         mock_h.assert_awaited_once_with({"messages": [], "response_text": ""})
 
     async def test_dispatch_memory_delete(self):
         server = _make_server()
         with patch.object(server, "_handle_memory_delete") as mock_h:
             mock_h.return_value = [MagicMock(text='{"ok":true}')]
-            await server._call_tool_handler(
-                "memory_delete", {"memory_id": "mem-123"}
-            )
+            await server._call_tool_handler("memory_delete", {"memory_id": "mem-123"})
         mock_h.assert_awaited_once_with({"memory_id": "mem-123"})
 
     async def test_memory_search_no_backend_error(self):
@@ -1078,9 +1063,7 @@ class TestCallToolMemoryDispatch:
 
     async def test_memory_analyze_no_backend_error(self):
         server = _make_server()
-        result = await server._handle_memory_analyze(
-            {"messages": [], "response_text": ""}
-        )
+        result = await server._handle_memory_analyze({"messages": [], "response_text": ""})
         data = json.loads(result[0].text)
         assert data["error"] == "Memory backend not available"
 

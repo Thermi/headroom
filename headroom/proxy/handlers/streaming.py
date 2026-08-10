@@ -222,9 +222,7 @@ class StreamingMixin:
                         _input_val = int(usage.get("input_tokens", 0))
                         _cached_val = int(usage.get("cache_read_input_tokens", 0))
                         if _input_val > 0:
-                            usage["cache_creation_input_tokens"] = max(
-                                _input_val - _cached_val, 0
-                            )
+                            usage["cache_creation_input_tokens"] = max(_input_val - _cached_val, 0)
                         # OpenRouter sends per-request cost in the usage block
                         _cost = chunk_usage.get("cost")
                         if _cost is not None:
@@ -1282,9 +1280,7 @@ class StreamingMixin:
                     if attempt >= retry_attempts - 1:
                         from headroom.proxy.upstream_diagnostics import diagnose_upstream
 
-                        asyncio.ensure_future(
-                            diagnose_upstream(url, correlation_id=request_id)
-                        )
+                        asyncio.ensure_future(diagnose_upstream(url, correlation_id=request_id))
                         raise
 
                     delay_with_jitter = jitter_delay_ms(
@@ -1601,9 +1597,7 @@ class StreamingMixin:
                             # as custom SSE events.  Clients can listen for
                             # ``event: memory_op`` to learn what was saved/found
                             # without needing a continuation API call.
-                            memory_events = (
-                                self.memory_handler.format_memory_events(tool_results)
-                            )
+                            memory_events = self.memory_handler.format_memory_events(tool_results)
                             for mem_event in memory_events:
                                 sse_payload = f"event: memory_op\ndata: {json.dumps(mem_event)}\n\n"
                                 yield sse_payload.encode()

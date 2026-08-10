@@ -137,9 +137,7 @@ class TestMustKeepCompression:
 
         compressor = KompressCompressor(KompressConfig(enable_ccr=False))
         monkeypatch.setattr(compressor, "_should_batch_single_content", lambda *a, **k: False)
-        content = (
-            "alpha beta gamma delta epsilon zeta eta theta iota kappa 0x7fff2038 omega"
-        )
+        content = "alpha beta gamma delta epsilon zeta eta theta iota kappa 0x7fff2038 omega"
 
         enabled = compressor.compress(content)
         monkeypatch.setenv(_KOMPRESS_MUST_KEEP_ENV, "0")

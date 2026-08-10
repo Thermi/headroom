@@ -12,7 +12,7 @@ import json
 import logging
 import os
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 # litellm calls `dotenv.load_dotenv()` during its own import, which loads
 # the project `.env` into `os.environ`. We don't want that side effect —
@@ -162,7 +162,7 @@ def _known_provider_prefixes(cost_db: dict[str, Any]) -> list[str]:
     """Return sorted list of known litellm provider prefixes."""
     cached = getattr(_known_provider_prefixes, "_cache", None)
     if cached is not None:
-        return cached
+        return cast(list[str], cached)
     prefixes: set[str] = set()
     for key in cost_db:
         if "/" in key:

@@ -194,12 +194,12 @@ class LocalBackend:
 
         # Choose graph store based on config
         if self._config.graph_persist:
-
             # Derive graph db path from main db path if not specified
             if self._config.graph_db_path:
                 _graph_db_path = self._config.graph_db_path
             else:
                 import os as _os
+
                 from headroom.memory.adapters.graph import InMemoryGraphStore
 
                 _max_e = int(_os.environ.get("HEADROOM_GRAPH_MAX_ENTITIES", "50000"))
@@ -207,7 +207,8 @@ class LocalBackend:
                 self._graph = InMemoryGraphStore(max_entities=_max_e, max_relationships=_max_r)
                 logger.info(
                     "LocalBackend: Using InMemoryGraphStore (entities=%d, relationships=%d)",
-                    _max_e, _max_r,
+                    _max_e,
+                    _max_r,
                 )
 
             self._graph = InMemoryGraphStore()

@@ -494,9 +494,7 @@ async def _handle_analyze(
             )
             saved_count += 1
 
-        lines = [
-            f"Extracted and saved {saved_count} memories (strategy: {result.strategy}):"
-        ]
+        lines = [f"Extracted and saved {saved_count} memories (strategy: {result.strategy}):"]
         for mem in result.memories:
             lines.append(f"  [{mem.importance:.1f}] {mem.content}")
 
@@ -520,7 +518,12 @@ async def _handle_delete(
             return [TextContent(type="text", text=f"Memory not found: {memory_id}")]
 
         if existing.user_id != user_id:
-            return [TextContent(type="text", text="Permission denied: cannot delete memories belonging to other users.")]
+            return [
+                TextContent(
+                    type="text",
+                    text="Permission denied: cannot delete memories belonging to other users.",
+                )
+            ]
 
         deleted = await backend.delete_memory(
             memory_id=memory_id,
@@ -531,7 +534,11 @@ async def _handle_delete(
         if not deleted:
             return [TextContent(type="text", text=f"Failed to delete memory {memory_id}")]
 
-        return [TextContent(type="text", text=f"Deleted memory [{memory_id[:8]}]: {existing.content[:80]}")]
+        return [
+            TextContent(
+                type="text", text=f"Deleted memory [{memory_id[:8]}]: {existing.content[:80]}"
+            )
+        ]
     except Exception as e:
         logger.error(f"memory_delete failed: {e}")
         return [TextContent(type="text", text=f"Delete error: {e}")]

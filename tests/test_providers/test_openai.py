@@ -96,9 +96,7 @@ class TestOpenAIModelLimits:
         provider = OpenAIProvider()
 
         assert _get_encoding_name_for_model("provider/model-with-metadata") == "o200k_base"
-        assert provider._get_pricing("provider/model-with-metadata") == pytest.approx(
-            (0.27, 1.10)
-        )
+        assert provider._get_pricing("provider/model-with-metadata") == pytest.approx((0.27, 1.10))
 
     def test_get_context_limit_gpt4o(self, openai_provider):
         assert openai_provider.get_context_limit("gpt-4o") == 128000

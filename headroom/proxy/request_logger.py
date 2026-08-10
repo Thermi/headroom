@@ -89,7 +89,9 @@ class RequestLogger:
     """
 
     MAX_LOG_ENTRIES = int(os.environ.get("HEADROOM_REQUEST_LOGGER_MAX_ENTRIES", "10000"))
-    MAX_TOTAL_BYTES = int(os.environ.get("HEADROOM_REQUEST_LOGGER_MAX_BYTES", str(100 * 1024 * 1024)))
+    MAX_TOTAL_BYTES = int(
+        os.environ.get("HEADROOM_REQUEST_LOGGER_MAX_BYTES", str(100 * 1024 * 1024))
+    )
     MAX_BUFFER_SIZE = 512 * 1024  # 512 KB before forced flush
     FLUSH_INTERVAL_SECONDS = 5.0
 

@@ -409,9 +409,9 @@ class TOINConfig:
     # prevent unbounded memory growth. 5000 covers all common tools across
     # multiple tenant slices; set higher for SaaS deployments with many
     # unique tool shapes. Override via HEADROOM_TOIN_MAX_PATTERNS env var.
-    max_patterns: int = field(default_factory=lambda: int(
-        os.environ.get("HEADROOM_TOIN_MAX_PATTERNS", "5000")
-    ))
+    max_patterns: int = field(
+        default_factory=lambda: int(os.environ.get("HEADROOM_TOIN_MAX_PATTERNS", "5000"))
+    )
 
     # LOW FIX #22: Metrics/monitoring hooks
     # Callback for emitting metrics events. Signature: (event_name, event_data) -> None

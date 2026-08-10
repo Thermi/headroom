@@ -262,9 +262,7 @@ class BatchContextStore:
                     await asyncio.sleep(interval)
                     removed = await self.cleanup_expired()
                     if removed:
-                        logger.debug(
-                            "BatchContextStore: swept %d expired entries", removed
-                        )
+                        logger.debug("BatchContextStore: swept %d expired entries", removed)
                 except asyncio.CancelledError:
                     break
                 except Exception:

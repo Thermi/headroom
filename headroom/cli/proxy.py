@@ -9,12 +9,10 @@ import sys
 import warnings
 from typing import Any, Literal, cast
 
-# Apply memory budget before any headroom imports so dataclass defaults
-# (models.py, etc.) see scaled env vars when HEADROOM_MEMORY_MODE is set.
-import headroom.memory.budget  # noqa: E402 — side-effect: sets os.environ
-
 import click
 
+# Apply memory budget before any headroom imports so dataclass defaults
+# (models.py, etc.) see scaled env vars when HEADROOM_MEMORY_MODE is set.
 from headroom import paths as _paths
 from headroom.providers.registry import resolve_api_overrides, resolve_api_targets
 from headroom.proxy.modes import PROXY_MODE_CACHE, normalize_proxy_mode
@@ -1559,6 +1557,7 @@ Memory (Multi-Provider):
         tuning_section = ""
 
     from headroom._version import __version__
+
     mcp_endpoint_line = _mcp_endpoint_banner_line(MCP_STREAMABLE_HTTP_AVAILABLE)
 
     try:

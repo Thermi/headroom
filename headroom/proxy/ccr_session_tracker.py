@@ -97,5 +97,8 @@ class SessionCcrTracker:
                     "has_done_ccr": has_done_ccr,
                     "has_golden_tool_bytes": golden_tool_bytes is not None,
                 }
-                for (provider, session_id), (has_done_ccr, golden_tool_bytes) in self._sessions.items()
+                for (provider, session_id), (
+                    has_done_ccr,
+                    golden_tool_bytes,
+                ) in self._sessions.items()
             ]

@@ -143,11 +143,35 @@ def tools_doctor_cmd(emit_json: bool) -> None:
     kompress = is_kompress_available()
     gpu_providers: list[str] = []
     if gpu_providers:
-        rows.append({"tool": "gpu", "state": "available", "version": "", "platform": gpu_providers[0], "path": gpu_providers[0]})
+        rows.append(
+            {
+                "tool": "gpu",
+                "state": "available",
+                "version": "",
+                "platform": gpu_providers[0],
+                "path": gpu_providers[0],
+            }
+        )
     elif kompress:
-        rows.append({"tool": "gpu", "state": "unavailable", "version": "", "platform": "cpu", "path": "CPUExecutionProvider"})
+        rows.append(
+            {
+                "tool": "gpu",
+                "state": "unavailable",
+                "version": "",
+                "platform": "cpu",
+                "path": "CPUExecutionProvider",
+            }
+        )
     else:
-        rows.append({"tool": "gpu", "state": "unknown", "version": "", "platform": "", "path": "Kompress not installed"})
+        rows.append(
+            {
+                "tool": "gpu",
+                "state": "unknown",
+                "version": "",
+                "platform": "",
+                "path": "Kompress not installed",
+            }
+        )
 
     if emit_json:
         click.echo(_json.dumps(rows, indent=2))

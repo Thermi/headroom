@@ -63,6 +63,7 @@ def _packaged_build_version() -> str | None:
         return None
     return _clean_version(getattr(build_info, "BUILD_VERSION", None))
 
+
 _CACHED_VERSION: str | None = None
 
 

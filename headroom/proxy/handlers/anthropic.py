@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import asyncio
 import copy
-import json
 import logging
 import os
 import time
@@ -1126,8 +1125,7 @@ class AnthropicHandlerMixin:
             }
             skip_ccr_request_compression = (
                 not is_token_mode(self.config.mode)
-                and
-                self.config.ccr_inject_tool
+                and self.config.ccr_inject_tool
                 and frozen_message_count > 0
                 and "headroom_retrieve" not in existing_tool_names
             )
@@ -1528,10 +1526,14 @@ class AnthropicHandlerMixin:
                     else:
                         previous_original_messages = prefix_tracker.get_last_original_messages()
                         previous_forwarded_messages = prefix_tracker.get_last_forwarded_messages()
-                        delta = None if skip_ccr_request_compression else self._extract_cache_stable_delta(
-                            original_client_messages,
-                            previous_original_messages,
-                            previous_forwarded_messages,
+                        delta = (
+                            None
+                            if skip_ccr_request_compression
+                            else self._extract_cache_stable_delta(
+                                original_client_messages,
+                                previous_original_messages,
+                                previous_forwarded_messages,
+                            )
                         )
                         if delta is not None:
                             stable_forwarded_prefix, delta_messages = delta
@@ -1574,7 +1576,6 @@ class AnthropicHandlerMixin:
                                 # frozen (never compressed) and we discard the router's copy of
                                 # it below, so the forwarded prefix stays byte-identical to last
                                 # turn -> append-only -> no bust.
-                                prefix_n = len(stable_forwarded_prefix)
                                 compression_input = list(_strip_cache_control(delta_messages))
                                 result = await self._run_compression_in_executor(
                                     lambda: self.anthropic_pipeline.apply(
@@ -1599,7 +1600,9 @@ class AnthropicHandlerMixin:
                                 optimized_tokens = tokenizer.count_messages(optimized_messages)
                             else:
                                 optimized_messages = (
-                                    messages if skip_ccr_request_compression else stable_forwarded_prefix
+                                    messages
+                                    if skip_ccr_request_compression
+                                    else stable_forwarded_prefix
                                 )
                                 optimized_tokens = tokenizer.count_messages(optimized_messages)
                         else:

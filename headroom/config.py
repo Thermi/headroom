@@ -314,27 +314,6 @@ def unwrap_tool_call_name(name: str, arguments: Any) -> str:
     return name
 
 
-def _tool_name_aliases(name: str) -> tuple[str, ...]:
-    """Return equivalent spellings for tool exclusion matching."""
-    aliases = [name]
-    lname = name.lower()
-
-    if lname.startswith("mcp__"):
-        # OpenAI-style MCP wrappers use mcp__server__tool. Custom agents that
-        # speak Anthropic sometimes emit the same wrapper as mcp_Server_tool.
-        parts = name.split("__", 2)
-        if len(parts) == 3 and parts[1] and parts[2]:
-            aliases.append(f"mcp_{parts[1]}_{parts[2]}")
-            aliases.append(parts[2])
-    elif lname.startswith("mcp_"):
-        parts = name.split("_", 2)
-        if len(parts) == 3 and parts[1] and parts[2]:
-            aliases.append(f"mcp__{parts[1]}__{parts[2]}")
-            aliases.append(parts[2])
-
-    return tuple(dict.fromkeys(aliases))
-
-
 def is_tool_excluded(name: str, exclude_tools: Iterable[str]) -> bool:
     """Return True if ``name`` matches the tool-exclusion set.
 
@@ -531,6 +510,7 @@ class SmartCrusherConfig:
     preserve_change_points: bool = True
     factor_out_constants: bool = False  # Disabled - preserves original schema
     include_summaries: bool = False  # Disabled - no generated text
+    lossless_only: bool = False
 
     # Feedback loop integration (TOIN - Tool Output Intelligence Network)
     use_feedback_hints: bool = True  # Use learned patterns to adjust compression

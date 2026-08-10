@@ -616,7 +616,7 @@ class LiteLLMBackend(Backend):
         else:
             self._model_map = self._config.model_map
 
-# Operator override map (all providers; only meaningful for Bedrock
+        # Operator override map (all providers; only meaningful for Bedrock
         # today). Lets you pin a plain model name to a specific target the
         # AWS discovery can't disambiguate — e.g. a per-user application
         # inference profile ARN for cost attribution. See

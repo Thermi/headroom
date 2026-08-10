@@ -11,8 +11,6 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import logging
-
-from headroom.proxy import _json as json
 import os
 import random
 import re
@@ -24,6 +22,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 from headroom import paths as _paths
+from headroom.proxy import _json as json
 from headroom.proxy import (
     diagnostic_decode_policy,
     memory_injection_mode_policy,
@@ -53,8 +52,10 @@ from headroom.proxy.beta_header_policy import (
     resolve_beta_tracker_max_sessions,
 )
 from headroom.proxy.body_forwarding import (
+    _PYTHON_FORWARDER_MODE_ENV,  # noqa: F401 - compatibility export
+)
+from headroom.proxy.body_forwarding import (
     BodyMutationTracker as BodyMutationTracker,  # noqa: F401 - compatibility export
-    _PYTHON_FORWARDER_MODE_ENV,
 )
 from headroom.proxy.body_forwarding import (
     PythonForwarderMode as PythonForwarderMode,  # noqa: F401 - compatibility export
@@ -92,8 +93,12 @@ from headroom.proxy.tool_definition_serialization import (
     serialize_tool_definition_canonical as _serialize_tool_definition_canonical,
 )
 from headroom.proxy.tool_injection_config import (
-    TOOL_INJECTION_STICKY_ENV as _TOOL_INJECTION_STICKY_ENV,
-    TOOL_TRACKER_MAX_SESSIONS_ENV as _TOOL_TRACKER_MAX_SESSIONS_ENV,
+    TOOL_INJECTION_STICKY_ENV as _TOOL_INJECTION_STICKY_ENV,  # noqa: F401 - compatibility export
+)
+from headroom.proxy.tool_injection_config import (
+    TOOL_TRACKER_MAX_SESSIONS_ENV as _TOOL_TRACKER_MAX_SESSIONS_ENV,  # noqa: F401 - compatibility export
+)
+from headroom.proxy.tool_injection_config import (
     ToolInjectionStickyMode,
 )
 from headroom.proxy.tool_injection_config import (
@@ -355,90 +360,6 @@ def _headroom_no_inline_tool_injection(
             pass
 
     return False
-
-
-def serialize_body_canonical(body: dict[str, Any]) -> bytes:
-    """Re-serialize a request body deterministically with cache-stable formatting.
-
-    Uses compact separators and preserves UTF-8 (no ``\\uXXXX`` escapes), so
-    byte output matches what well-behaved API clients (Claude Code, Codex
-    CLI) emit. Python 3.7+ dict insertion order is preserved by
-    ``json.dumps`` so message ordering is stable.
-
-    This is the canonical re-serialization for any forwarder path that did
-    mutate the body (memory injection, compression, etc.).
-    """
-    return json.dumps(body, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
-
-
-class BodyMutationTracker:
-    """Records whether a request body was mutated and why.
-
-    The forwarder reads ``mutated`` to decide between byte-faithful
-    passthrough and canonical re-serialization. Reasons are logged with
-    each outbound request to make cache-affecting decisions auditable.
-
-    Thread-safety: a single tracker instance is owned by exactly one
-    request task. No locking needed.
-    """
-
-    __slots__ = ("_mutated", "_reasons")
-
-    def __init__(self) -> None:
-        self._mutated: bool = False
-        self._reasons: list[str] = []
-
-    def mark_mutated(self, reason: str) -> None:
-        """Mark the body as mutated and record the reason.
-
-        ``reason`` should be a stable identifier (snake_case) suitable for
-        log aggregation, e.g. ``memory_injection`` or
-        ``compression_smart_crusher``.
-        """
-        if not reason:
-            raise ValueError("BodyMutationTracker.mark_mutated: reason must be non-empty")
-        self._mutated = True
-        if reason not in self._reasons:
-            self._reasons.append(reason)
-
-    @property
-    def mutated(self) -> bool:
-        return self._mutated
-
-    @property
-    def reasons(self) -> list[str]:
-        return list(self._reasons)
-
-
-def prepare_outbound_body_bytes(
-    *,
-    body: dict[str, Any],
-    original_body_bytes: bytes | None,
-    body_mutated: bool,
-    forwarder_mode: PythonForwarderMode | None = None,
-) -> tuple[bytes, str]:
-    """Pick the outbound body bytes for a forwarder call.
-
-    Returns ``(outbound_bytes, source)`` where ``source`` is one of
-    ``passthrough`` (original bytes verbatim), ``canonical`` (re-serialized
-    deterministically because body was mutated), or ``legacy`` (rollback
-    mode — old ``json=body`` behavior).
-
-    * ``forwarder_mode == "byte_faithful"`` (default): unmutated → passthrough,
-      mutated → canonical.
-    * ``forwarder_mode == "legacy_json_kwarg"``: always re-encode via the old
-      httpx-style separators (operator opt-in, for rollback only).
-    """
-    mode = forwarder_mode if forwarder_mode is not None else get_python_forwarder_mode()
-    if mode == "legacy_json_kwarg":
-        # Old httpx default: separators=(", ", ": "), ensure_ascii=True.
-        legacy_bytes = json.dumps(body, separators=(", ", ": "), ensure_ascii=True).encode("utf-8")
-        return legacy_bytes, "legacy"
-
-    # byte_faithful path
-    if body_mutated or original_body_bytes is None:
-        return serialize_body_canonical(body), "canonical"
-    return original_body_bytes, "passthrough"
 
 
 def _summarize_reasons(reasons: list[str]) -> str:
@@ -1126,26 +1047,28 @@ def _setup_file_logging() -> None:
 
     _no_file_log = os.environ.get("HEADROOM_NO_FILE_LOG", "").lower() in ("true", "1", "yes", "on")
 
-    log_dir = _headroom_log_dir()
+    initial_log_dir = _headroom_log_dir()
     try:
-        log_dir.mkdir(parents=True, exist_ok=True)
+        initial_log_dir.mkdir(parents=True, exist_ok=True)
     except OSError as exc:
         warnings.warn(
-            f"Logging to {log_dir} failed ({exc}), falling back to temp directory", stacklevel=2
+            f"Logging to {initial_log_dir} failed ({exc}), falling back to temp directory",
+            stacklevel=2,
         )
         try:
             log_dir = Path(tempfile.mkdtemp(prefix="headroom-logs-"))
         except OSError as exc2:
             warnings.warn(f"Logging setup failed (non-fatal): {exc2}", stacklevel=2)
             log_dir = None
+    else:
+        log_dir = initial_log_dir
 
     fmt = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
     headroom_logger = logging.getLogger("headroom")
     headroom_logger.setLevel(logging.INFO)
     if not any(
-        isinstance(handler, logging.StreamHandler)
-        and not isinstance(handler, RotatingFileHandler)
+        isinstance(handler, logging.StreamHandler) and not isinstance(handler, RotatingFileHandler)
         for handler in headroom_logger.handlers
     ):
         stream_handler = logging.StreamHandler()

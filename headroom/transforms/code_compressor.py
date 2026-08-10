@@ -48,7 +48,7 @@ import threading
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any
+from typing import Any, cast
 
 from ..config import TransformResult
 from ..tokenizer import Tokenizer
@@ -148,7 +148,7 @@ def _get_parser(language: str) -> Any:
             # Language grammars are read-only and shared across all threads.
             # Only the Parser instances are per-thread (PyO3 unsendable).
             if language not in _language_cache:
-                _language_cache[language] = get_language(language)
+                _language_cache[language] = get_language(cast(Any, language))
             parser = Parser()
             # `language` is a validated runtime str; get_language types its arg
             # as a Literal of supported names, which a dynamic str can't satisfy.

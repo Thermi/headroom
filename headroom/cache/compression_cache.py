@@ -241,7 +241,7 @@ class CompressionCache:
                         sorted_keys = sorted(
                             self._first_seen.keys(),
                             key=lambda k: self._first_seen[k],
-                        )[:len(self._first_seen) - self.max_entries]
+                        )[: len(self._first_seen) - self.max_entries]
                         for k in sorted_keys:
                             del self._first_seen[k]
                 return False  # First time — compress now (no cache entry to preserve)

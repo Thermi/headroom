@@ -169,7 +169,12 @@ class CompressionPolicy:
         alive = 1.0 if math.isnan(p_alive) else min(max(p_alive, 0.0), 1.0)
         logger.info(
             "NetMutationGain w=%.2f r=%.2f dt=%d suffix=%d reads=%.2f alive=%.2f",
-            w, r, dt, suffix, reads, alive,
+            w,
+            r,
+            dt,
+            suffix,
+            reads,
+            alive,
         )
         return float(dt) * (w + r * (reads - 1.0)) - alive * (w - r) * float(suffix + dt)
 

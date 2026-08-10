@@ -1225,9 +1225,7 @@ your responses, not to drive new actions."""
                     input_data = tc.get("input", {})
                 else:
                     args_str = (
-                        tc.get("arguments")
-                        or tc.get("function", {}).get("arguments")
-                        or "{}"
+                        tc.get("arguments") or tc.get("function", {}).get("arguments") or "{}"
                     )
                     try:
                         input_data = json.loads(args_str)
@@ -1235,9 +1233,7 @@ your responses, not to drive new actions."""
                         input_data = {}
 
                 if tool_name == NATIVE_MEMORY_TOOL_NAME:
-                    result_content = await self._execute_native_memory_tool(
-                        input_data, user_id
-                    )
+                    result_content = await self._execute_native_memory_tool(input_data, user_id)
                 elif tool_name in MEMORY_TOOL_NAMES:
                     if not self._backend:
                         return tool_id, None
@@ -1386,9 +1382,7 @@ your responses, not to drive new actions."""
         saved: list[dict[str, Any]] = []
         for mem in result.memories:
             input_data = mem.to_save_input()
-            save_result = await self._execute_save(
-                input_data, user_id, provider, request_context
-            )
+            save_result = await self._execute_save(input_data, user_id, provider, request_context)
             saved.append({"strategy": result.strategy, "content": mem.content, "save": save_result})
 
         logger.info(

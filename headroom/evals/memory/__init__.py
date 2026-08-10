@@ -48,8 +48,9 @@ from headroom.evals.memory.runner import (
     run_locomo_eval,
     run_locomo_eval_sync,
 )
+
 try:
-    from headroom.evals.memory.runner_v2 import (
+    from headroom.evals.memory.runner_v2 import (  # noqa: F401
         EvalMetrics,
         LoCoMoEvaluatorV2,
         MemoryEvalConfigV2,

@@ -4573,10 +4573,16 @@ class ContentRouter(Transform):
             except ValueError:
                 logger.warning("HEADROOM_NET_COST_P_ALIVE malformed; using 1.0")
         w = 1.25  # CACHE_WRITE_MULTIPLIER
-        r = 0.1   # CACHE_READ_MULTIPLIER
+        r = 0.1  # CACHE_READ_MULTIPLIER
         logger.debug(
             "NetCostPolicy pre-calc model=%s w=%.2f r=%.2f delta_t=%d suffix=%d reads=%.1f p_alive=%.2f",
-            model, w, r, delta_t, suffix, reads, p_alive,
+            model,
+            w,
+            r,
+            delta_t,
+            suffix,
+            reads,
+            p_alive,
         )
         gain = float(policy.net_mutation_gain(delta_t, suffix, reads, p_alive))
         allowed = gain > 0.0

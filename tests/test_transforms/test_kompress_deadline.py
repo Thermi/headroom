@@ -178,7 +178,9 @@ def test_payload_timeout_exhausts_and_bypasses_real_inference(monkeypatch):
             calls["inference"] += 1
             raise TimeoutError("payload timeout")
 
-    monkeypatch.setattr(kc, "_load_kompress", lambda *a, **k: (_TimeoutModel(), _Tokenizer(), "onnx"))
+    monkeypatch.setattr(
+        kc, "_load_kompress", lambda *a, **k: (_TimeoutModel(), _Tokenizer(), "onnx")
+    )
     content = " ".join(f"w{i}" for i in range(20))
     compressor = kc.KompressCompressor()
     monkeypatch.setattr(compressor, "_should_batch_single_content", lambda *a, **k: False)

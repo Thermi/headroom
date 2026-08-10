@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, replace
 from collections.abc import MutableMapping
+from dataclasses import dataclass, replace
 from typing import Protocol
 
 AGENT_90_PROFILE = "agent-90"

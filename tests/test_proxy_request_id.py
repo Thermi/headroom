@@ -7,8 +7,8 @@ from fastapi.testclient import TestClient
 
 from headroom.proxy.models import ProxyConfig
 from headroom.proxy.server import (
-    HeadroomProxy,
     _REQUEST_ID_VAR,
+    HeadroomProxy,
 )
 
 pytest.importorskip("fastapi")
@@ -194,10 +194,8 @@ class TestMiddlewareRequestId:
         _REQUEST_ID_VAR.set(None)
         ids = []
         for _ in range(5):
-            response = client.get("/livez")
+            client.get("/livez")
             proxy = client.app.state.proxy
             ids.append(proxy._request_counter)
 
-        assert len(set(ids)) == 5, (
-            f"Expected 5 unique request_ids, got: {ids}"
-        )
+        assert len(set(ids)) == 5, f"Expected 5 unique request_ids, got: {ids}"

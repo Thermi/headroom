@@ -20,10 +20,10 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import itertools
 import json
 import logging
 import time
-import itertools
 from collections import OrderedDict
 from dataclasses import dataclass
 from typing import Any
@@ -145,9 +145,7 @@ def _strip_cache_control(obj: Any) -> Any:
     """Return a recursive copy without provider cache breakpoint metadata."""
     if isinstance(obj, dict):
         return {
-            key: _strip_cache_control(value)
-            for key, value in obj.items()
-            if key != "cache_control"
+            key: _strip_cache_control(value) for key, value in obj.items() if key != "cache_control"
         }
     if isinstance(obj, list):
         return [_strip_cache_control(value) for value in obj]
@@ -169,7 +167,9 @@ def _canonicalize_for_prefix_compare(obj: Any) -> Any:
                 result[key] = _canonicalize_for_prefix_compare(value)
         return result
     if isinstance(obj, list):
-        return [value for value in (_canonicalize_for_prefix_compare(v) for v in obj) if value != {}]
+        return [
+            value for value in (_canonicalize_for_prefix_compare(v) for v in obj) if value != {}
+        ]
     return obj
 
 
@@ -184,9 +184,9 @@ def extract_cache_stable_delta(
     prefix_len = len(previous_original_messages)
     if len(current_messages) < prefix_len:
         return None
-    if _canonicalize_for_prefix_compare(current_messages[:prefix_len]) != _canonicalize_for_prefix_compare(
-        previous_original_messages
-    ):
+    if _canonicalize_for_prefix_compare(
+        current_messages[:prefix_len]
+    ) != _canonicalize_for_prefix_compare(previous_original_messages):
         return None
     return copy.deepcopy(previous_forwarded_messages), copy.deepcopy(current_messages[prefix_len:])
 
@@ -619,9 +619,7 @@ class SessionTrackerStore:
         if len(self._trackers) >= self._max_sessions > 0:
             evict_count = max(1, self._max_sessions // 4)
             # Prefer evicting expired trackers first
-            expired = [
-                sid for sid, t in self._trackers.items() if t.is_expired
-            ]
+            expired = [sid for sid, t in self._trackers.items() if t.is_expired]
             for sid in expired[:evict_count]:
                 del self._trackers[sid]
             # If still at capacity, evict oldest by last activity

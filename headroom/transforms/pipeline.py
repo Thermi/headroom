@@ -57,6 +57,7 @@ def _waste_sampling_check() -> bool:
         return True
     return random.random() < rate
 
+
 # OTel GenAI semantic conventions (open-telemetry/semantic-conventions-genai).
 # The compression-pipeline span carries this gen_ai.* attribute alongside the
 # proprietary headroom.* ones, so Headroom's telemetry groups/filters by the
