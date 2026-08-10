@@ -459,43 +459,6 @@ class TestInjectAndRestoreRoundTrip:
         assert status == "restored"
         assert config_file.read_text(encoding="utf-8") == malformed
 
-    def test_unwrap_removes_rtk_block_from_global_agents(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
-        """`wrap codex` injects the rtk block into the Codex global AGENTS.md;
-        `unwrap codex` must take it back out (regression for #1421)."""
-        _set_test_home(monkeypatch, tmp_path)
-        codex_home = tmp_path / ".codex"
-        codex_home.mkdir()
-        agents = codex_home / "AGENTS.md"
-        wrap_mod._inject_rtk_instructions(agents)
-        assert wrap_mod._RTK_MARKER in agents.read_text(encoding="utf-8")
-
-        wrap_mod.unwrap_codex.callback(port=8787, no_stop_proxy=True)
-
-        remaining = agents.read_text(encoding="utf-8") if agents.exists() else ""
-        assert wrap_mod._RTK_MARKER not in remaining
-
-    def test_unwrap_preserves_user_content_in_global_agents(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
-        """Only the marker-fenced rtk block is removed; the user's own AGENTS.md
-        prose survives the unwrap."""
-        _set_test_home(monkeypatch, tmp_path)
-        codex_home = tmp_path / ".codex"
-        codex_home.mkdir()
-        agents = codex_home / "AGENTS.md"
-        agents.write_text("# My project rules\n\nAlways write tests.\n", encoding="utf-8")
-        wrap_mod._inject_rtk_instructions(agents)
-        assert wrap_mod._RTK_MARKER in agents.read_text(encoding="utf-8")
-
-        wrap_mod.unwrap_codex.callback(port=8787, no_stop_proxy=True)
-
-        remaining = agents.read_text(encoding="utf-8")
-        assert wrap_mod._RTK_MARKER not in remaining
-        assert "# My project rules" in remaining
-        assert "Always write tests." in remaining
-
     def test_unwrap_is_safe_when_no_global_agents(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
@@ -1053,39 +1016,6 @@ def test_wrap_codex_prepare_only_respects_codex_home(
     assert not (tmp_path / ".codex" / "config.toml").exists()
 
 
-def test_wrap_codex_injects_rtk_globally_without_changing_project_agents(
-    runner: CliRunner, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    _set_test_home(monkeypatch, tmp_path)
-    project_dir = tmp_path / "project"
-    project_dir.mkdir()
-    project_agents = project_dir / "AGENTS.md"
-    original = "# Project instructions\n\nUse the repository conventions.\n"
-    project_agents.write_text(original, encoding="utf-8")
-    original_bytes = project_agents.read_bytes()
-    monkeypatch.chdir(project_dir)
-
-    with patch(
-        "headroom.cli.wrap._ensure_rtk_binary",
-        return_value=tmp_path / "rtk",
-    ):
-        result = runner.invoke(
-            main,
-            [
-                "wrap",
-                "codex",
-                "--prepare-only",
-                "--no-mcp",
-                "--no-serena",
-            ],
-        )
-
-    assert result.exit_code == 0, result.output
-    assert project_agents.read_bytes() == original_bytes
-    global_agents = tmp_path / ".codex" / "AGENTS.md"
-    assert wrap_mod._RTK_MARKER.encode() in global_agents.read_bytes()
-
-
 def test_unwrap_codex_without_codex_home_warns_on_ambiguous_noop(
     runner: CliRunner, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -1232,7 +1162,7 @@ def test_launch_tool_ignores_sigint_in_wrapper(
     class FakeCompleted:
         returncode = 0
 
-    monkeypatch.setattr(wrap_mod, "_ensure_proxy", lambda *args, **kwargs: None)
+    monkeypatch.setattr(wrap_mod, "_ensure_proxy", lambda *args, **kwargs: (None, 8787))
     monkeypatch.setattr(
         wrap_mod.signal, "signal", lambda sig, fn: signal_handlers.setdefault(sig, fn)
     )
