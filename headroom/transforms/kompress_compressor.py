@@ -949,6 +949,7 @@ def _load_kompress_onnx(
     *,
     use_coreml: bool = False,
     use_gpu: bool = False,
+    auto_detect_gpu: bool = True,
     allow_download: bool = True,
 ) -> tuple[Any, Any, str]:
     """Download ONNX INT8 model from HuggingFace and load with onnxruntime.
@@ -1013,7 +1014,7 @@ def _load_kompress_onnx(
                 providers = ["CPUExecutionProvider"]
                 use_gpu = False
                 backend = "onnx"
-        else:
+        elif auto_detect_gpu:
             detected = _available_gpu_providers()
             if detected:
                 providers = detected + ["CPUExecutionProvider"]
@@ -1023,6 +1024,8 @@ def _load_kompress_onnx(
                 )
             else:
                 providers = ["CPUExecutionProvider"]
+        else:
+            providers = ["CPUExecutionProvider"]
 
         session = _create_onnx_session(model_id, providers, allow_download=allow_download)
         model = _OnnxModel(session)
@@ -1255,7 +1258,12 @@ def _load_kompress(
 
     backend = _selected_backend()
     if backend in ("onnx", "onnx_cpu"):
-        return _load_kompress_onnx(model_id, use_coreml=False, allow_download=allow_download)
+        return _load_kompress_onnx(
+            model_id,
+            use_coreml=False,
+            auto_detect_gpu=False,
+            allow_download=allow_download,
+        )
 
     if backend == "onnx_gpu":
         return _load_kompress_onnx(
@@ -1281,7 +1289,10 @@ def _load_kompress(
             )
             if _is_onnx_available():
                 return _load_kompress_onnx(
-                    model_id, use_coreml=False, allow_download=allow_download
+                    model_id,
+                    use_coreml=False,
+                    auto_detect_gpu=False,
+                    allow_download=allow_download,
                 )
             return _load_kompress_pytorch(model_id, "cpu", allow_download=allow_download)
 
@@ -1326,7 +1337,11 @@ def _recover_onnx_gpu_session(model_id: str) -> bool:
     logger.warning("Kompress ONNX GPU session failed; unloading it and retrying with CPU execution")
     unload_kompress_model(model_id)
     try:
-        model, tokenizer, backend = _load_kompress_onnx(model_id, allow_download=True)
+        model, tokenizer, backend = _load_kompress_onnx(
+            model_id,
+            auto_detect_gpu=False,
+            allow_download=True,
+        )
     except Exception as exc:
         logger.warning("Kompress ONNX CPU recovery failed: %s", exc)
         return False

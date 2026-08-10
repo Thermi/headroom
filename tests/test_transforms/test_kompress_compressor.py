@@ -1512,6 +1512,25 @@ class TestOnnxBackendPrefixGating:
         elapsed = compressor._timed_canary(model, self._fake_tokenizer, "onnx_coreml")
         assert isinstance(elapsed, float)
 
+    def test_explicit_onnx_cpu_skips_gpu_provider_probe(self, monkeypatch) -> None:
+        import pytest
+
+        import headroom.transforms.kompress_compressor as kmod
+
+        kmod._kompress_cache.clear()
+        monkeypatch.setenv("HEADROOM_KOMPRESS_BACKEND", "onnx_cpu")
+        monkeypatch.setattr(
+            kmod,
+            "_available_gpu_providers",
+            lambda: pytest.fail("explicit onnx_cpu must not probe GPU providers"),
+        )
+        monkeypatch.setattr(kmod, "_create_onnx_session", lambda *args, **kwargs: object())
+        monkeypatch.setattr(kmod, "_load_modernbert_tokenizer", lambda *args, **kwargs: object())
+
+        _model, _tokenizer, backend = kmod._load_kompress("test-model", allow_download=False)
+
+        assert backend == "onnx"
+
     def test_timed_canary_pytorch_still_dispatches_to_device(self) -> None:
         # Negative control: the PyTorch branch DOES touch .parameters(), so the
         # paramless fake model raises there — proving the test above is only
