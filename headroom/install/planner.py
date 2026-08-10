@@ -119,6 +119,7 @@ def build_manifest(
     memory_enabled: bool,
     telemetry_enabled: bool,
     image: str,
+    no_http2: bool = False,
 ) -> DeploymentManifest:
     """Create a normalized deployment manifest."""
 
@@ -160,6 +161,8 @@ def build_manifest(
         backend,
     ]
     proxy_args.append("--telemetry" if telemetry_enabled else "--no-telemetry")
+    if no_http2:
+        proxy_args.append("--no-http2")
     if memory_enabled:
         proxy_args.extend(["--memory", "--memory-db-path", str(_paths.memory_db_path())])
     if anyllm_provider:

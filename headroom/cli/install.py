@@ -224,6 +224,12 @@ def _reject_task_lifecycle(manifest: DeploymentManifest, action: str) -> None:
     help="Force anonymous telemetry off in the runtime (already the default).",
 )
 @click.option(
+    "--http2/--no-http2",
+    default=True,
+    show_default=True,
+    help="Enable or disable HTTP/2 for the persistent proxy runtime.",
+)
+@click.option(
     "--image",
     default="ghcr.io/chopratejas/headroom:latest",
     show_default=True,
@@ -244,6 +250,7 @@ def install_apply(
     memory: bool,
     telemetry: bool,
     no_telemetry: bool,
+    http2: bool,
     image: str,
 ) -> None:
     """Install a persistent Headroom deployment."""
@@ -272,6 +279,7 @@ def install_apply(
         memory_enabled=memory,
         telemetry_enabled=telemetry and not no_telemetry,
         image=image,
+        no_http2=not http2,
     )
 
     try:
