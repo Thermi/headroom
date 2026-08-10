@@ -2855,6 +2855,9 @@ def create_app(config: ProxyConfig | None = None) -> FastAPI:
                 _batch_store = get_batch_context_store()
                 await _batch_store.start_background_cleanup()
 
+                if MCP_STREAMABLE_HTTP_AVAILABLE:
+                    await _start_mcp_session_manager()
+
                 # Only start beacon if we acquire the lock (first worker wins)
                 _beacon_is_owner[0] = _try_acquire_beacon_lock()
 
@@ -2905,6 +2908,9 @@ def create_app(config: ProxyConfig | None = None) -> FastAPI:
                 await get_batch_context_store().stop_background_cleanup()
             except Exception:
                 pass
+
+            if MCP_STREAMABLE_HTTP_AVAILABLE:
+                await _stop_mcp_session_manager()
 
             await proxy.shutdown()
             shutdown_headroom_tracing()
@@ -5510,9 +5516,6 @@ def create_app(config: ProxyConfig | None = None) -> FastAPI:
             if _mcp_session_context is not None:
                 await _mcp_session_context.__aexit__(None, None, None)
                 _mcp_session_context = None
-
-        app.router.add_event_handler("startup", _start_mcp_session_manager)
-        app.router.add_event_handler("shutdown", _stop_mcp_session_manager)
 
         class _TransportHandledResponse(Response):
             async def __call__(self, scope, receive, send):

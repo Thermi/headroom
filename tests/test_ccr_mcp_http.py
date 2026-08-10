@@ -9,12 +9,15 @@ pytest.importorskip("mcp")
 
 from mcp.client.session import ClientSession
 from mcp.client.streamable_http import streamable_http_client
+from fastapi.testclient import TestClient
 
 from headroom.ccr.mcp_http import (
     create_streamable_http_app,
     create_streamable_http_session_manager,
 )
 from headroom.ccr.mcp_server import create_ccr_mcp_server
+from headroom.proxy.models import ProxyConfig
+from headroom.proxy.server import create_app
 
 pytestmark = pytest.mark.anyio
 
@@ -49,3 +52,21 @@ async def test_streamable_http_initialize_and_list_tools() -> None:
     assert "headroom_compress" in tool_names
     assert "headroom_retrieve" in tool_names
     assert "headroom_stats" in tool_names
+
+
+def test_proxy_mcp_manager_closes_in_lifespan_task() -> None:
+    app = create_app(
+        ProxyConfig(
+            optimize=False,
+            cache_enabled=False,
+            rate_limit_enabled=False,
+            cost_tracking_enabled=False,
+            log_requests=False,
+            ccr_inject_tool=False,
+            ccr_handle_responses=False,
+            ccr_context_tracking=False,
+        )
+    )
+
+    with TestClient(app):
+        pass
