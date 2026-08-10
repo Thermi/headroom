@@ -65,7 +65,12 @@ def test_discover_dangling_homes_only_returns_codex_homes(tmp_path: Path) -> Non
     outside = tmp_path / "outside"
     outside.mkdir()
     (outside / "history.jsonl").write_text("{}\n", encoding="utf-8")
-    (tmp_path / "headroom-codex-home-linked").symlink_to(outside, target_is_directory=True)
+    try:
+        (tmp_path / "headroom-codex-home-linked").symlink_to(outside, target_is_directory=True)
+    except OSError as exc:
+        if sys.platform == "win32":
+            pytest.skip(f"directory symlinks require elevated Windows privileges: {exc}")
+        raise
 
     assert discover_dangling_homes(tmp_path) == [candidate]
 
@@ -551,7 +556,12 @@ def test_recovery_never_writes_through_target_symlinks(tmp_path: Path) -> None:
     target.mkdir()
     source.mkdir()
     outside.mkdir()
-    (target / "sessions").symlink_to(outside, target_is_directory=True)
+    try:
+        (target / "sessions").symlink_to(outside, target_is_directory=True)
+    except OSError as exc:
+        if sys.platform == "win32":
+            pytest.skip(f"directory symlinks require elevated Windows privileges: {exc}")
+        raise
     source_session = source / "sessions" / "rollout.jsonl"
     source_session.parent.mkdir()
     source_session.write_text('{"type":"session_meta"}\n', encoding="utf-8")
