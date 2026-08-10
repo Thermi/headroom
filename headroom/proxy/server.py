@@ -5653,7 +5653,7 @@ def _get_build_info_value(key: str) -> str:
                 timeout=2,
             )
             if r.returncode == 0:
-                return r.stdout.strip()
+                return str(r.stdout).strip()
         except Exception:
             pass
     elif key == "build_time":

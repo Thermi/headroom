@@ -202,6 +202,7 @@ benchmark_results/
 
 # Headroom specific
 .headroom/
+.worktrees/
 headroom.db
 headroom_*.db
 *.jsonl

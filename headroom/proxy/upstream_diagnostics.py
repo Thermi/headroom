@@ -237,7 +237,7 @@ def _detect_interface_mtu() -> str:
             if result.returncode == 0:
                 for line in result.stdout.splitlines():
                     if "MTU" in line:
-                        return line.strip()
+                        return str(line).strip()
             return "<could not determine MTU on macOS>"
         return f"<MTU detection not implemented for {system}>"
     except Exception as exc:
