@@ -33,7 +33,12 @@ _mock_core.is_html_tag = MagicMock(return_value=False)
 _mock_core.known_html_tag_names = MagicMock(return_value=[])
 _mock_core.protect_tags = MagicMock(return_value="")
 _mock_core.restore_tags = MagicMock(return_value=("", False))
-sys.modules["headroom._core"] = _mock_core
+
+
+@pytest.fixture(autouse=True)
+def _mock_rust_core(monkeypatch: pytest.MonkeyPatch):
+    """Scope the fake Rust module to these tests instead of the whole suite."""
+    monkeypatch.setitem(sys.modules, "headroom._core", _mock_core)
 
 
 def _make_proxy_config(**overrides):

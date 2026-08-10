@@ -336,6 +336,21 @@ class SessionStats:
         if len(self.events) > 50:
             self.events = self.events[-50:]
 
+    def record_model_usage(
+        self,
+        model_name: str | None,
+        input_tokens: int,
+        output_tokens: int,
+        runtime_ms: float,
+    ) -> None:
+        """Record model accounting for callers that track usage separately."""
+        self._model_accounting.record(
+            model_name=model_name or "unknown",
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            runtime_ms=runtime_ms,
+        )
+
     def to_dict(self) -> dict[str, Any]:
         savings_pct = (
             round((self.total_tokens_saved / self.total_input_tokens) * 100, 1)
