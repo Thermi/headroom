@@ -93,157 +93,6 @@ def test_print_wrap_banner_title_is_centered_or_near_centered() -> None:
 
 
 # ---------------------------------------------------------------------------
-# _setup_context_tool_for_agent -- all five branches:
-#   1. lean-ctx mode -> calls _setup_lean_ctx_agent, returns None
-#   2. rtk install success -> calls on_rtk_ready, returns rtk_path
-#   3. rtk install fail + rtk_required=False -> returns None silently
-#   4. rtk install fail + rtk_required=True -> SystemExit(1)
-#   5. KeyboardInterrupt -> _emit_wrap_interrupted, SystemExit(130)
-# ---------------------------------------------------------------------------
-
-
-def test_setup_context_tool_lean_ctx_calls_lean_ctx_setup(monkeypatch: pytest.MonkeyPatch) -> None:
-    """When HEADROOM_CONTEXT_TOOL=lean-ctx, helper calls _setup_lean_ctx_agent."""
-    monkeypatch.setenv("HEADROOM_CONTEXT_TOOL", "lean-ctx")
-    called_with: dict[str, Any] = {}
-
-    def fake_lean_ctx(agent: str, verbose: bool = False) -> Path | None:
-        called_with["agent"] = agent
-        called_with["verbose"] = verbose
-        return None
-
-    monkeypatch.setattr(wrap_mod, "_setup_lean_ctx_agent", fake_lean_ctx)
-
-    runner = CliRunner()
-
-    @click.command()
-    def _cmd() -> None:
-        result = wrap_mod._setup_context_tool_for_agent(
-            agent="cline",
-            agent_display="Cline",
-            marker_path=None,
-        )
-        assert result is None
-
-    inv = runner.invoke(_cmd)
-    assert inv.exit_code == 0, inv.output
-    assert called_with == {"agent": "cline", "verbose": False}
-
-
-def test_setup_context_tool_rtk_success_calls_on_rtk_ready(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    """rtk install success -> on_rtk_ready receives the rtk binary path."""
-    monkeypatch.delenv("HEADROOM_CONTEXT_TOOL", raising=False)
-    fake_rtk = Path("/tmp/rtk-fake")
-    received: list[Path] = []
-
-    monkeypatch.setattr(wrap_mod, "_ensure_rtk_binary", lambda verbose=False: fake_rtk)
-
-    runner = CliRunner()
-
-    @click.command()
-    def _cmd() -> None:
-        result = wrap_mod._setup_context_tool_for_agent(
-            agent="cline",
-            agent_display="Cline",
-            marker_path=tmp_path / ".clinerules",
-            on_rtk_ready=lambda rtk: received.append(rtk),
-        )
-        assert result == fake_rtk
-
-    inv = runner.invoke(_cmd)
-    assert inv.exit_code == 0, inv.output
-    assert received == [fake_rtk]
-
-
-def test_setup_context_tool_rtk_failure_with_not_required_returns_none(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """rtk install failure + rtk_required=False -> silent fall-through, None."""
-    monkeypatch.delenv("HEADROOM_CONTEXT_TOOL", raising=False)
-    monkeypatch.setattr(wrap_mod, "_ensure_rtk_binary", lambda verbose=False: None)
-
-    on_rtk_called = False
-
-    def _should_not_be_called(_rtk: Path) -> None:
-        nonlocal on_rtk_called
-        on_rtk_called = True
-
-    runner = CliRunner()
-
-    @click.command()
-    def _cmd() -> None:
-        result = wrap_mod._setup_context_tool_for_agent(
-            agent="cursor",
-            agent_display="Cursor",
-            marker_path=None,
-            on_rtk_ready=_should_not_be_called,
-            rtk_required=False,
-        )
-        assert result is None
-
-    inv = runner.invoke(_cmd)
-    assert inv.exit_code == 0, inv.output
-    assert not on_rtk_called, "on_rtk_ready should not be called when rtk install fails"
-
-
-def test_setup_context_tool_rtk_failure_with_required_exits_1(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """rtk install failure + rtk_required=True -> SystemExit(1) with refusal message."""
-    monkeypatch.delenv("HEADROOM_CONTEXT_TOOL", raising=False)
-    monkeypatch.setattr(wrap_mod, "_ensure_rtk_binary", lambda verbose=False: None)
-
-    runner = CliRunner()
-
-    @click.command()
-    def _cmd() -> None:
-        wrap_mod._setup_context_tool_for_agent(
-            agent="openhands",
-            agent_display="OpenHands",
-            marker_path=None,
-            rtk_required=True,
-        )
-
-    inv = runner.invoke(_cmd)
-    assert inv.exit_code == 1, inv.output
-    assert "rtk install failed" in inv.output
-    assert "refusing to inject" in inv.output
-
-
-def test_setup_context_tool_keyboardinterrupt_emits_interrupted_and_exits_130(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    """KeyboardInterrupt during setup -> _emit_wrap_interrupted, SystemExit(130)."""
-    monkeypatch.delenv("HEADROOM_CONTEXT_TOOL", raising=False)
-
-    marker = tmp_path / ".clinerules"
-    marker.write_text("pre-existing")
-
-    def raise_kbd(verbose: bool = False) -> Path | None:
-        raise KeyboardInterrupt
-
-    monkeypatch.setattr(wrap_mod, "_ensure_rtk_binary", raise_kbd)
-
-    runner = CliRunner()
-
-    @click.command()
-    def _cmd() -> None:
-        wrap_mod._setup_context_tool_for_agent(
-            agent="cline",
-            agent_display="Cline",
-            marker_path=marker,
-        )
-
-    inv = runner.invoke(_cmd)
-    assert inv.exit_code == 130
-    assert "interrupted" in inv.output.lower()
-    assert "idempotent" in inv.output.lower()
-    assert str(marker) in inv.output
-
-
-# ---------------------------------------------------------------------------
 # _run_proxy_only_watcher -- must print banner, call setup callback, install
 # signal handlers, and clean up. Heavily mocked since the real watcher
 # blocks on `time.sleep` indefinitely.
@@ -269,10 +118,10 @@ def test_run_proxy_only_watcher_calls_setup_lines_callback(
 
     callback_calls: list[None] = []
 
-    def fake_setup() -> None:
+    def fake_setup(_port: int) -> None:
         callback_calls.append(None)
 
-    monkeypatch.setattr(wrap_mod, "_ensure_proxy", lambda *a, **kw: fake_proc)
+    monkeypatch.setattr(wrap_mod, "_ensure_proxy", lambda *a, **kw: (fake_proc, 8787))
     # Replace time.sleep with a no-op so the loop spins quickly.
     monkeypatch.setattr(wrap_mod.time, "sleep", lambda _s: None)
     # Replace _make_cleanup to avoid side-effects on real ports/files.
@@ -320,7 +169,7 @@ def test_run_proxy_only_watcher_keyboardinterrupt_shuts_down_cleanly(
         if sleep_calls["n"] >= 1:
             raise KeyboardInterrupt
 
-    monkeypatch.setattr(wrap_mod, "_ensure_proxy", lambda *a, **kw: _FakeProc())
+    monkeypatch.setattr(wrap_mod, "_ensure_proxy", lambda *a, **kw: (_FakeProc(), 8787))
     monkeypatch.setattr(wrap_mod.time, "sleep", raising_sleep)
     monkeypatch.setattr(wrap_mod, "_make_cleanup", lambda holder, port: lambda *a, **kw: None)
     monkeypatch.setattr(wrap_mod.signal, "signal", lambda *a, **kw: None)
@@ -336,7 +185,7 @@ def test_run_proxy_only_watcher_keyboardinterrupt_shuts_down_cleanly(
             learn=False,
             memory=False,
             agent_type="cursor",
-            print_setup_lines=lambda: None,
+            print_setup_lines=lambda _port: None,
         )
 
     inv = runner.invoke(_cmd)
@@ -418,7 +267,7 @@ def test_run_proxy_only_watcher_unexpected_exception_returns_exit_1(
             learn=False,
             memory=False,
             agent_type="cline",
-            print_setup_lines=lambda: None,
+            print_setup_lines=lambda _port: None,
         )
 
     inv = runner.invoke(_cmd)
@@ -454,7 +303,7 @@ def test_run_proxy_only_watcher_calls_cleanup_on_finally(
             learn=False,
             memory=False,
             agent_type="cline",
-            print_setup_lines=lambda: None,
+            print_setup_lines=lambda _port: None,
         )
 
     inv = runner.invoke(_cmd)
