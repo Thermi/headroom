@@ -333,7 +333,9 @@ class CCRResponseHandler:
                 "content": response.get("content", []),
             }
         elif provider == "openai":
-            message = response.get("choices", [{}])[0].get("message", {})
+            choices = response.get("choices") or []
+            first_choice = choices[0] if choices and isinstance(choices[0], dict) else {}
+            message = first_choice.get("message", {})
             return {
                 "role": "assistant",
                 "content": message.get("content"),
