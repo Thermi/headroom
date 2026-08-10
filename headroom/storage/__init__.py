@@ -1,5 +1,7 @@
 """Storage modules for Headroom SDK."""
 
+import os
+
 from .base import Storage
 from .jsonl import JSONLStorage
 from .sqlite import SQLiteStorage
@@ -9,6 +11,14 @@ __all__ = [
     "SQLiteStorage",
     "JSONLStorage",
 ]
+
+
+def _path_from_store_url(store_url: str, scheme: str) -> str:
+    """Return a filesystem path without corrupting Windows drive prefixes."""
+    path = store_url.removeprefix(scheme)
+    if os.name == "nt" and path.startswith("/") and len(path) >= 3 and path[2] == ":":
+        return path[1:]
+    return path
 
 
 def create_storage(store_url: str) -> Storage:
@@ -29,15 +39,10 @@ def create_storage(store_url: str) -> Storage:
         Storage instance.
     """
     if store_url.startswith("sqlite://"):
-        path = store_url.replace("sqlite://", "")
-        # Handle sqlite:/// (3 slashes for absolute path)
-        if path.startswith("/"):
-            path = path  # Already absolute
+        path = _path_from_store_url(store_url, "sqlite://")
         return SQLiteStorage(path)
     elif store_url.startswith("jsonl://"):
-        path = store_url.replace("jsonl://", "")
-        if path.startswith("/"):
-            path = path
+        path = _path_from_store_url(store_url, "jsonl://")
         return JSONLStorage(path)
     else:
         # Unknown scheme: try entry point headroom.storage_backend[name=scheme]
