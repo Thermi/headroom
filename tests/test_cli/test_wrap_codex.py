@@ -9,7 +9,6 @@ way a user would from the shell.
 
 from __future__ import annotations
 
-import shutil
 import sqlite3
 from pathlib import Path
 from unittest.mock import patch
