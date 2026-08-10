@@ -5,6 +5,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import click
+import pytest
+
 from headroom.cli import wrap as wrap_cli
 
 
@@ -155,24 +158,22 @@ def test_restore_noop_when_file_corrupt(tmp_path: Path) -> None:
     wrap_cli._restore_claude_wrap_base_url(None, settings_path=path)  # must not raise
 
 
-def test_write_recovers_from_corrupt_file(tmp_path: Path) -> None:
+def test_write_refuses_corrupt_file(tmp_path: Path) -> None:
     path = _settings(tmp_path)
     path.parent.mkdir(parents=True)
     path.write_text("not valid json {{{{", encoding="utf-8")
-    prev = wrap_cli._write_claude_wrap_base_url("http://127.0.0.1:8787", settings_path=path)
-    assert prev is None  # treated as fresh
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    assert payload["env"]["ANTHROPIC_BASE_URL"] == "http://127.0.0.1:8787"
+    with pytest.raises(click.ClickException, match="not valid JSON"):
+        wrap_cli._write_claude_wrap_base_url("http://127.0.0.1:8787", settings_path=path)
+    assert path.read_text(encoding="utf-8") == "not valid json {{{{"
 
 
-def test_write_recovers_from_non_dict_payload(tmp_path: Path) -> None:
+def test_write_refuses_non_dict_payload(tmp_path: Path) -> None:
     path = _settings(tmp_path)
     path.parent.mkdir(parents=True)
     path.write_text("[1, 2, 3]", encoding="utf-8")  # valid JSON but not a dict
-    prev = wrap_cli._write_claude_wrap_base_url("http://127.0.0.1:8787", settings_path=path)
-    assert prev is None
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    assert payload["env"]["ANTHROPIC_BASE_URL"] == "http://127.0.0.1:8787"
+    with pytest.raises(click.ClickException, match="does not contain a JSON object"):
+        wrap_cli._write_claude_wrap_base_url("http://127.0.0.1:8787", settings_path=path)
+    assert json.loads(path.read_text(encoding="utf-8")) == [1, 2, 3]
 
 
 def test_write_restore_roundtrip(tmp_path: Path) -> None:
