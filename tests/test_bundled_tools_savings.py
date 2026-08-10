@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import textwrap
 from pathlib import Path
@@ -176,6 +177,10 @@ def test_ast_grep_slice_saves_tokens(repo: Path):
 
 def test_difftastic_saves_tokens_vs_line_diff(repo: Path):
     """Structural diff should compress smaller than unified line diff."""
+    difft_path = binaries.resolve("difft")
+    if shutil.which("diff") is None or not difft_path.exists():
+        pytest.skip("diff and difft are required for the bundled-tool comparison")
+
     # Baseline: unified line diff via /usr/bin/diff.
     line_diff = subprocess.run(
         ["diff", "-u", str(repo / "payments.py"), str(repo / "payments_v2.py")],
@@ -187,7 +192,7 @@ def test_difftastic_saves_tokens_vs_line_diff(repo: Path):
     # difftastic in a compact display mode.
     struct = subprocess.run(
         [
-            str(binaries.resolve("difft")),
+            str(difft_path),
             "--display=inline",
             "--color=never",
             str(repo / "payments.py"),
