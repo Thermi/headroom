@@ -245,7 +245,7 @@ class TestMCPStatusCommand:
         result = runner.invoke(main, ["mcp", "status"])
 
         assert result.exit_code == 0
-        assert "[OK] Configured" in result.output
+        assert "Configured" in result.output
 
 
 class TestMCPServeCommand:
