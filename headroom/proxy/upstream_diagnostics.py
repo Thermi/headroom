@@ -208,9 +208,9 @@ def _detect_interface_mtu() -> str:
                 return f"{iface_name}:{mtu}"
             return "<no non-loopback interface found>"
         if system == "windows":
-            import subprocess as _sp
+            from headroom._subprocess import run as _run
 
-            result = _sp.run(
+            result = _run(
                 ["netsh", "interface", "ip", "show", "interface"],
                 capture_output=True,
                 text=True,
@@ -226,9 +226,9 @@ def _detect_interface_mtu() -> str:
                             return f"{iface_name}:{mtu_val}"
             return f"<netsh result: {result.returncode}>"
         if system == "darwin":
-            import subprocess as _sp
+            from headroom._subprocess import run as _run
 
-            result = _sp.run(
+            result = _run(
                 ["networksetup", "-getinfo", "Ethernet"],
                 capture_output=True,
                 text=True,

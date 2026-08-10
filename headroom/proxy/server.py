@@ -869,9 +869,9 @@ class HeadroomProxy(
             self._build_info["build_time"] = BUILD_TIME or "unknown"
         except (ImportError, AttributeError):
             try:
-                import subprocess
+                from headroom._subprocess import run as subprocess_run
 
-                result = subprocess.run(
+                result = subprocess_run(
                     ["git", "rev-parse", "--short", "HEAD"],
                     capture_output=True,
                     text=True,
@@ -5644,9 +5644,9 @@ def _get_build_info_value(key: str) -> str:
         pass
     if key == "git_commit":
         try:
-            import subprocess
+            from headroom._subprocess import run as subprocess_run
 
-            r = subprocess.run(
+            r = subprocess_run(
                 ["git", "rev-parse", "--short", "HEAD"],
                 capture_output=True,
                 text=True,

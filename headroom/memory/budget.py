@@ -15,11 +15,12 @@ from __future__ import annotations
 import logging
 import os as _os
 import re
-import subprocess
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
+from subprocess import TimeoutExpired
 
+from headroom._subprocess import run as subprocess_run
 from headroom.memory.writers.base import MemoryEntry, _estimate_tokens
 
 logger = logging.getLogger(__name__)
@@ -216,7 +217,7 @@ class MemoryBudgetManager:
             return self._git_files_cache
 
         try:
-            result = subprocess.run(
+            result = subprocess_run(
                 ["git", "ls-files"],
                 capture_output=True,
                 text=True,
@@ -227,7 +228,7 @@ class MemoryBudgetManager:
                 self._git_files_cache = set(result.stdout.strip().split("\n"))
             else:
                 self._git_files_cache = set()
-        except (subprocess.TimeoutExpired, FileNotFoundError):
+        except (TimeoutExpired, FileNotFoundError):
             self._git_files_cache = set()
 
         return self._git_files_cache

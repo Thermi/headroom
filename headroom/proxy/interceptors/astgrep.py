@@ -13,12 +13,13 @@ from __future__ import annotations
 import logging
 import os
 import shutil
-import subprocess
 import tempfile
 from pathlib import Path
+from subprocess import TimeoutExpired
 from typing import Any
 
 from headroom import binaries
+from headroom._subprocess import run as subprocess_run
 from headroom.proxy import _json as json
 from headroom.proxy import runtime_env
 
@@ -200,7 +201,7 @@ def _run_ast_grep(
     try:
         for pattern in patterns:
             try:
-                completed = subprocess.run(
+                completed = subprocess_run(
                     [
                         str(exe),
                         "run",
@@ -220,7 +221,7 @@ def _run_ast_grep(
                     timeout=5,
                     check=False,
                 )
-            except (subprocess.TimeoutExpired, OSError) as e:
+            except (TimeoutExpired, OSError) as e:
                 logger.debug("ast-grep timed out or failed: %s", e)
                 continue
             # rc=0: matches. rc=1: no matches (expected). rc>=2: real error
