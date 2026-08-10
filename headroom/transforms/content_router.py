@@ -3774,7 +3774,9 @@ class ContentRouter(Transform):
 
         # Restore protected tag blocks into the compressed text
         if protected:
-            compressed = restore_tags(compressed, protected)
+            compressed, had_tag_loss = restore_tags(compressed, protected)
+            if had_tag_loss:
+                compressed = content
             compressed_tokens = _estimate_tokens(compressed)
 
         return compressed, compressed_tokens or _estimate_tokens(compressed)

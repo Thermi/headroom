@@ -2293,6 +2293,8 @@ class KompressCompressor(Transform):
             raise ValueError("batch_size must be positive")
         if not contents:
             return []
+        if ccr_originals is not None and len(ccr_originals) != len(contents):
+            raise ValueError("ccr_originals must have the same length as contents")
 
         cache = get_kompress_cache()
         cache_namespace = self._cache_namespace()
