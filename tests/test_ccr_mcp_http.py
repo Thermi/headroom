@@ -7,9 +7,9 @@ import pytest
 
 pytest.importorskip("mcp")
 
+from fastapi.testclient import TestClient
 from mcp.client.session import ClientSession
 from mcp.client.streamable_http import streamable_http_client
-from fastapi.testclient import TestClient
 
 from headroom.ccr.mcp_http import (
     create_streamable_http_app,
