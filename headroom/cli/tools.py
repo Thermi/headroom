@@ -183,7 +183,7 @@ def tools_doctor_cmd(emit_json: bool) -> None:
 
     console = Console()
     table = Table(show_header=True, header_style="bold")
-    for col in ("check", "state", "version", "detail"):
+    for col in ("check", "state", "version", "platform", "path"):
         table.add_column(col)
     state_style = {
         "on-path": "green",
@@ -204,7 +204,8 @@ def tools_doctor_cmd(emit_json: bool) -> None:
             r["tool"],
             f"[{style}]{r['state']}[/{style}]",
             str(r.get("version", "")),
-            f"{platform} {r.get('path', '')}".strip(),
+            platform,
+            str(r.get("path", "") or "-"),
         )
     console.print(table)
     from rich.markup import escape as _escape
