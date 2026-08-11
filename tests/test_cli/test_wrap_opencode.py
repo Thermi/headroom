@@ -37,6 +37,7 @@ def runner() -> CliRunner:
 @pytest.fixture(autouse=True)
 def _clear_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("HEADROOM_CONTEXT_TOOL", raising=False)
+    monkeypatch.setenv("OPENCODE_CONFIG", str(Path.cwd() / ".opencode-test" / "opencode.json"))
 
 
 def _capture_launch(runner, args, monkeypatch, tmp_path):
