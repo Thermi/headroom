@@ -1686,6 +1686,9 @@ class ContentRouterConfig:
     # dispatch threshold and compaction heuristics without constructing
     # the crusher themselves.
     smart_crusher: Any | None = None
+    search_compressor: Any | None = None
+    log_compressor: Any | None = None
+    diff_compressor: Any | None = None
 
     # Group search-compressor output by file (`rg --heading` style).
     # Default False; the proxy enables it in token mode.
@@ -3929,9 +3932,11 @@ class ContentRouter(Transform):
             try:
                 from .search_compressor import SearchCompressor, SearchCompressorConfig
 
-                self._search_compressor = SearchCompressor(
-                    SearchCompressorConfig(group_by_file=self.config.search_group_by_file)
+                cfg = SearchCompressorConfig(
+                    group_by_file=self.config.search_group_by_file,
+                    enable_ccr=self.config.ccr_inject_marker,
                 )
+                self._search_compressor = SearchCompressor(cfg)
             except ImportError:
                 logger.debug("SearchCompressor not available")
         return self._search_compressor
