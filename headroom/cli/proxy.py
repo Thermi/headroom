@@ -434,6 +434,20 @@ def dashboard(port: int, no_open: bool) -> None:
     ),
 )
 @click.option(
+    "--retry-base-delay-ms",
+    type=click.IntRange(min=0),
+    default=None,
+    envvar="HEADROOM_RETRY_BASE_DELAY_MS",
+    help="Initial retry delay in milliseconds.",
+)
+@click.option(
+    "--retry-max-delay-ms",
+    type=click.IntRange(min=0),
+    default=None,
+    envvar="HEADROOM_RETRY_MAX_DELAY_MS",
+    help="Maximum retry delay in milliseconds.",
+)
+@click.option(
     "--request-timeout-seconds",
     type=int,
     default=None,
@@ -998,6 +1012,8 @@ def proxy(
     ds4_budget: float | None,
     ds4_budget_period: str,
     retry_max_attempts: int | None,
+    retry_base_delay_ms: int | None,
+    retry_max_delay_ms: int | None,
     request_timeout_seconds: int | None,
     connect_timeout_seconds: int | None,
     anthropic_buffered_request_timeout_seconds: int | None,
@@ -1302,6 +1318,8 @@ def proxy(
         ds4_budget_limit_usd=ds4_budget,
         ds4_budget_period=cast(Literal["hourly", "daily", "monthly"], ds4_budget_period),
         retry_max_attempts=retry_max_attempts if retry_max_attempts is not None else 3,
+        retry_base_delay_ms=retry_base_delay_ms if retry_base_delay_ms is not None else 1000,
+        retry_max_delay_ms=retry_max_delay_ms if retry_max_delay_ms is not None else 30000,
         request_timeout_seconds=request_timeout_seconds
         if request_timeout_seconds is not None and request_timeout_seconds > 0
         else 300,
