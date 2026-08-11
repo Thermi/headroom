@@ -3838,7 +3838,13 @@ def _ensure_proxy(
         try:
             actual_port = helpers._find_available_port(port_search_start)
         except OSError as e:
-            raise click.ClickException(f"Port {port} is unavailable: {e}") from e
+            detail = f"Port {port} is unavailable: {e}"
+            if sys.platform == "win32":
+                detail += (
+                    " (Windows may reserve this port; try another port, e.g. "
+                    f"headroom wrap {agent_type} --port {port + 1}.)"
+                )
+            raise click.ClickException(detail) from e
         except RuntimeError as e:
             raise click.ClickException(str(e)) from e
 

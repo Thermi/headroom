@@ -47,7 +47,7 @@ def test_ensure_proxy_recovers_matching_persistent_deployment(monkeypatch) -> No
 
     result = wrap_cli._ensure_proxy(8787, False)
 
-    assert result is None
+    assert result == (None, 8787)
     assert calls == ["start:default"]
 
 
@@ -67,7 +67,7 @@ def test_ensure_proxy_recovers_persistent_deployment_when_socket_is_bound(monkey
 
     result = wrap_cli._ensure_proxy(8787, False)
 
-    assert result is None
+    assert result == (None, 8787)
     assert calls == ["start:default"]
 
 
@@ -97,7 +97,7 @@ def test_ensure_proxy_falls_back_when_persistent_manifest_is_stale(monkeypatch) 
 
     result = wrap_cli._ensure_proxy(8787, False)
 
-    assert result is None
+    assert result == (None, 8787)
     assert calls == ["start"]
 
 
@@ -152,7 +152,7 @@ def test_ensure_proxy_restarts_idle_stale_persistent_deployment(monkeypatch) -> 
 
     result = wrap_cli._ensure_proxy(8787, False)
 
-    assert result is None
+    assert result == (None, 8787)
     assert calls == ["restart:default:8787"]
 
 
@@ -202,7 +202,7 @@ def test_ensure_proxy_leaves_active_stale_persistent_deployment_running(monkeypa
 
     result = wrap_cli._ensure_proxy(8787, False)
 
-    assert result is None
+    assert result == (None, 8787)
 
 
 def test_ensure_proxy_defers_persistent_restart_when_http_wrapper_attached(
@@ -237,7 +237,7 @@ def test_ensure_proxy_defers_persistent_restart_when_http_wrapper_attached(
 
     result = wrap_cli._ensure_proxy(8787, False)
 
-    assert result is None
+    assert result == (None, 8787)
 
 
 def test_find_persistent_manifest_prefers_default_profile(monkeypatch) -> None:
@@ -301,7 +301,7 @@ def test_ensure_proxy_restarts_idle_stale_ephemeral_proxy(monkeypatch) -> None:
 
     result = wrap_cli._ensure_proxy(8787, False)
 
-    assert result is None
+    assert result == (None, 8787)
     assert calls[0] == ("kill", 12345, 8787)
     assert calls[1][0] == "start"
 
@@ -341,7 +341,7 @@ def test_ensure_proxy_restarts_ephemeral_proxy_for_openai_api_url_mismatch(monke
         openai_api_url="https://api.individual.githubcopilot.com",
     )
 
-    assert result is None
+    assert result == (None, 8787)
     assert calls[0] == ("kill", 12345, 8787)
     assert calls[1][0] == "start"
     assert calls[1][2]["openai_api_url"] == "https://api.individual.githubcopilot.com"
@@ -495,7 +495,7 @@ def test_ensure_proxy_reuses_agent_proxy_without_savings_profile(monkeypatch) ->
 
     result = wrap_cli._ensure_proxy(8787, False, agent_type="codex")
 
-    assert result is None
+    assert result == (None, 8787)
 
 
 def test_ensure_proxy_restarts_for_explicit_agent_savings_profile(monkeypatch) -> None:
@@ -524,7 +524,7 @@ def test_ensure_proxy_restarts_for_explicit_agent_savings_profile(monkeypatch) -
 
     result = wrap_cli._ensure_proxy(8787, False, agent_type="codex")
 
-    assert result is None
+    assert result == (None, 8787)
     assert calls[0] == ("kill", 12345, 8787)
     assert calls[1][0] == "start"
 
@@ -572,7 +572,7 @@ def test_ensure_proxy_reuses_agent_proxy_with_savings_profile(monkeypatch) -> No
 
     result = wrap_cli._ensure_proxy(8787, False, agent_type="cursor")
 
-    assert result is None
+    assert result == (None, 8787)
 
 
 def test_ensure_proxy_leaves_active_stale_ephemeral_proxy_running(monkeypatch) -> None:
@@ -602,7 +602,7 @@ def test_ensure_proxy_leaves_active_stale_ephemeral_proxy_running(monkeypatch) -
 
     result = wrap_cli._ensure_proxy(8787, False)
 
-    assert result is None
+    assert result == (None, 8787)
 
 
 def test_ensure_proxy_defers_version_restart_when_http_wrapper_attached(monkeypatch) -> None:
@@ -637,7 +637,7 @@ def test_ensure_proxy_defers_version_restart_when_http_wrapper_attached(monkeypa
 
     result = wrap_cli._ensure_proxy(8787, False)
 
-    assert result is None
+    assert result == (None, 8787)
 
 
 def test_ensure_proxy_defers_flag_restart_when_other_wrapper_attached(monkeypatch) -> None:
@@ -671,7 +671,7 @@ def test_ensure_proxy_defers_flag_restart_when_other_wrapper_attached(monkeypatc
 
     result = wrap_cli._ensure_proxy(8787, False, memory=True)
 
-    assert result is None
+    assert result == (None, 8787)
 
 
 def test_ensure_proxy_restarts_for_flags_when_no_other_wrapper(monkeypatch) -> None:
@@ -702,7 +702,7 @@ def test_ensure_proxy_restarts_for_flags_when_no_other_wrapper(monkeypatch) -> N
 
     result = wrap_cli._ensure_proxy(8787, False, memory=True)
 
-    assert result is None
+    assert result == (None, 8787)
     assert calls[0] == ("kill", 12345, 8787)
     assert calls[1][0] == "start"
 
@@ -746,7 +746,7 @@ def test_ensure_proxy_restarts_persistent_deployment_for_feature_mismatch(monkey
         openai_api_url="https://api.githubcopilot.com",
     )
 
-    assert result is None
+    assert result == (None, 8787)
     # Proxy should be killed and restarted due to openai_api_url mismatch
     assert calls[0] == ("kill", 12345, 8787)
     assert calls[1][0] == "start"
@@ -788,7 +788,7 @@ def test_ensure_proxy_restarts_persistent_deployment_for_memory_mismatch(monkeyp
     # Request memory that differs from running config (False)
     result = wrap_cli._ensure_proxy(8787, False, memory=True)
 
-    assert result is None
+    assert result == (None, 8787)
     # Proxy should be killed and restarted due to memory mismatch
     assert calls[0] == ("kill", 12345, 8787)
     assert calls[1][0] == "start"
@@ -835,7 +835,7 @@ def test_ensure_proxy_restarts_recovered_persistent_for_openai_api_url_mismatch(
         openai_api_url="https://api.business.githubcopilot.com",
     )
 
-    assert result is None
+    assert result == (None, 8787)
     assert calls == [("restart", "default", 8787)]
 
 
@@ -867,7 +867,7 @@ def test_ensure_proxy_restarts_recovered_persistent_when_config_unavailable(monk
         openai_api_url="https://api.business.githubcopilot.com",
     )
 
-    assert result is None
+    assert result == (None, 8787)
     assert calls == [("restart", "default", 8787)]
 
 
@@ -911,7 +911,7 @@ def test_ensure_proxy_reuses_persistent_deployment_when_features_match(monkeypat
         openai_api_url="https://api.githubcopilot.com",
     )
 
-    assert result is None
+    assert result == (None, 8787)
 
 
 def test_ensure_proxy_recovered_persistent_deployment_checks_feature_mismatch(monkeypatch) -> None:
@@ -959,5 +959,5 @@ def test_ensure_proxy_recovered_persistent_deployment_checks_feature_mismatch(mo
         openai_api_url="https://api.githubcopilot.com",
     )
 
-    assert result is None
+    assert result == (None, 8787)
     assert calls == [("restart", "default", 8787)]
