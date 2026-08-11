@@ -111,6 +111,11 @@ def test_go_doc_comments_stay_attached_to_function() -> None:
     assert compressor._verify_syntax(compressed, CodeLanguage.GO) is True
 
 
+def test_go_verifier_accepts_valid_package_with_doc_comments() -> None:
+    compressor = CodeAwareCompressor(CodeCompressorConfig())
+    assert compressor._verify_syntax(GO_DOC_COMMENTS, CodeLanguage.GO) is True
+
+
 def test_actual_typescript_compression() -> None:
     """Parity with the existing JS/Python/Go 'actual compression' tests —
     real TS input must actually compress, not silently no-op."""

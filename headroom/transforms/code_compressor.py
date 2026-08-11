@@ -1703,6 +1703,14 @@ class CodeAwareCompressor(Transform):
         if body_node is None:
             return node_text
 
+        # Tree-sitter reports Go function bodies as complete nodes whose closing
+        # brace is already part of the node range. The generic line slicer later
+        # appends that brace again, producing `}` after every function.
+        if language == CodeLanguage.GO and body_node.type == "block":
+            node_text = _get_node_text(node, code)
+            if self._verify_syntax(node_text, language):
+                return node_text
+
         # Use line numbers to slice: this preserves original indentation.
         # tree-sitter gives 0-based row numbers.
         node_start_line = node.start_point[0]
