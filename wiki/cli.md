@@ -246,6 +246,8 @@ headroom proxy --mode cache
 | `--no-cache` | off | Disable semantic caching |
 | `--no-rate-limit` | off | Disable rate limiting |
 | `--retry-max-attempts` | runtime default `3` | Maximum upstream retry attempts |
+| `--retry-base-delay-ms` | `1000` | Initial upstream retry delay in milliseconds |
+| `--retry-max-delay-ms` | `30000` | Maximum upstream retry delay in milliseconds |
 | `--request-timeout-seconds` | runtime default `300` | Request timeout in seconds |
 | `--connect-timeout-seconds` | runtime default `10` | Upstream connection timeout |
 | `--anthropic-pre-upstream-concurrency` | auto `max(2, min(8, cpu_count))` | Cap simultaneous pre-upstream work on `/v1/messages` (body read, deep copy, first compression stage, memory-context lookup, upstream connect). `0` or negative disables (unbounded); any positive integer is honoured verbatim. Prevents cold-start replay storms from starving `/livez`, `/readyz`, and new Codex WS opens. |

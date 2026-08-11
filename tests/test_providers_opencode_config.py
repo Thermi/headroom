@@ -427,6 +427,7 @@ def test_inject_provider_config_no_crash_on_unwriteable_dir(
     import click as click_mod
 
     monkeypatch.setenv("HOME", "/nonexistent/path/that/cannot/be/created")
+    monkeypatch.delenv("OPENCODE_CONFIG", raising=False)
     try:
         inject_opencode_provider_config(port=8787)
     except click_mod.ClickException:
@@ -508,7 +509,8 @@ def test_build_launch_env_with_project(monkeypatch: pytest.MonkeyPatch, tmp_path
     assert env["HEADROOM_PROJECT"] == "test-proj"
     # Plugin loaded → its proxy target is exported for self-configuration.
     assert env["HEADROOM_PROXY_URL"] == "http://127.0.0.1:8787"
-    assert str(plugin) in env["OPENCODE_CONFIG_CONTENT"]
+    launch_config = json.loads(env["OPENCODE_CONFIG_CONTENT"])
+    assert launch_config["plugin"] == [str(plugin)]
     assert f"plugin={HEADROOM_OPENCODE_PLUGIN}" in display
     assert "OPENAI_BASE_URL" not in env
     assert "ANTHROPIC_BASE_URL" not in env

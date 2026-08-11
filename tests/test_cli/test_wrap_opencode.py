@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -37,12 +38,23 @@ def runner() -> CliRunner:
 @pytest.fixture(autouse=True)
 def _clear_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("HEADROOM_CONTEXT_TOOL", raising=False)
-    monkeypatch.setenv("OPENCODE_CONFIG", str(Path.cwd() / ".opencode-test" / "opencode.json"))
+
+
+@pytest.fixture(autouse=True)
+def _skip_proxy_start(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        wrap_mod,
+        "_ensure_proxy",
+        lambda port, no_proxy, **kwargs: (None, port),
+    )
+    monkeypatch.setattr(wrap_mod, "_setup_headroom_mcp", lambda *args, **kwargs: None)
+    monkeypatch.setattr(wrap_mod, "_setup_serena_mcp", lambda *args, **kwargs: None)
+    monkeypatch.setattr(wrap_mod, "_disable_serena_mcp", lambda *args, **kwargs: None)
 
 
 def _capture_launch(runner, args, monkeypatch, tmp_path):
     """Helper: invoke wrap opencode, capturing _launch_tool kwargs."""
-    captured: dict[str, object] = {}
+    captured: dict[str, Any] = {}
     monkeypatch.chdir(tmp_path)
 
     def fake_launch_tool(**kwargs):  # noqa: ANN003

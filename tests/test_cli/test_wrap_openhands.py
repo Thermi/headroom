@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -26,7 +27,7 @@ def test_wrap_openhands_sets_provider_envs(
     monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("HEADROOM_CONTEXT_TOOL", raising=False)
 
-    captured: dict[str, object] = {}
+    captured: dict[str, Any] = {}
 
     def fake_launch_tool(**kwargs):  # noqa: ANN003
         captured.update(kwargs)
@@ -55,12 +56,12 @@ def test_wrap_openhands_preserves_existing_openhands_instructions(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Pre-existing OPENHANDS_INSTRUCTIONS env content is preserved, rtk is appended."""
+    """Pre-existing OPENHANDS_INSTRUCTIONS content is preserved unchanged."""
     monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("HEADROOM_CONTEXT_TOOL", raising=False)
     monkeypatch.setenv("OPENHANDS_INSTRUCTIONS", "Prefer typed Python.")
 
-    captured: dict[str, object] = {}
+    captured: dict[str, Any] = {}
 
     def fake_launch_tool(**kwargs):  # noqa: ANN003
         captured.update(kwargs)
@@ -74,7 +75,7 @@ def test_wrap_openhands_preserves_existing_openhands_instructions(
     env = captured["env"]
     instructions = env.get("OPENHANDS_INSTRUCTIONS", "")
     assert "Prefer typed Python." in instructions
-    assert "Prefer typed Python." in instructions
+    assert instructions == "Prefer typed Python."
 
 
 def test_wrap_openhands_idempotent_already_injected(
@@ -82,13 +83,13 @@ def test_wrap_openhands_idempotent_already_injected(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """If OPENHANDS_INSTRUCTIONS already contains the marker, do not re-append."""
+    """Existing OPENHANDS_INSTRUCTIONS content remains unchanged."""
     monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("HEADROOM_CONTEXT_TOOL", raising=False)
     pre_existing = "Prefer typed Python."
     monkeypatch.setenv("OPENHANDS_INSTRUCTIONS", pre_existing)
 
-    captured: dict[str, object] = {}
+    captured: dict[str, Any] = {}
 
     def fake_launch_tool(**kwargs):  # noqa: ANN003
         captured.update(kwargs)
@@ -119,4 +120,3 @@ def test_wrap_openhands_missing_binary_errors_clearly(
 
     assert result.exit_code == 1
     assert "'openhands' not found in PATH" in result.output
-

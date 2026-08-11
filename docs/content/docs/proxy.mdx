@@ -259,6 +259,8 @@ Coding agents re-read the same files repeatedly; these control how stale reads a
 | `--request-timeout-seconds` / `HEADROOM_REQUEST_TIMEOUT` | `300` | Upstream request timeout (seconds). |
 | `--connect-timeout-seconds` | `10` | Upstream connect timeout (seconds). |
 | `--retry-max-attempts` | `3` | Upstream retries on transient failure. |
+| `--retry-base-delay-ms` / `HEADROOM_RETRY_BASE_DELAY_MS` | `1000` | Initial upstream retry delay in milliseconds. |
+| `--retry-max-delay-ms` / `HEADROOM_RETRY_MAX_DELAY_MS` | `30000` | Maximum upstream retry delay in milliseconds. |
 | `--limit-concurrency` | `1000` | Concurrent connections before returning 503. |
 | `--rpm` / `--tpm` | `60` / `100000` | Requests- and tokens-per-minute rate limits (disable with `--no-rate-limit`). |
 | `--budget` / `--budget-period` | none / `daily` | Spend cap in USD per period; over-budget requests get 429. |

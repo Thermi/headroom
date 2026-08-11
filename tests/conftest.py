@@ -45,6 +45,14 @@ def _disable_telemetry_beacon(monkeypatch, _scrub_developer_headroom_env):
     monkeypatch.setenv("HEADROOM_BEACON", "off")
 
 
+# OpenCode wrap/MCP tests edit the active config file. Keep the default path
+# out of the developer's real home unless a path-focused test deliberately
+# overrides it.
+@pytest.fixture(autouse=True)
+def _isolate_opencode_config(monkeypatch, tmp_path):
+    monkeypatch.setenv("OPENCODE_CONFIG", str(tmp_path / "opencode.json"))
+
+
 # The MCP install ledger defaults to ``~/.headroom/mcp_installs.json``, so any
 # test that registers a server (directly or through `wrap`) writes into the
 # developer's REAL ledger — observed adding a live `claude/serena` entry during a
