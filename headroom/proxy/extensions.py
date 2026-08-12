@@ -12,8 +12,7 @@ Each ``install`` callable is invoked with the FastAPI ``app`` and the
   * register ASGI middleware (``app.add_middleware(...)``)
   * add routes or health endpoints
   * mutate config
-  * raise on an environment or auth failure to disable *itself* (the proxy logs
-    the failure and starts without that extension)
+  * raise on an environment or auth failure; startup surfaces the failure
 
 OSS makes no assumptions about what extensions do. The interface is
 deliberately minimal; extensions own the complexity behind it.
@@ -40,7 +39,6 @@ from __future__ import annotations
 import importlib.metadata
 import logging
 import os
-import sys
 from collections.abc import Callable, Iterable, Iterator
 from typing import Any
 
@@ -57,9 +55,8 @@ def discover() -> Iterator[tuple[str, ProxyExtension]]:
     """Yield ``(name, install_callable)`` pairs for every registered extension.
 
     Entry-point load failures are logged and skipped — a broken third-party
-    package must not prevent the proxy from starting. An extension that fails
-    its environment/auth check raises from ``install()``; ``install_all`` logs
-    and skips it, so it is disabled rather than aborting startup.
+    package must not prevent the proxy from starting. Installer failures
+    propagate so enabled extension configuration errors are visible.
     """
     try:
         entries = importlib.metadata.entry_points(group=ENTRY_POINT_GROUP)
@@ -107,10 +104,8 @@ def install_all(
     The literal ``"*"`` in ``enabled`` is a wildcard that enables every
     discovered extension.
 
-    Returns the names of successfully installed extensions. If an extension
-    raises inside ``install()`` it is logged, skipped, and recorded as failed —
-    a single broken extension is disabled rather than aborting proxy startup for
-    every other extension.
+    Returns the names of successfully installed extensions. Installer errors
+    propagate to the caller after discovery/load failures have been handled.
     """
     enabled_set = _resolve_enabled(enabled)
     discovered = list(discover())
@@ -128,38 +123,21 @@ def install_all(
 
     wildcard = "*" in enabled_set
     installed: list[str] = []
-    failed: list[str] = []
     for name, install in discovered:
         if not wildcard and name not in enabled_set:
             continue
         try:
             install(app, config)
-        except Exception as exc:  # noqa: BLE001 — one bad extension must not brick the proxy
-            # A failing extension disables *itself* and the proxy keeps running
-            # without it — covers environment/auth failures and compatibility
-            # errors (e.g. a plugin built against a core API this version lacks).
+        except Exception as exc:  # noqa: BLE001 — preserve installer failure context
             log.warning(
-                "proxy extension %r failed to install and was skipped: %s",
+                "proxy extension %r failed to install: %s",
                 name,
                 exc,
                 exc_info=True,
             )
-            failed.append(name)
-            continue
+            raise
         installed.append(name)
         log.info("proxy extension installed: %s", name)
-
-    if failed:
-        skipped = ",".join(sorted(failed))
-        log.warning("proxy extensions skipped due to install errors: %s", skipped)
-        # The startup banner lists enabled extensions *before* install runs, so a
-        # skip would otherwise only appear if logging is configured to show this
-        # logger. Surface it on the console unconditionally.
-        print(
-            f"[headroom] proxy extensions SKIPPED: {skipped} "
-            f"(install failed — running without them; see logs)",
-            file=sys.stderr,
-        )
 
     # Warn about names the user asked for that weren't found.
     if not wildcard:
