@@ -73,8 +73,10 @@ def _check_tree_sitter_available() -> bool:
             import tree_sitter  # noqa: F401
             import tree_sitter_language_pack  # noqa: F401
 
+            parser = _get_parser("python")
+            parser.parse(b"def _headroom_probe():\n    return None\n")
             _tree_sitter_available = True
-        except ImportError:
+        except (ImportError, TypeError, ValueError, AttributeError):
             _tree_sitter_available = False
     return _tree_sitter_available
 

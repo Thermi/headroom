@@ -1688,6 +1688,7 @@ class ContentRouterConfig:
     smart_crusher: Any | None = None
     search_compressor: Any | None = None
     diff_compressor: Any | None = None
+    text_crusher: Any | None = None
 
     # Group search-compressor output by file (`rg --heading` style).
     # Default False; the proxy enables it in token mode.
@@ -6192,7 +6193,6 @@ class ContentRouter(Transform):
                         compressed_details=compressed_details,
                         strategy_label="tool_result",
                         details_prefix="tool",
-                        enforce_reversibility=True,
                     )
                     compressed_content, was_compressed = compression_future.result()
                     if compressed_content is not None:
