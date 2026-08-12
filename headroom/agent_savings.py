@@ -247,7 +247,11 @@ def proxy_pipeline_kwargs(config: object) -> dict[str, object]:
 
     protect_recent = getattr(config, "protect_recent", None)
     if protect_recent is not None:
-        kwargs["protect_recent"] = int(protect_recent)
+        protect_recent = int(protect_recent)
+        kwargs["protect_recent"] = protect_recent
+        # Keep the read-protection view consistent with an explicit override.
+        if profile_name:
+            kwargs["read_protection_window"] = protect_recent
 
     protect_analysis_context = getattr(config, "protect_analysis_context", None)
     if protect_analysis_context is not None:
