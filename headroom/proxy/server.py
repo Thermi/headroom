@@ -2979,7 +2979,7 @@ def create_app(config: ProxyConfig | None = None) -> FastAPI:
                     routers.append(transform)
         return routers
 
-    def _reconcile_kompress_health() -> bool:
+    def _reconcile_kompress_health(*, allow_module_cache: bool = True) -> bool:
         routers = _kompress_health_routers()
         if not routers:
             return False
@@ -3008,6 +3008,13 @@ def create_app(config: ProxyConfig | None = None) -> FastAPI:
             return True
 
         if proxy.warmup.kompress.status == "error":
+            return True
+
+        if proxy.warmup.kompress.info.get("source_status") == "deferred" and compressors:
+            if not allow_module_cache:
+                return True
+
+        if not allow_module_cache:
             return True
 
         try:
@@ -3745,7 +3752,7 @@ def create_app(config: ProxyConfig | None = None) -> FastAPI:
         # even while the model is loaded and compressing, unless somebody
         # happens to hit /health or /readyz first. Same read-only
         # reconciliation those endpoints run (issue #2624).
-        _reconcile_kompress_health()
+        _reconcile_kompress_health(allow_module_cache=False)
         warmup_registry = getattr(proxy, "warmup", None)
         payload = warmup_registry.to_dict() if warmup_registry is not None else {}
         payload["runtime"] = _runtime_payload()
