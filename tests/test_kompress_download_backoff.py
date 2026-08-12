@@ -101,10 +101,12 @@ def test_window_grows_with_consecutive_failures():
 
 def test_a_live_thread_is_never_duplicated(monkeypatch):
     gate = threading.Event()
+    started_event = threading.Event()
     started: list[str] = []
 
     def slow_load(model_id, device, allow_download=True):
         started.append(model_id)
+        started_event.set()
         gate.wait(timeout=10)
         return object(), object(), "onnx"
 
@@ -112,6 +114,7 @@ def test_a_live_thread_is_never_duplicated(monkeypatch):
     for _ in range(10):
         kc.ensure_background_download("some/model")
     try:
+        assert started_event.wait(timeout=5), "download worker never started"
         assert len(started) == 1
     finally:
         gate.set()
