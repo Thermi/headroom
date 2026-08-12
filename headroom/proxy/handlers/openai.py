@@ -3215,11 +3215,17 @@ class OpenAIHandlerMixin:
         # only-guarded and idempotent (cache mode already replays).
         from headroom.cache.prefix_tracker import overlay_cached_prefix
 
+        get_last_original_messages = getattr(
+            openai_prefix_tracker, "get_last_original_messages", None
+        )
+        get_last_forwarded_messages = getattr(
+            openai_prefix_tracker, "get_last_forwarded_messages", None
+        )
         _ov = overlay_cached_prefix(
             optimized_messages,
             original_client_messages,
-            openai_prefix_tracker.get_last_original_messages(),
-            openai_prefix_tracker.get_last_forwarded_messages(),
+            get_last_original_messages() if callable(get_last_original_messages) else [],
+            get_last_forwarded_messages() if callable(get_last_forwarded_messages) else [],
         )
         if _ov != optimized_messages:
             optimized_messages = _ov
