@@ -72,6 +72,9 @@ def _register_provider_passthrough_route(
     proxy: Any,
     spec: ProviderPassthroughRoute,
 ) -> None:
+    if spec.provider_name == "anthropic" and not proxy.config.anthropic_enabled:
+        return
+
     async def provider_passthrough(request: Request):
         return await proxy.handle_passthrough(
             request,
@@ -120,6 +123,8 @@ def _register_provider_handler_route(app: FastAPI, proxy: Any, spec: ProviderHan
 
 def _register_provider_handler_routes(app: FastAPI, proxy: Any) -> None:
     for spec in PROVIDER_HANDLER_ROUTES:
+        if spec.handler_name.startswith("handle_anthropic_") and not proxy.config.anthropic_enabled:
+            continue
         _register_provider_handler_route(app, proxy, spec)
 
 
@@ -235,23 +240,25 @@ def register_provider_routes(app: FastAPI, proxy: Any) -> None:
             vertex_publisher_provider_name(publisher),
         )
 
-    @app.post("/v1/messages")
-    async def anthropic_messages(request: Request):
-        # Honor the per-request upstream override so clients that speak the
-        # Anthropic Messages wire format but authenticate against a
-        # non-Anthropic gateway route correctly, consistent with the
-        # OpenAI-compatible and generic passthrough routes.
-        custom_base = request.headers.get("x-headroom-base-url", "").strip()
-        if custom_base:
-            return await proxy.handle_anthropic_messages(
-                request, upstream_base_url=custom_base.rstrip("/")
-            )
-        return await proxy.handle_anthropic_messages(request)
+    if proxy.config.anthropic_enabled:
 
-    @app.post("/anthropic/v1/messages")
-    async def foundry_anthropic_messages(request: Request):
-        normalize_request_path(request, "/v1/messages")
-        return await proxy.handle_anthropic_messages(request, _api_target(proxy, "anthropic"))
+        @app.post("/v1/messages")
+        async def anthropic_messages(request: Request):
+            # Honor the per-request upstream override so clients that speak the
+            # Anthropic Messages wire format but authenticate against a
+            # non-Anthropic gateway route correctly, consistent with the
+            # OpenAI-compatible and generic passthrough routes.
+            custom_base = request.headers.get("x-headroom-base-url", "").strip()
+            if custom_base:
+                return await proxy.handle_anthropic_messages(
+                    request, upstream_base_url=custom_base.rstrip("/")
+                )
+            return await proxy.handle_anthropic_messages(request)
+
+        @app.post("/anthropic/v1/messages")
+        async def foundry_anthropic_messages(request: Request):
+            normalize_request_path(request, "/v1/messages")
+            return await proxy.handle_anthropic_messages(request, _api_target(proxy, "anthropic"))
 
     # AWS Bedrock InvokeModel passthrough. Registered ONLY when an upstream is
     # configured (`--bedrock-api-url` / BEDROCK_TARGET_API_URL): without it,
