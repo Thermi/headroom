@@ -458,6 +458,7 @@ def merge_cost_stats(
         "cli_tokens_avoided": cli_tokens_avoided,
         "cli_filtering_tokens_avoided": cli_tokens_avoided,
         "cli_tokens_included_in_compression": cli_tokens_avoided > 0,
+        "cli_filtering_tokens_included_in_compression": cli_tokens_avoided > 0,
     }
 
 
@@ -636,6 +637,14 @@ def build_session_summary(
                 + cli_tokens_avoided
             ),
             "cli_tokens_avoided": cli_tokens_avoided,
+            "cli_filtering_tokens_avoided": cli_tokens_avoided,
+            "total_tokens_saved_with_cli_filtering": (
+                metrics.tokens_saved_total + cli_tokens_avoided
+            ),
+            "total_tokens_before_with_cli_filtering": total_tokens_before,
+            "rtk_tokens_avoided": cli_tokens_avoided,
+            "total_tokens_saved_with_rtk": metrics.tokens_saved_total + cli_tokens_avoided,
+            "total_tokens_before_with_rtk": total_tokens_before,
         },
         "uncompressed_requests": {k: v for k, v in uncompressed_reasons.items() if v > 0},
         "cost": {
@@ -646,6 +655,8 @@ def build_session_summary(
             "breakdown": {
                 "cache_savings_usd": round(cache_net, 2),
                 "compression_savings_usd": round(compression_savings, 2),
+                "cli_filtering_savings_usd": 0.0,
+                "rtk_savings_usd": 0.0,
             },
         },
     }

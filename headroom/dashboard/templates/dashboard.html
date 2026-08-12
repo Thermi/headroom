@@ -390,6 +390,14 @@
                                 <span class="text-sm text-gray-400">Before Compression</span>
                                 <span class="font-mono text-sm" x-text="formatNumber(stats.tokens?.total_before_compression || 0)"></span>
                             </div>
+                            <div class="flex justify-between items-center" x-show="cliFilteringAvailable">
+                                <span class="text-sm text-gray-400" x-text="cliFilteringLabel + ' Filtered' + ' (this session)'"></span>
+                                <span class="font-mono text-sm text-emerald-400" x-text="formatNumber(cliFilteringSaved)"></span>
+                            </div>
+                            <div class="flex justify-between items-center" x-show="!cliFilteringAvailable">
+                                <span class="text-sm text-gray-400" x-text="cliFilteringLabel + ' Filtered' + ' (this session)'"></span>
+                                <span class="font-mono text-sm text-gray-600">not installed</span>
+                            </div>
                             <div class="flex justify-between items-center">
                                 <span class="text-sm text-gray-400">Proxy Removed</span>
                                 <span class="font-mono text-sm text-accent" x-text="formatNumber(stats.tokens?.proxy_compression_saved || 0)"></span>
@@ -2610,6 +2618,28 @@
                     const total = this.compressionTotalBefore;
                     if (total <= 0) return 0;
                     return (this.stats.tokens?.proxy_compression_saved || 0) / total * 100;
+                },
+
+                get cliFilteringLabel() {
+                    const raw = this.stats.savings?.by_layer?.cli_filtering?.label
+                        || this.stats.context_tool?.label
+                        || this.stats.context_tool?.configured
+                        || 'Context Tool';
+                    if (String(raw).toLowerCase() === 'lean-ctx') return 'Lean-ctx';
+                    return String(raw);
+                },
+
+                get cliFilteringSaved() {
+                    return this.stats.tokens?.cli_filtering_saved
+                        ?? this.stats.tokens?.cli_tokens_avoided
+                        ?? this.stats.tokens?.rtk_saved
+                        ?? 0;
+                },
+
+                get cliFilteringAvailable() {
+                    const tool = this.stats.context_tool;
+                    if (tool && typeof tool.available === 'boolean') return tool.available;
+                    return true;
                 },
 
                 // --- Headline savings percent ---

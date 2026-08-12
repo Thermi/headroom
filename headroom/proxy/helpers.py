@@ -14,6 +14,8 @@ import logging
 import os
 import random
 import re
+import shutil
+import subprocess
 import threading
 import time
 from collections import OrderedDict
@@ -121,6 +123,255 @@ if TYPE_CHECKING:
     from fastapi import Request
 
 logger = logging.getLogger("headroom.proxy")
+
+_CONTEXT_TOOL_ENV = "HEADROOM_CONTEXT_TOOL"
+_CONTEXT_TOOL_RTK = "rtk"
+_CONTEXT_TOOL_LEAN_CTX = "lean-ctx"
+_RTK_GAIN_SCOPE_ENV = "HEADROOM_RTK_GAIN_SCOPE"
+_RTK_GAIN_SCOPES = {"global", "project"}
+RTK_STATS_CACHE_TTL_SECONDS = 60.0
+CONTEXT_TOOL_STATS_CACHE_TTL_SECONDS = RTK_STATS_CACHE_TTL_SECONDS
+_rtk_stats_cache: dict[str, Any] = {
+    "expires_at": 0.0,
+    "has_value": False,
+    "tool": None,
+    "value": None,
+}
+_rtk_session_baseline: dict[str, Any] = {
+    "initialized": False,
+    "tool": None,
+    "total_commands": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "tokens_saved": 0,
+    "total_time_ms": 0,
+    "captured_at": 0.0,
+}
+_rtk_stats_cache_lock = threading.Lock()
+
+
+def _selected_context_tool() -> str:
+    value = os.environ.get(_CONTEXT_TOOL_ENV, _CONTEXT_TOOL_RTK).strip().lower()
+    return (
+        _CONTEXT_TOOL_LEAN_CTX
+        if value in ("leanctx", _CONTEXT_TOOL_LEAN_CTX)
+        else _CONTEXT_TOOL_RTK
+    )
+
+
+def _context_tool_label(tool: str) -> str:
+    return "lean-ctx" if tool == _CONTEXT_TOOL_LEAN_CTX else "RTK"
+
+
+def _rtk_gain_scope() -> str:
+    value = os.environ.get(_RTK_GAIN_SCOPE_ENV, "").strip().lower()
+    if value in _RTK_GAIN_SCOPES:
+        return value
+    if value:
+        logger.warning(
+            "event=rtk_gain_scope_invalid env=%s value=%r default=global",
+            _RTK_GAIN_SCOPE_ENV,
+            value,
+        )
+    return "global"
+
+
+def _context_tool_summary_payload(
+    *, tool: str, installed: bool, scope: str | None = None, summary: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    summary = summary or {}
+    commands = int(summary.get("total_commands", 0) or 0)
+    input_tokens = int(summary.get("total_input", summary.get("total_input_tokens", 0)) or 0)
+    output_tokens = int(summary.get("total_output", summary.get("total_output_tokens", 0)) or 0)
+    tokens_saved = int(summary.get("total_saved", summary.get("tokens_saved", 0)) or 0)
+    return {
+        "tool": tool,
+        "label": _context_tool_label(tool),
+        "installed": installed,
+        "scope": scope or ("global" if tool == _CONTEXT_TOOL_RTK else "local"),
+        "total_commands": commands,
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "tokens_saved": tokens_saved,
+        "total_time_ms": int(summary.get("total_time_ms", 0) or 0),
+        "avg_savings_pct": float(summary.get("avg_savings_pct", 0.0) or 0.0),
+        "lifetime_avg_savings_pct": float(summary.get("avg_savings_pct", 0.0) or 0.0),
+    }
+
+
+def _read_rtk_lifetime_stats() -> dict[str, Any] | None:
+    try:
+        from headroom.rtk import get_rtk_path
+    except ImportError:
+
+        def get_rtk_path() -> Path | None:
+            return None
+
+    path = get_rtk_path() or shutil.which("rtk")  # type: ignore[arg-type]
+    if not path:
+        return _context_tool_summary_payload(tool=_CONTEXT_TOOL_RTK, installed=False)
+    command = [str(path), "gain"]
+    if _rtk_gain_scope() == "project":
+        command.append("--project")
+    command.extend(["--format", "json"])
+    try:
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=5,
+        )
+        if result.returncode != 0:
+            return None
+        data = json.loads(result.stdout)
+        return _context_tool_summary_payload(
+            tool=_CONTEXT_TOOL_RTK,
+            installed=True,
+            scope=_rtk_gain_scope(),
+            summary=data.get("summary", {}),
+        )
+    except Exception:
+        return None
+
+
+def _read_context_tool_lifetime_stats(tool: str) -> dict[str, Any] | None:
+    if tool == _CONTEXT_TOOL_LEAN_CTX:
+        from headroom.lean_ctx import get_lean_ctx_path
+
+        path = get_lean_ctx_path()
+        command = [str(path), "gain", "--json"] if path else None
+    else:
+        return _read_rtk_lifetime_stats()
+    if command is None:
+        return _context_tool_summary_payload(tool=tool, installed=False)
+    try:
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=5,
+        )
+        if result.returncode != 0:
+            return None
+        data = json.loads(result.stdout)
+        return _context_tool_summary_payload(
+            tool=tool, installed=True, summary=data.get("summary", data)
+        )
+    except Exception:
+        return None
+
+
+async def initialize_context_tool_session_baseline() -> None:
+    """Pin installed context-tool counters before a proxy session starts."""
+    tool = _selected_context_tool()
+    payload = await asyncio.to_thread(_read_context_tool_lifetime_stats, tool)
+    with _rtk_stats_cache_lock:
+        if payload is not None and payload.get("installed", False):
+            _rtk_session_baseline.update(
+                {
+                    "initialized": True,
+                    "tool": tool,
+                    "total_commands": payload["total_commands"],
+                    "input_tokens": payload["input_tokens"],
+                    "output_tokens": payload["output_tokens"],
+                    "tokens_saved": payload["tokens_saved"],
+                    "total_time_ms": payload["total_time_ms"],
+                    "captured_at": time.time(),
+                }
+            )
+        else:
+            _rtk_session_baseline.update({"initialized": False, "tool": tool})
+        _rtk_stats_cache.update(
+            {"expires_at": 0.0, "has_value": False, "tool": None, "value": None}
+        )
+
+
+def _get_context_tool_stats() -> dict[str, Any] | None:
+    tool = _selected_context_tool()
+    now = time.monotonic()
+    with _rtk_stats_cache_lock:
+        if (
+            _rtk_stats_cache["has_value"]
+            and now < _rtk_stats_cache["expires_at"]
+            and _rtk_stats_cache["tool"] == tool
+        ):
+            cached = _rtk_stats_cache["value"]
+            return cast(dict[str, Any] | None, cached)
+    payload = _read_context_tool_lifetime_stats(tool)
+    if payload is None:
+        return None
+    with _rtk_stats_cache_lock:
+        if payload.get("installed") and not _rtk_session_baseline["initialized"]:
+            _rtk_session_baseline.update(
+                {
+                    "initialized": True,
+                    "tool": tool,
+                    "total_commands": payload["total_commands"],
+                    "input_tokens": payload["input_tokens"],
+                    "output_tokens": payload["output_tokens"],
+                    "tokens_saved": payload["tokens_saved"],
+                    "total_time_ms": payload["total_time_ms"],
+                }
+            )
+        baseline = _rtk_session_baseline
+        for key in (
+            "total_commands",
+            "input_tokens",
+            "output_tokens",
+            "tokens_saved",
+            "total_time_ms",
+        ):
+            payload[f"lifetime_{key}"] = payload[key]
+            payload[f"session_baseline_{key}"] = baseline[key]
+            payload[key] = max(payload[key] - baseline[key], 0)
+        payload["session_savings_pct"] = (
+            payload["tokens_saved"] / payload["input_tokens"] * 100
+            if payload["input_tokens"]
+            else None
+        )
+        payload["session_avg_time_ms"] = (
+            payload["total_time_ms"] / payload["total_commands"]
+            if payload["total_commands"]
+            else None
+        )
+        payload["avg_savings_pct_scope"] = "lifetime"
+        payload["session"] = {
+            "commands": payload["total_commands"],
+            "input_tokens": payload["input_tokens"],
+            "output_tokens": payload["output_tokens"],
+            "tokens_saved": payload["tokens_saved"],
+            "savings_pct": payload["session_savings_pct"],
+            "total_time_ms": payload["total_time_ms"],
+            "avg_time_ms": payload["session_avg_time_ms"],
+        }
+        payload["lifetime"] = {
+            "commands": payload["lifetime_total_commands"],
+            "input_tokens": payload["lifetime_input_tokens"],
+            "output_tokens": payload["lifetime_output_tokens"],
+            "tokens_saved": payload["lifetime_tokens_saved"],
+            "savings_pct": payload["lifetime_avg_savings_pct"],
+            "total_time_ms": payload["lifetime_total_time_ms"],
+        }
+        payload["sample_ttl_seconds"] = CONTEXT_TOOL_STATS_CACHE_TTL_SECONDS
+        payload["refresh_interval_seconds"] = CONTEXT_TOOL_STATS_CACHE_TTL_SECONDS
+        _rtk_stats_cache.update(
+            {
+                "expires_at": now + CONTEXT_TOOL_STATS_CACHE_TTL_SECONDS,
+                "has_value": True,
+                "tool": tool,
+                "value": payload,
+            }
+        )
+        return payload
+
+
+def _get_rtk_stats() -> dict[str, Any] | None:
+    return _get_context_tool_stats()
+
 
 _CODEX_WIRE_DEBUG_ENV = "HEADROOM_CODEX_WIRE_DEBUG"
 _CODEX_WIRE_DEBUG_DIR_ENV = "HEADROOM_CODEX_WIRE_DEBUG_DIR"
