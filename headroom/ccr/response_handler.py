@@ -30,6 +30,10 @@ from .tool_injection import CCR_TOOL_NAME
 
 logger = logging.getLogger(__name__)
 
+RESIDUAL_CCR_RESOLVED = "resolved"
+RESIDUAL_CCR_SKIPPED_MIXED = "skipped_mixed_tools"
+RESIDUAL_CCR_ERROR = "error"
+
 
 @dataclass
 class CCRToolResult:
@@ -109,6 +113,19 @@ class CCRResponseHandler:
             True if response contains headroom_retrieve tool calls.
         """
         return has_ccr_tool_calls(response, provider)
+
+    def residual_ccr_status(
+        self,
+        response: dict[str, Any],
+        provider: str = "anthropic",
+    ) -> str:
+        """Classify any CCR calls left after response handling."""
+        ccr_calls, other_calls = self._parse_ccr_tool_calls(response, provider)
+        if not ccr_calls:
+            return RESIDUAL_CCR_RESOLVED
+        if other_calls:
+            return RESIDUAL_CCR_SKIPPED_MIXED
+        return RESIDUAL_CCR_ERROR
 
     def _extract_tool_calls(
         self,
