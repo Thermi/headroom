@@ -188,7 +188,8 @@ def _merge_into_file(file_path: Path, new_recommendations: list[Recommendation])
     if file_path.exists():
         existing = _read_text_tolerant(file_path)
         if _MARKER_START in existing:
-            return _MARKER_PATTERN.sub(lambda _match: section, existing)
+            replaced = _MARKER_PATTERN.sub(lambda _match: section, existing)
+            return replaced.rstrip("\r\n") + "\n"
         return existing.rstrip() + "\n\n" + section + "\n"
     return section + "\n"
 
