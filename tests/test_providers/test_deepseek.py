@@ -134,7 +134,10 @@ class TestDeepSeekLiteLLMInjection:
         assert output_cost == pytest.approx(0.28, rel=0.01)
 
     def test_resolve_litellm_model_prefixes_deepseek(self):
-        from headroom.pricing.litellm_pricing import resolve_litellm_model
+        from headroom.pricing.litellm_pricing import LITELLM_AVAILABLE, resolve_litellm_model
+
+        if not LITELLM_AVAILABLE:
+            pytest.skip("litellm not available")
 
         resolved = resolve_litellm_model("deepseek-v4-flash")
         assert resolved == "deepseek/deepseek-v4-flash"
