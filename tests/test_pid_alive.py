@@ -39,6 +39,7 @@ def test_pid_alive_systemerror_is_not_alive(monkeypatch) -> None:
 
 def test_pid_alive_only_uses_signal_zero(monkeypatch) -> None:
     """The liveness probe must never send a real (terminating) signal."""
+    monkeypatch.setattr("headroom._subprocess.sys.platform", "linux")
     monkeypatch.setitem(
         sys.modules,
         "psutil",
