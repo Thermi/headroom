@@ -18,8 +18,8 @@ from pathlib import Path
 from subprocess import TimeoutExpired
 from typing import Any
 
+from headroom import _subprocess as subprocess
 from headroom import binaries
-from headroom._subprocess import run as subprocess_run
 from headroom.proxy import _json as json
 from headroom.proxy import runtime_env
 
@@ -201,7 +201,7 @@ def _run_ast_grep(
     try:
         for pattern in patterns:
             try:
-                completed = subprocess_run(
+                completed = subprocess.run(
                     [
                         str(exe),
                         "run",
