@@ -751,7 +751,13 @@ class SQLiteGraphStore:
     def close(self) -> None:
         """Close any open connections (cleanup).
 
-        Note: This store uses connection-per-request pattern,
-        so there's typically nothing to close.
+        The store keeps one connection per worker thread, so close the current
+        thread's connection and clear it from the thread-local cache.
         """
-        pass
+        with self._lock:
+            conn: sqlite3.Connection | None = getattr(self._local, "conn", None)
+            if conn is not None:
+                try:
+                    conn.close()
+                finally:
+                    self._local.conn = None
