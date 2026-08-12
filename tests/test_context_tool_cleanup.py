@@ -11,6 +11,7 @@ else.
 from __future__ import annotations
 
 import json
+import sys
 
 import pytest
 
@@ -91,7 +92,12 @@ def test_leaves_a_users_own_binary_on_path_alone(home):
     own = _write(home / ".local" / "bin" / "lean-ctx", "my own build")
     managed = _write(home / ".headroom" / "bin" / "rtk", "binary")
     link = home / ".local" / "bin" / "rtk"
-    link.symlink_to(managed)
+    try:
+        link.symlink_to(managed)
+    except OSError as exc:
+        if sys.platform == "win32":
+            pytest.skip(f"file symlinks require elevated Windows privileges: {exc}")
+        raise
 
     context_tool_cleanup.purge_context_tool_artifacts()
 
