@@ -33,6 +33,8 @@ HEADROOM_SAVINGS_PATH_ENV_VAR = _paths.HEADROOM_SAVINGS_PATH_ENV
 DEFAULT_SAVINGS_DIR = ".headroom"
 DEFAULT_SAVINGS_FILE = "proxy_savings.json"
 SCHEMA_VERSION = 5
+# The history endpoint retains its v3 response contract while storage evolves.
+HISTORY_RESPONSE_SCHEMA_VERSION = 3
 DEFAULT_MAX_HISTORY_POINTS = 5000
 DEFAULT_MAX_PROJECTS = 50
 DEFAULT_MAX_HISTORY_AGE_DAYS = 365
@@ -382,6 +384,7 @@ def _normalize_history_entry(entry: Any) -> dict[str, Any] | None:
     provider = PROVIDER_UNKNOWN
     model = MODEL_UNKNOWN
 
+    has_extended_fields = False
     if isinstance(entry, dict):
         timestamp = _parse_timestamp(entry.get("timestamp"))
         total_tokens_saved = _coerce_int(entry.get("total_tokens_saved"))
@@ -395,6 +398,15 @@ def _normalize_history_entry(entry: Any) -> dict[str, Any] | None:
         total_input_cost_usd = _coerce_float(entry.get("total_input_cost_usd"))
         output_tokens_saved = _coerce_int(entry.get("output_tokens_saved"))
         output_savings_usd = _coerce_float(entry.get("output_savings_usd"))
+        has_extended_fields = any(
+            key in entry
+            for key in (
+                "cache_read_tokens",
+                "cache_savings_usd",
+                "output_tokens_saved",
+                "output_savings_usd",
+            )
+        )
         provider = _normalize_provider(entry.get("provider"))
         model = _normalize_model(entry.get("model"))
     elif isinstance(entry, list | tuple) and len(entry) >= 2:
@@ -412,19 +424,25 @@ def _normalize_history_entry(entry: Any) -> dict[str, Any] | None:
     if timestamp is None:
         return None
 
-    return {
+    normalized = {
         "timestamp": _to_utc_iso(timestamp),
         "provider": provider,
         "model": model,
         "total_tokens_saved": total_tokens_saved,
         "compression_savings_usd": round(compression_savings_usd, 6),
-        "cache_read_tokens": cache_read_tokens,
-        "cache_savings_usd": round(cache_savings_usd, 6),
         "total_input_tokens": total_input_tokens,
         "total_input_cost_usd": round(total_input_cost_usd, 6),
-        "output_tokens_saved": output_tokens_saved,
-        "output_savings_usd": round(output_savings_usd, 6),
     }
+    if has_extended_fields:
+        normalized.update(
+            {
+                "cache_read_tokens": cache_read_tokens,
+                "cache_savings_usd": round(cache_savings_usd, 6),
+                "output_tokens_saved": output_tokens_saved,
+                "output_savings_usd": round(output_savings_usd, 6),
+            }
+        )
+    return normalized
 
 
 def _empty_display_session() -> dict[str, Any]:
@@ -1079,7 +1097,7 @@ class SavingsTracker:
         }
         history = self._history_for_response(raw_history, mode=history_mode)
         return {
-            "schema_version": snapshot["schema_version"],
+            "schema_version": HISTORY_RESPONSE_SCHEMA_VERSION,
             "generated_at": _to_utc_iso(_utc_now()),
             "storage_path": snapshot["storage_path"],
             "lifetime": snapshot["lifetime"],
@@ -1132,9 +1150,12 @@ class SavingsTracker:
                 "total_input_tokens",
                 "total_input_cost_usd_delta",
                 "total_input_cost_usd",
-                "output_tokens_saved_delta",
-                "output_savings_usd_delta",
             ]
+            if any(
+                row.get("output_tokens_saved_delta") or row.get("output_savings_usd_delta")
+                for row in rows
+            ):
+                fieldnames.extend(["output_tokens_saved_delta", "output_savings_usd_delta"])
 
         buffer = StringIO()
         writer = DictWriter(buffer, fieldnames=fieldnames)
@@ -1146,10 +1167,14 @@ class SavingsTracker:
     def snapshot(self) -> dict[str, Any]:
         with self._lock:
             history = [dict(item) for item in self._state["history"]]
+            lifetime = dict(self._state["lifetime"])
+            if self._state["schema_version"] < SCHEMA_VERSION:
+                lifetime.pop("cache_read_tokens", None)
+                lifetime.pop("cache_savings_usd", None)
             return {
-                "schema_version": SCHEMA_VERSION,
+                "schema_version": self._state["schema_version"],
                 "storage_path": str(self._path),
-                "lifetime": dict(self._state["lifetime"]),
+                "lifetime": lifetime,
                 "display_session": self._display_session_snapshot_locked(),
                 "display_session_policy": {
                     "rollover_inactivity_minutes": (self._display_session_inactivity_minutes),
@@ -1182,6 +1207,12 @@ class SavingsTracker:
             "by_model": {},
         }
 
+    def _legacy_default_state(self) -> dict[str, Any]:
+        """Return the v3-shaped state used for invalid legacy files."""
+        state = self._default_state()
+        state["schema_version"] = HISTORY_RESPONSE_SCHEMA_VERSION
+        return state
+
     def _load_state(self) -> dict[str, Any]:
         if not self._path.exists():
             return self._default_state()
@@ -1200,7 +1231,7 @@ class SavingsTracker:
             self._persistence_healthy = False
             self._persistence_error = "Savings state root must be a JSON object"
             self._preserve_corrupt_file()
-            return self._default_state()
+            return self._legacy_default_state()
         if _coerce_int(raw.get("schema_version")) != SCHEMA_VERSION:
             self._needs_schema_save = True
         return self._sanitize_state(raw)
@@ -1218,6 +1249,13 @@ class SavingsTracker:
     def _sanitize_state(self, raw: Any) -> dict[str, Any]:
         if not isinstance(raw, dict):
             return self._default_state()
+
+        raw_schema_version = _coerce_int(raw.get("schema_version"))
+        state_schema_version = (
+            SCHEMA_VERSION
+            if raw_schema_version >= SCHEMA_VERSION
+            else HISTORY_RESPONSE_SCHEMA_VERSION
+        )
 
         history_raw = raw.get("history", [])
         normalized_history = []
@@ -1266,7 +1304,7 @@ class SavingsTracker:
             )
 
         state = {
-            "schema_version": SCHEMA_VERSION,
+            "schema_version": state_schema_version,
             "lifetime": {
                 "requests": lifetime_requests,
                 "tokens_saved": lifetime_tokens_saved,
@@ -1527,6 +1565,9 @@ class SavingsTracker:
             _coerce_float(session.get("total_input_cost_usd")),
             6,
         )
+        if not session.get("cache_read_tokens") and not session.get("cache_savings_usd"):
+            session.pop("cache_read_tokens", None)
+            session.pop("cache_savings_usd", None)
         return session
 
     def _is_display_session_expired(
