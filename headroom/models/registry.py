@@ -12,8 +12,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from headroom.pricing.anthropic_prices import ANTHROPIC_PRICES
+from headroom.pricing.deepseek_prices import DEEPSEEK_PRICES
 from headroom.pricing.litellm_pricing import estimate_cost as litellm_estimate_cost
 from headroom.pricing.litellm_pricing import get_model_pricing
+from headroom.pricing.openai_prices import OPENAI_PRICES
+from headroom.pricing.registry import ModelPricing
 
 
 @dataclass(frozen=True)
@@ -54,6 +58,12 @@ class ModelInfo:
 # Built-in model database
 # Pricing as of January 2025 - verify current rates
 _MODELS: dict[str, ModelInfo] = {}
+
+_FALLBACK_PRICES: dict[str, ModelPricing] = {
+    **OPENAI_PRICES,
+    **ANTHROPIC_PRICES,
+    **DEEPSEEK_PRICES,
+}
 
 
 def _register_builtin_models() -> None:
@@ -829,8 +839,27 @@ class ModelRegistry:
         Returns:
             Estimated cost in USD, or None if pricing unknown.
         """
-        # Use LiteLLM's pricing database
-        return litellm_estimate_cost(model, input_tokens, output_tokens)
+        # Prefer LiteLLM, but retain pricing for Python versions where it is
+        # intentionally an optional dependency.
+        cost = litellm_estimate_cost(model, input_tokens, output_tokens)
+        if cost is not None:
+            return cost
+
+        pricing = cls._get_fallback_pricing(model)
+        if pricing is None:
+            return None
+        return (input_tokens / 1_000_000) * pricing.input_per_1m + (
+            output_tokens / 1_000_000
+        ) * pricing.output_per_1m
+
+    @classmethod
+    def _get_fallback_pricing(cls, model: str) -> ModelPricing | None:
+        """Get bundled pricing when LiteLLM is unavailable or incomplete."""
+        pricing = _FALLBACK_PRICES.get(model)
+        if pricing is not None:
+            return pricing
+        info = cls.get(model)
+        return _FALLBACK_PRICES.get(info.name) if info is not None else None
 
     @classmethod
     def get_pricing(cls, model: str) -> tuple[float, float] | None:
@@ -844,7 +873,10 @@ class ModelRegistry:
         """
         pricing = get_model_pricing(model)
         if pricing is None:
-            return None
+            fallback = cls._get_fallback_pricing(model)
+            if fallback is None:
+                return None
+            return (fallback.input_per_1m, fallback.output_per_1m)
         return (pricing.input_cost_per_1m, pricing.output_cost_per_1m)
 
 

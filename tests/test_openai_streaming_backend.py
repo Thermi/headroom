@@ -279,6 +279,8 @@ class TestOpenAIStreamingMock:
             )
 
         with (
+            patch("headroom.backends.litellm.LITELLM_AVAILABLE", True),
+            patch("headroom.backends.litellm.litellm", MagicMock()),
             patch("headroom.backends.litellm._fetch_bedrock_inference_profiles", return_value={}),
             patch("headroom.backends.litellm.acompletion", new_callable=AsyncMock) as mock_acomp,
         ):

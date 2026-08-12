@@ -133,6 +133,7 @@ def _resolve_litellm_model_uncached(model: str) -> str:
         "o3-": "openai/",
         "o4-": "openai/",
         "gemini-": "google/",
+        "minimax-": "minimax/",
         "deepseek-": "deepseek/",
     }
     model_lower = model.lower()

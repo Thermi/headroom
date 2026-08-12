@@ -232,6 +232,20 @@ class TestModelRegistry:
         )
         assert cost is None
 
+    def test_estimate_cost_falls_back_without_litellm(self, monkeypatch):
+        """Use the bundled pricing tables when LiteLLM is unavailable."""
+        import headroom.pricing.litellm_pricing as litellm_pricing
+
+        monkeypatch.setattr(litellm_pricing, "LITELLM_AVAILABLE", False)
+
+        cost = ModelRegistry.estimate_cost(
+            model="gpt-4o",
+            input_tokens=1_000_000,
+            output_tokens=500_000,
+        )
+
+        assert cost == pytest.approx(7.50)
+
 
 class TestConvenienceFunctions:
     """Tests for convenience functions."""
