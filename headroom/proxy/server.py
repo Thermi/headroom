@@ -3007,7 +3007,7 @@ def create_app(config: ProxyConfig | None = None) -> FastAPI:
             )
             return True
 
-        if proxy.warmup.kompress.info.get("source_status") == "deferred":
+        if proxy.warmup.kompress.status == "error":
             return True
 
         try:
@@ -3026,6 +3026,9 @@ def create_app(config: ProxyConfig | None = None) -> FastAPI:
                     proxy.warmup.kompress.mark_loaded(
                         handle=model, backend=backend, source_status="runtime"
                     )
+                    return True
+        if proxy.warmup.kompress.info.get("source_status") == "deferred":
+            return True
         return True
 
     def _health_checks() -> dict[str, dict[str, Any]]:
