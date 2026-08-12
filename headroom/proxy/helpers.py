@@ -1734,7 +1734,7 @@ def apply_session_sticky_memory_tools(
                     tool_name=tool_name,
                     golden_tool_bytes=golden_bytes,
                 )
-            except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError) as exc:
                 logger.error(
                     "corrupt golden tool bytes for session %s tool %s: %s — skipping tool injection",
                     session_id,
@@ -1976,7 +1976,7 @@ def apply_session_sticky_ccr_tool(
                     request_id=request_id,
                 )
                 return tools_out, True
-            except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError) as exc:
                 logger.error(
                     "corrupt golden CCR tool bytes for session %s: %s — regenerating fresh definition",
                     session_id,
