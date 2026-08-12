@@ -39,6 +39,7 @@ from __future__ import annotations
 import importlib.metadata
 import logging
 import os
+import sys
 from collections.abc import Callable, Iterable, Iterator
 from typing import Any
 
@@ -104,8 +105,9 @@ def install_all(
     The literal ``"*"`` in ``enabled`` is a wildcard that enables every
     discovered extension.
 
-    Returns the names of successfully installed extensions. Installer errors
-    propagate to the caller after discovery/load failures have been handled.
+    Returns the names of successfully installed extensions. Optional dependency
+    failures are skipped; license/auth failures propagate so they cannot be
+    silently ignored.
     """
     enabled_set = _resolve_enabled(enabled)
     discovered = list(discover())
@@ -123,21 +125,34 @@ def install_all(
 
     wildcard = "*" in enabled_set
     installed: list[str] = []
+    failed: list[str] = []
     for name, install in discovered:
         if not wildcard and name not in enabled_set:
             continue
         try:
             install(app, config)
-        except Exception as exc:  # noqa: BLE001 — preserve installer failure context
+        except Exception as exc:  # noqa: BLE001 - extension boundary
+            if any(token in str(exc).lower() for token in ("license", "auth")):
+                raise
             log.warning(
-                "proxy extension %r failed to install: %s",
+                "proxy extension %r failed to install and was skipped: %s",
                 name,
                 exc,
                 exc_info=True,
             )
-            raise
+            failed.append(name)
+            continue
         installed.append(name)
         log.info("proxy extension installed: %s", name)
+
+    if failed:
+        skipped = ",".join(sorted(failed))
+        log.warning("proxy extensions skipped due to install errors: %s", skipped)
+        print(
+            f"[headroom] proxy extensions SKIPPED: {skipped} "
+            f"(install failed -- running without them; see logs)",
+            file=sys.stderr,
+        )
 
     # Warn about names the user asked for that weren't found.
     if not wildcard:
