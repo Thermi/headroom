@@ -517,6 +517,7 @@ def build_session_summary(
     metrics: Any,
     prefix_cache_stats: dict,
     total_tokens_before: int,
+    cli_tokens_avoided: int = 0,
 ) -> dict[str, Any]:
     """Build a human-readable session summary from metrics and request logs.
 
@@ -630,8 +631,11 @@ def build_session_summary(
             # message compression, so consumers can see the full picture.
             "tool_schema_tokens_saved": getattr(metrics, "tool_search_saved_total", 0),
             "total_tokens_saved_all_layers": (
-                metrics.tokens_saved_total + getattr(metrics, "tool_search_saved_total", 0)
+                metrics.tokens_saved_total
+                + getattr(metrics, "tool_search_saved_total", 0)
+                + cli_tokens_avoided
             ),
+            "cli_tokens_avoided": cli_tokens_avoided,
         },
         "uncompressed_requests": {k: v for k, v in uncompressed_reasons.items() if v > 0},
         "cost": {
