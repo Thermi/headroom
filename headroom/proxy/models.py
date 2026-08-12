@@ -424,7 +424,7 @@ class ProxyConfig:
     # Qdrant connection (defaults resolve from HEADROOM_QDRANT_* env vars)
     memory_qdrant_url: str | None = field(default_factory=qdrant_env.qdrant_env_url)
     memory_qdrant_host: str = field(default_factory=qdrant_env.qdrant_env_host)
-    memory_qdrant_port: int = field(default_factory=qdrant_env.qdrant_env_port)
+    memory_qdrant_port: int = field(default_factory=_qdrant_env_port_or_default)
     memory_qdrant_api_key: str | None = field(default_factory=qdrant_env.qdrant_env_api_key)
     memory_neo4j_uri: str = "neo4j://localhost:7687"
     memory_neo4j_user: str = "neo4j"
