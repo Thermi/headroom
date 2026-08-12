@@ -1315,7 +1315,7 @@ class AnthropicHandlerMixin:
             if (
                 _decision.should_compress
                 and not _skip_compression_for_backpressure
-                and not skip_ccr_request_compression
+                and (not skip_ccr_request_compression or is_cache_mode(self.config.mode))
             ):
                 try:
                     from headroom.proxy.helpers import COMPRESSION_TIMEOUT_SECONDS
@@ -1557,19 +1557,15 @@ class AnthropicHandlerMixin:
                     else:
                         previous_original_messages = prefix_tracker.get_last_original_messages()
                         previous_forwarded_messages = prefix_tracker.get_last_forwarded_messages()
-                        delta = (
-                            None
-                            if skip_ccr_request_compression
-                            else self._extract_cache_stable_delta(
-                                original_client_messages,
-                                previous_original_messages,
-                                previous_forwarded_messages,
-                            )
+                        delta = self._extract_cache_stable_delta(
+                            original_client_messages,
+                            previous_original_messages,
+                            previous_forwarded_messages,
                         )
                         if delta is not None:
                             stable_forwarded_prefix, delta_messages = delta
                             if delta_messages and skip_ccr_request_compression:
-                                optimized_messages = messages
+                                optimized_messages = copy.deepcopy(previous_forwarded_messages)
                                 optimized_tokens = tokenizer.count_messages(optimized_messages)
                             elif delta_messages:
                                 # Compress the delta, with two cache-mode adjustments:
@@ -1630,11 +1626,7 @@ class AnthropicHandlerMixin:
                                 pipeline_timing = result.timing
                                 optimized_tokens = tokenizer.count_messages(optimized_messages)
                             else:
-                                optimized_messages = (
-                                    messages
-                                    if skip_ccr_request_compression
-                                    else stable_forwarded_prefix
-                                )
+                                optimized_messages = stable_forwarded_prefix
                                 optimized_tokens = tokenizer.count_messages(optimized_messages)
                         else:
                             # Conservative rule for cache mode:
@@ -1683,15 +1675,11 @@ class AnthropicHandlerMixin:
             if _cold_recompact_active:
                 _overlay_replayed = False
             else:
-                _ov = (
-                    optimized_messages
-                    if skip_ccr_request_compression
-                    else overlay_cached_prefix(
-                        optimized_messages,
-                        original_client_messages,
-                        prefix_tracker.get_last_original_messages(),
-                        prefix_tracker.get_last_forwarded_messages(),
-                    )
+                _ov = overlay_cached_prefix(
+                    optimized_messages,
+                    original_client_messages,
+                    prefix_tracker.get_last_original_messages(),
+                    prefix_tracker.get_last_forwarded_messages(),
                 )
                 _overlay_replayed = _ov != optimized_messages
                 if _overlay_replayed:
