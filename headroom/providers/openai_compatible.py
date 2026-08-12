@@ -88,8 +88,12 @@ _DEFAULT_CONTEXT_LIMITS: dict[str, int] = {
     "deepseek": 1048576,
     "deepseek-coder": 128000,
     "deepseek-v2": 128000,
-    "deepseek-v3": 128000,
-    "deepseek-v4": 1_000_000,
+    "deepseek-v3": 1048576,
+    "deepseek-v3.2": 128000,
+    "deepseek-v4": 1048576,
+    "deepseek-v4-pro": 1_000_000,
+    "deepseek-v4-flash": 1_000_000,
+    "deepseek-r1": 131072,
     # Yi
     "yi": 32768,
     "yi-34b": 32768,
@@ -301,8 +305,12 @@ class OpenAICompatibleProvider(Provider):
             return _DEFAULT_CONTEXT_LIMITS[model_lower]
 
         # Prefix match
-        for prefix, limit in _DEFAULT_CONTEXT_LIMITS.items():
-            if model_lower.startswith(prefix):
+        for prefix, limit in sorted(
+            _DEFAULT_CONTEXT_LIMITS.items(), key=lambda item: -len(item[0])
+        ):
+            if model_lower.startswith(prefix) and (
+                len(model_lower) == len(prefix) or model_lower[len(prefix)] in "-/:@_"
+            ):
                 return limit
 
         # Default to 128K for modern models
