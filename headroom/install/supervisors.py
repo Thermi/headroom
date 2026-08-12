@@ -12,7 +12,6 @@ from pathlib import Path
 import click
 
 from headroom._subprocess import run
-from headroom._subprocess import run as subprocess_run
 
 from .models import ArtifactRecord, DeploymentManifest, SupervisorKind
 from .paths import (
@@ -196,8 +195,8 @@ def install_supervisor(manifest: DeploymentManifest) -> list[ArtifactRecord]:
         unit_path.parent.mkdir(parents=True, exist_ok=True)
         unit_path.write_text(content)
         flags = [] if manifest.scope == "system" else ["--user"]
-        subprocess_run(["systemctl", *flags, "daemon-reload"], check=True)
-        subprocess_run(["systemctl", *flags, "enable", manifest.service_name], check=True)
+        run(["systemctl", *flags, "daemon-reload"], check=True)
+        run(["systemctl", *flags, "enable", manifest.service_name], check=True)
         records.append(ArtifactRecord(kind="service-unit", path=str(unit_path)))
         return records
 
@@ -256,17 +255,17 @@ def install_supervisor(manifest: DeploymentManifest) -> list[ArtifactRecord]:
             and manifest.supervisor_kind == SupervisorKind.SERVICE.value
             else f"gui/{os.getuid()}"
         )
-        subprocess_run(["launchctl", "bootstrap", bootstrap_domain, str(plist_path)], check=True)
+        run(["launchctl", "bootstrap", bootstrap_domain, str(plist_path)], check=True)
         records.append(ArtifactRecord(kind="plist", path=str(plist_path)))
         return records
 
     if _is_windows() and manifest.supervisor_kind == SupervisorKind.SERVICE.value:
         service_bin = f'cmd.exe /c "{windows_run_cmd_path(manifest.profile)}"'
-        subprocess_run(
+        run(
             ["sc.exe", "create", manifest.service_name, f"binPath= {service_bin}", "start= auto"],
             check=True,
         )
-        subprocess_run(
+        run(
             ["sc.exe", "failure", manifest.service_name, "reset= 0", "actions= restart/5000"],
             check=True,
         )
@@ -304,8 +303,8 @@ def install_supervisor(manifest: DeploymentManifest) -> list[ArtifactRecord]:
             "/F",
             *user_args,
         ]
-        subprocess_run(start_schedule, check=True)
-        subprocess_run(health_schedule, check=True)
+        run(start_schedule, check=True)
+        run(health_schedule, check=True)
         records.extend(
             [
                 ArtifactRecord(kind="windows-task", path=startup_name),
@@ -326,7 +325,7 @@ def start_supervisor(manifest: DeploymentManifest) -> None:
         return
     if sys.platform.startswith("linux"):
         flags = [] if manifest.scope == "system" else ["--user"]
-        subprocess_run(["systemctl", *flags, "restart", manifest.service_name], check=True)
+        run(["systemctl", *flags, "restart", manifest.service_name], check=True)
         return
     if sys.platform == "darwin":
         label = f"com.headroom.{manifest.profile}"
@@ -339,7 +338,7 @@ def start_supervisor(manifest: DeploymentManifest) -> None:
         # Fast path: when the job is already bootstrapped (e.g. `start` right
         # after `install apply`, or `start` on a running service), `kickstart`
         # restarts it in place.
-        kick = subprocess_run(
+        kick = run(
             ["launchctl", "kickstart", "-k", f"{domain}/{label}"],
             capture_output=True,
             text=True,
@@ -349,7 +348,7 @@ def start_supervisor(manifest: DeploymentManifest) -> None:
         # Otherwise the job is not registered in the domain. This is the state
         # `stop`/`restart` leave behind, since they `bootout` the job, and
         # `kickstart` cannot recover it (launchctl error 113). Bootstrap fresh
-        # instead — a successful bootstrap also starts the job via RunAtLoad.
+        # instead â€” a successful bootstrap also starts the job via RunAtLoad.
         # launchd can return EIO (error 5) from bootstrap for several seconds
         # after a bootout while it releases the label, so retry for ~15s.
         plist_dir = (
@@ -361,7 +360,7 @@ def start_supervisor(manifest: DeploymentManifest) -> None:
         plist_path = plist_dir / f"{label}.plist"
         last = kick
         for _ in range(_MACOS_BOOTSTRAP_RETRIES):
-            boot = subprocess_run(
+            boot = run(
                 ["launchctl", "bootstrap", domain, str(plist_path)],
                 capture_output=True,
                 text=True,
@@ -375,7 +374,7 @@ def start_supervisor(manifest: DeploymentManifest) -> None:
             f"launchctl could not start {domain}/{label}: {detail or 'unknown error'}"
         )
     if _is_windows() and manifest.supervisor_kind == SupervisorKind.SERVICE.value:
-        subprocess_run(["sc.exe", "start", manifest.service_name], check=True)
+        run(["sc.exe", "start", manifest.service_name], check=True)
 
 
 def stop_supervisor(manifest: DeploymentManifest) -> None:
@@ -385,7 +384,7 @@ def stop_supervisor(manifest: DeploymentManifest) -> None:
         return
     if sys.platform.startswith("linux"):
         flags = [] if manifest.scope == "system" else ["--user"]
-        subprocess_run(["systemctl", *flags, "stop", manifest.service_name], check=True)
+        run(["systemctl", *flags, "stop", manifest.service_name], check=True)
         return
     if sys.platform == "darwin":
         label = f"com.headroom.{manifest.profile}"
@@ -396,11 +395,11 @@ def stop_supervisor(manifest: DeploymentManifest) -> None:
             else f"gui/{os.getuid()}"
         )
         # `bootout` exits with ESRCH ("No such process") when the job is already
-        # absent — tolerate only that, so `restart` can proceed to start again.
+        # absent â€” tolerate only that, so `restart` can proceed to start again.
         # Any other non-zero result is a real failure (permissions, malformed
         # domain, launchd error) and must surface; otherwise `restart` could
         # report success while a stale job is still running.
-        result = subprocess_run(
+        result = run(
             ["launchctl", "bootout", f"{domain}/{label}"],
             capture_output=True,
             text=True,
@@ -412,7 +411,7 @@ def stop_supervisor(manifest: DeploymentManifest) -> None:
             )
         return
     if _is_windows() and manifest.supervisor_kind == SupervisorKind.SERVICE.value:
-        subprocess_run(["sc.exe", "stop", manifest.service_name], check=True)
+        run(["sc.exe", "stop", manifest.service_name], check=True)
 
 
 def remove_supervisor(manifest: DeploymentManifest) -> None:
