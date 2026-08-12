@@ -1521,6 +1521,9 @@ def serialize_tool_definition_canonical(tool_definition: dict[str, Any]) -> byte
     return _serialize_tool_definition_canonical(tool_definition)
 
 
+_previous_session_tool_tracker = globals().get("SessionToolTracker")
+
+
 class SessionToolTracker(_SessionToolTracker):
     """Env-aware compatibility wrapper for the pure session tool tracker."""
 
@@ -1528,6 +1531,10 @@ class SessionToolTracker(_SessionToolTracker):
         if max_sessions is None:
             max_sessions = get_tool_tracker_max_sessions()
         super().__init__(max_sessions=max_sessions)
+
+
+if _previous_session_tool_tracker is not None:
+    SessionToolTracker = _previous_session_tool_tracker  # type: ignore[misc]
 
 
 # Process-wide singleton. Lazily replaced by tests via
@@ -1811,6 +1818,9 @@ def apply_session_sticky_memory_tools(
 # tool list bytes stay byte-stable across turns once injected.
 
 
+_previous_session_ccr_tracker = globals().get("SessionCcrTracker")
+
+
 class SessionCcrTracker(_SessionCcrTracker):
     """Env-aware compatibility wrapper for the pure CCR session tracker."""
 
@@ -1818,6 +1828,10 @@ class SessionCcrTracker(_SessionCcrTracker):
         if max_sessions is None:
             max_sessions = get_tool_tracker_max_sessions()
         super().__init__(max_sessions=max_sessions)
+
+
+if _previous_session_ccr_tracker is not None:
+    SessionCcrTracker = _previous_session_ccr_tracker  # type: ignore[misc]
 
 
 # Process-wide singleton.
