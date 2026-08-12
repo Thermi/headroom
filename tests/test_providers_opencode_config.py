@@ -27,6 +27,11 @@ def _set_test_home(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.delenv("OPENCODE_CONFIG", raising=False)
 
 
+@pytest.fixture(autouse=True)
+def _isolate_opencode_config_writes(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("OPENCODE_CONFIG", str(tmp_path / "opencode.json"))
+
+
 # ---------------------------------------------------------------------------
 # Config paths
 # ---------------------------------------------------------------------------
