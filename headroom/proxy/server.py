@@ -3014,6 +3014,9 @@ def create_app(config: ProxyConfig | None = None) -> FastAPI:
         ):
             return True
 
+        if not compressors and proxy.warmup.kompress.info.get("source_status") != "deferred":
+            return True
+
         if proxy.warmup.kompress.status == "error":
             return True
 
