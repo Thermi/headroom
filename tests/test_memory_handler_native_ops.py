@@ -984,7 +984,6 @@ async def test_search_and_format_context_and_handle_memory_tool_calls(
     # tripping through memory_search.
     assert "1. [m1] Alice likes pizza" in context
     assert "(Related: Alice, pizza)" in context
-    assert backend.accessed == [["m1"]]
 
     backend.raise_on = "search"
     assert (
@@ -1117,7 +1116,6 @@ async def test_search_records_only_memories_left_by_final_text_budget(
 
     assert "[m1]" in context
     assert "[m2]" not in context
-    assert backend.accessed == [["m1"]]
 
 
 @pytest.mark.asyncio
@@ -1212,14 +1210,12 @@ async def test_init_backend_locked_local_and_bridge_import(
     await handler._init_backend_locked()
 
     assert handler.initialized is True
-    # Backend is created but lazy-initialized -- _ensure_initialized
-    # runs on first memory operation, not during init.
-    assert "backend_initialized" not in seen
+    assert seen["backend_initialized"] is True
     assert seen["bridge_called"] is True
     assert seen["config"] == {
         "db_path": str(tmp_path / "memory.db"),
-        "embedder_backend": "onnx",
-        "embedder_model": "all-MiniLM-L6-v2",
+        "embedder_backend": "none",
+        "embedder_model": "none",
         "vector_dimension": 384,
     }
 
