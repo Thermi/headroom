@@ -259,11 +259,15 @@ async def test_real_localbackend_initializes_via_public_entrypoint(tmp_path):
         except Exception:  # pragma: no cover - env-dependent
             pytest.skip("No embedder backend available in this environment")
 
+    from headroom.memory.factory import _reset_embedder_cache_for_tests
+
+    _reset_embedder_cache_for_tests()
     handler = MemoryHandler(
         MemoryConfig(
             enabled=True,
             backend="local",
             db_path=str(tmp_path / "mem.db"),
+            embedder_backend_override="onnx",
         )
     )
 
@@ -278,6 +282,7 @@ async def test_real_localbackend_initializes_via_public_entrypoint(tmp_path):
         pytest.skip("Skipped because required Hugging Face model files are unavailable offline")
     assert warmed is True
     await handler.close()
+    _reset_embedder_cache_for_tests()
 
 
 @pytest.mark.asyncio

@@ -396,6 +396,7 @@ class MemoryHandler:
                 vector_dimension=vector_dimension,
             )
             self._backend = LocalBackend(backend_config)
+            await self._backend._ensure_initialized()
             logger.info(
                 f"Memory: Initialized LocalBackend at {self.config.db_path} "
                 f"(embedder: {embedder_backend})"
