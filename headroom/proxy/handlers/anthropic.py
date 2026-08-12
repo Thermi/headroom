@@ -8,9 +8,11 @@ Contains all Anthropic Messages API handlers including batch operations.
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import copy
 import logging
 import os
+import threading
 import time
 import uuid
 from datetime import datetime
@@ -41,6 +43,33 @@ from headroom.proxy.model_router import estimate_input_tokens
 from headroom.proxy.outcome import RequestOutcome
 
 logger = logging.getLogger("headroom.proxy")
+
+_ANTHROPIC_BATCH_PARALLELISM_DEFAULT = 8
+_anthropic_batch_executor: concurrent.futures.ThreadPoolExecutor | None = None
+_anthropic_batch_executor_lock = threading.Lock()
+
+
+def _anthropic_batch_parallelism() -> int:
+    """Return the bounded parallelism configured for Anthropic batches."""
+    try:
+        configured = int(
+            os.environ.get("HEADROOM_BATCH_PARALLELISM", str(_ANTHROPIC_BATCH_PARALLELISM_DEFAULT))
+        )
+    except ValueError:
+        configured = _ANTHROPIC_BATCH_PARALLELISM_DEFAULT
+    return max(1, min(configured, 64))
+
+
+def _get_anthropic_batch_executor() -> concurrent.futures.ThreadPoolExecutor:
+    """Return the lazily initialized Anthropic batch executor."""
+    global _anthropic_batch_executor
+    if _anthropic_batch_executor is None:
+        with _anthropic_batch_executor_lock:
+            if _anthropic_batch_executor is None:
+                _anthropic_batch_executor = concurrent.futures.ThreadPoolExecutor(
+                    max_workers=_anthropic_batch_parallelism()
+                )
+    return _anthropic_batch_executor
 
 
 def _strip_streaming_only_content_fields(messages: Any) -> None:
