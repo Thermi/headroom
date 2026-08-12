@@ -1910,25 +1910,6 @@ class HeadroomProxy(
             # written off-thread).
             for transform_status in transform_statuses:
                 self.warmup.merge_transform_status(transform_status)
-        elif self.config.kompress_enabled:
-            # Kompress remains usable with optimize=False, so still warm its
-            # model before accepting requests even though other eager loaders
-            # are disabled.
-            try:
-                eager_status = await asyncio.wait_for(
-                    asyncio.to_thread(self._preload_kompress_models),
-                    timeout=EAGER_PRELOAD_TIMEOUT_SECONDS,
-                )
-                if eager_status:
-                    self.warmup.merge_transform_status(eager_status)
-            except Exception as exc:
-                logger.warning(
-                    "Kompress startup preload exceeded %.0fs or failed (%s); "
-                    "continuing with request-time fallback.",
-                    EAGER_PRELOAD_TIMEOUT_SECONDS,
-                    exc,
-                )
-
         # Update internal status from eager loading results
         if eager_status.get("kompress") in {"enabled", "deferred"}:
             self._kompress_status = eager_status["kompress"]
