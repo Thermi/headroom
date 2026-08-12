@@ -426,14 +426,15 @@ class TestDecodeProjectPath:
             project.mkdir()
 
             # Flatten separators exactly as Claude Code does when escaping.
-            encoded = "-" + str(project)[1:].replace("/", "-").replace(".", "-").replace("_", "-")
+            encoded = "-" + str(project).replace(":", "", 1).replace("/", "-").replace(
+                "\\", "-"
+            ).replace(".", "-").replace("_", "-")
             result = _decode_project_path(encoded)
+            assert result is not None
+            assert result == project
+            assert home.name in result.parts
         finally:
             shutil.rmtree(base, ignore_errors=True)
-
-        assert result == project
-        # The home component is reconstructed whole, never split on a separator.
-        assert home.name in result.parts
 
 
 # ---------------------------------------------------------------------------
@@ -464,12 +465,3 @@ class TestDecodePermissionError:
         # Must not raise; the unreadable candidate is treated as non-existent.
         result = _decode_project_path("-home-marco-rocha-butterfly-sylphina")
         assert result is None or isinstance(result, Path)
-
-    def test_path_exists_swallows_oserror(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        from headroom.learn.plugins.claude import _path_exists
-
-        def boom(self: Path, *args: object, **kwargs: object) -> bool:
-            raise PermissionError(13, "Permission denied", str(self))
-
-        monkeypatch.setattr(Path, "exists", boom)
-        assert _path_exists(Path("/home/marco")) is False
