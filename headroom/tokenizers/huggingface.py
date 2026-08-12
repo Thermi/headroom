@@ -68,6 +68,7 @@ MODEL_TO_TOKENIZER: dict[str, str] = {
     "deepseek-coder": "deepseek-ai/deepseek-coder-6.7b-base",
     "deepseek-v2": "deepseek-ai/DeepSeek-V2",
     "deepseek-v3": "deepseek-ai/DeepSeek-V3",
+    "deepseek-v4": "deepseek-ai/DeepSeek-V4-Flash",
     "deepseek-v4-flash": "deepseek-ai/DeepSeek-V4-Flash",
     "deepseek-v4-pro": "deepseek-ai/DeepSeek-V4-Pro",
     # Yi family

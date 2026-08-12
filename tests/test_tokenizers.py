@@ -25,6 +25,10 @@ def test_huggingface_tokenizer_unwraps_provider_prefixed_deepseek_model() -> Non
     assert get_tokenizer_name("deepseek/deepseek-v4-flash-0731") == "deepseek-ai/DeepSeek-V4-Flash"
 
 
+def test_huggingface_tokenizer_maps_generic_deepseek_v4() -> None:
+    assert get_tokenizer_name("deepseek/deepseek-v4") == "deepseek-ai/DeepSeek-V4-Flash"
+
+
 class TestTiktokenCounter:
     """Tests for TiktokenCounter."""
 
