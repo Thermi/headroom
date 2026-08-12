@@ -206,7 +206,8 @@ class ClaudeCodePlugin(LearnPlugin, ConversationScanner):
 
                     if line_type == "assistant":
                         self._extract_tool_uses(d, tool_uses)
-                        usage = d.get("message", {}).get("usage", {})
+                        message = d.get("message")
+                        usage = message.get("usage", {}) if isinstance(message, dict) else {}
                         total_input_tokens += usage.get("input_tokens", 0)
                         total_input_tokens += usage.get("cache_read_input_tokens", 0)
                         total_input_tokens += usage.get("cache_creation_input_tokens", 0)
@@ -236,6 +237,8 @@ class ClaudeCodePlugin(LearnPlugin, ConversationScanner):
     def _extract_tool_uses(self, d: dict, tool_uses: dict[str, tuple[str, dict]]) -> None:
         """Extract tool_use blocks from an assistant message."""
         msg = d.get("message", {})
+        if not isinstance(msg, dict):
+            return
         content = msg.get("content", [])
         if not isinstance(content, list):
             return
@@ -260,6 +263,8 @@ class ClaudeCodePlugin(LearnPlugin, ConversationScanner):
     ) -> None:
         """Extract tool_result blocks from a user message and match to tool_uses."""
         msg = d.get("message", {})
+        if not isinstance(msg, dict):
+            return
         content = msg.get("content", [])
         if not isinstance(content, list):
             return
@@ -326,6 +331,8 @@ class ClaudeCodePlugin(LearnPlugin, ConversationScanner):
     ) -> None:
         """Extract user text messages and interruptions from a user line."""
         msg = d.get("message", {})
+        if not isinstance(msg, dict):
+            return
         content = msg.get("content", "")
 
         if isinstance(content, str) and content.strip():
