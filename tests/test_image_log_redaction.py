@@ -16,6 +16,7 @@ Python contract.
 from __future__ import annotations
 
 import base64
+import gzip
 import json
 import os
 import tempfile
@@ -154,7 +155,8 @@ def test_logger_writes_redacted_payload_to_jsonl():
             ]
         )
         logger.log(entry)
-        with open(log_path) as f:
+        logger.flush()
+        with gzip.open(log_path, "rt", encoding="utf-8") as f:
             line = f.read().strip()
         parsed = json.loads(line)
         # The raw base64 string must NOT appear in the JSONL line.
