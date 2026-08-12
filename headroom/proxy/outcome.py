@@ -595,3 +595,34 @@ async def emit_request_outcome(handler: Any, outcome: RequestOutcome) -> None:
         f"transforms={_summarize_transforms(list(outcome.transforms_applied))}"
         f"{client_part}"
     )
+
+    # Keep the same PERF data in memory when file logging is disabled. Import
+    # lazily to avoid the server/outcome module cycle.
+    try:
+        from headroom.perf.analyzer import PerfRecord
+        from headroom.proxy.server import store_inmemory_perf_record
+
+        store_inmemory_perf_record(
+            PerfRecord(
+                timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S,%f")[:-3],
+                request_id=outcome.request_id,
+                model=outcome.model,
+                client=outcome.client or "",
+                num_messages=outcome.num_messages,
+                tokens_before=outcome.original_tokens,
+                tokens_after=outcome.optimized_tokens,
+                tokens_saved=outcome.tokens_saved,
+                tool_saved=tool_saved,
+                cache_read=outcome.cache_read_tokens,
+                cache_write=outcome.cache_write_tokens,
+                cache_hit_pct=outcome.cache_hit_pct,
+                optimization_ms=outcome.overhead_ms,
+                transforms=list(outcome.transforms_applied),
+                total_ms=outcome.total_latency_ms,
+                tokens_out=outcome.output_tokens,
+                ttfb_ms=outcome.ttfb_ms,
+                stages=outcome.pipeline_timing or {},
+            )
+        )
+    except Exception:  # noqa: BLE001 - in-memory observability is best-effort
+        logger.debug("failed to store in-memory PERF record", exc_info=True)
