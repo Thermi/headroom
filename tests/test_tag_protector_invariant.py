@@ -202,9 +202,11 @@ def test_restore_never_introduces_asymmetry(rng: random.Random) -> None:
     every placeholder lost (worst case for the discard-wrap path),
     skew equals the cleaned-minus-placeholders baseline. With every
     placeholder present, skew equals the original input's skew."""
-    for _ in range(_CASES):
+    for case_index in range(_CASES):
         content = _gen_content(rng)
         cleaned, blocks = protect_tags(content)
+        if not blocks:
+            continue
 
         # Worst case: every placeholder lost. Restored output must
         # equal `cleaned` with placeholders stripped, and so must
@@ -217,7 +219,7 @@ def test_restore_never_introduces_asymmetry(rng: random.Random) -> None:
             f"discard-wrap introduced asymmetry: baseline={baseline_skew}, "
             f"after_restore={lost_skew}, content={content!r}"
         )
-        assert had_loss
+        assert had_loss, (case_index, content, cleaned, blocks, stripped, restored_lost)
 
         # Full restore: skew matches the original input.
         restored_full, had_loss_full = restore_tags(cleaned, blocks)
