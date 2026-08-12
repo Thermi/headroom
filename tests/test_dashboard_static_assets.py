@@ -34,7 +34,11 @@ def client():
         yield c
 
 
-@pytest.mark.parametrize("html", [get_dashboard_html(), get_settings_html()])
+@pytest.mark.parametrize(
+    "html",
+    [get_dashboard_html(), get_settings_html()],
+    ids=["dashboard", "settings"],
+)
 def test_templates_reference_no_cdn(html: str):
     assert "unpkg.com" not in html
     assert "cdn.tailwindcss.com" not in html
