@@ -112,7 +112,7 @@ def get_version() -> str:
     if root is not None:
         source_version = _source_tree_version(root)
         if source_version:
-            _CACHED_VERSION = source_version
+            _CACHED_VERSION = f"{source_version}-dev"
             return _CACHED_VERSION
 
     build_version = _packaged_build_version()
