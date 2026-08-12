@@ -350,14 +350,6 @@ class StreamingMixin:
                         usage_found["cache_read_input_tokens"] = _usage_int(
                             details.get("cached_tokens")
                         )
-                        # OpenAI/DeepSeek don't expose a separate cache write
-                        # counter; infer it as the uncached portion of input.
-                        _input_val = _usage_int(input_tokens)
-                        _cached_val = usage_found["cache_read_input_tokens"]
-                        if _input_val > 0:
-                            usage_found["cache_creation_input_tokens"] = max(
-                                _input_val - _cached_val, 0
-                            )
                         _cost = chunk_usage.get("cost")
                         if _cost is not None:
                             try:
