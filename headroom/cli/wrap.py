@@ -1555,7 +1555,8 @@ def _ensure_serena_dashboard_disabled(*, verbose: bool = False) -> None:
     """
     import re
 
-    cfg = Path.home() / ".serena" / "serena_config.yml"
+    home = os.environ.get("HOME") or str(Path.home())
+    cfg = Path(home) / ".serena" / "serena_config.yml"
     key = "web_dashboard_open_on_launch"
     if not cfg.exists():
         # Let Serena bootstrap its own valid config; the MCP flag handles the popup.
