@@ -81,6 +81,13 @@ MEMORY_TOOL_NAMES = {
     "memory_list",
 }
 
+
+def _openai_function(tool_call: dict[str, Any]) -> dict[str, Any]:
+    """Return an OpenAI function payload, tolerating explicit null values."""
+    function = tool_call.get("function")
+    return function if isinstance(function, dict) else {}
+
+
 # Anthropic's native memory tool name
 NATIVE_MEMORY_TOOL_NAME = "memory"
 
@@ -672,7 +679,7 @@ class MemoryHandler:
         # Check which tools are already present
         existing_names: set[str] = set()
         for tool in tools:
-            name = tool.get("name") or tool.get("function", {}).get("name")
+            name = tool.get("name") or _openai_function(tool).get("name")
             if name:
                 existing_names.add(name)
 
@@ -1129,7 +1136,7 @@ your responses, not to drive new actions."""
         """Check if response contains memory tool calls."""
         tool_calls = self._extract_tool_calls(response, provider)
         for tc in tool_calls:
-            name = tc.get("name") or tc.get("function", {}).get("name")
+            name = tc.get("name") or _openai_function(tc).get("name")
             # Check for both custom and native memory tools
             if name in MEMORY_TOOL_NAMES or name == NATIVE_MEMORY_TOOL_NAME:
                 return True
@@ -1208,7 +1215,7 @@ your responses, not to drive new actions."""
             name: str | None = tc.get("name")
             if name:
                 return name
-            fn_name: str | None = tc.get("function", {}).get("name")
+            fn_name: str | None = _openai_function(tc).get("name")
             return fn_name
 
         reads = [tc for tc in tool_calls if _get_tool_name(tc) in _read_tool_names]
@@ -1224,9 +1231,7 @@ your responses, not to drive new actions."""
                 if provider == "anthropic":
                     input_data = tc.get("input", {})
                 else:
-                    args_str = (
-                        tc.get("arguments") or tc.get("function", {}).get("arguments") or "{}"
-                    )
+                    args_str = tc.get("arguments") or _openai_function(tc).get("arguments") or "{}"
                     try:
                         input_data = json.loads(args_str)
                     except json.JSONDecodeError:
