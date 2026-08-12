@@ -277,9 +277,9 @@ class Ds4SubscriptionTracker(QuotaTracker):
                 else 0.0
             )
         else:
-            result["remaining_usd"] = 0.0
+            result["remaining_usd"] = None
             result["within_budget"] = True
-            result["utilization_pct"] = 0.0
+            result["utilization_pct"] = None
         return result
 
     def _get_period_cost_locked(self) -> float:

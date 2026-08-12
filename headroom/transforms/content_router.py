@@ -1687,7 +1687,6 @@ class ContentRouterConfig:
     # the crusher themselves.
     smart_crusher: Any | None = None
     search_compressor: Any | None = None
-    log_compressor: Any | None = None
     diff_compressor: Any | None = None
 
     # Group search-compressor output by file (`rg --heading` style).

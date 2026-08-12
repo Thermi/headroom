@@ -216,6 +216,7 @@ from headroom.proxy.ws_session_registry import WebSocketSessionRegistry
 from headroom.subscription.base import get_quota_registry, reset_quota_registry
 from headroom.subscription.codex_rate_limits import get_codex_rate_limit_state
 from headroom.subscription.copilot_quota import get_copilot_quota_tracker
+from headroom.subscription.ds4 import configure_ds4_tracker
 from headroom.subscription.tracker import (
     configure_subscription_tracker,
     get_subscription_tracker,
@@ -2031,6 +2032,13 @@ class HeadroomProxy(
         registry.register(tracker)
         registry.register(get_codex_rate_limit_state())
         registry.register(get_copilot_quota_tracker())
+        ds4_tracker = configure_ds4_tracker(
+            budget_limit_usd=self.config.ds4_budget_limit_usd,
+            budget_period=self.config.ds4_budget_period,
+            model_cost_map=self.config.model_cost_map,
+            enabled=self.config.ds4_subscription_enabled,
+        )
+        registry.register(ds4_tracker)
         await registry.start_all()
 
         if self.config.subscription_tracking_enabled:
@@ -4027,6 +4035,34 @@ def create_app(config: ProxyConfig | None = None) -> FastAPI:
             "recent_requests": dashboard_recent_requests,
         }
 
+    def _compute_ds4_stats_section() -> dict[str, Any]:
+        """Build the DS4 subscription and budget section for ``/stats``."""
+        from headroom.subscription.ds4 import get_ds4_tracker
+
+        tracker = get_ds4_tracker()
+        if tracker is None:
+            return {"enabled": False}
+
+        stats = tracker.get_stats() or {}
+        budget = stats.get("budget", {})
+        warning: str | None = None
+        if budget.get("budget_limit_usd") is not None:
+            if not budget.get("within_budget", True):
+                warning = "Budget exceeded"
+            elif (pct := budget.get("utilization_pct")) is not None:
+                if pct >= 90:
+                    warning = f"Budget near limit ({pct:.0f}% used)"
+                elif pct >= 75:
+                    warning = f"Budget at {pct:.0f}%"
+
+        return {
+            "enabled": tracker.is_available(),
+            "budget": budget,
+            "contribution": stats.get("contribution", {}),
+            "tracked_key_count": stats.get("tracked_key_count", 0),
+            "budget_warning": warning,
+        }
+
     async def _build_stats_payload() -> dict[str, Any]:
         """Build the full `/stats` response payload.
 
@@ -4535,6 +4571,7 @@ def create_app(config: ProxyConfig | None = None) -> FastAPI:
                 ),
             },
             "toin": get_toin().get_stats(),
+            "ds4": _compute_ds4_stats_section(),
             "proxy_inbound": proxy.metrics.inbound_snapshot(),
             "cache": await proxy.cache.stats() if proxy.cache else None,
             "rate_limiter": await proxy.rate_limiter.stats() if proxy.rate_limiter else None,

@@ -84,18 +84,26 @@ echo "   Bypass (use sparingly): git push --no-verify"
 # Install pre-commit hooks (repo checks on every commit).
 # Prefer the project venv over a global install so contributors always run the
 # pinned version. Resolution order: active $VIRTUAL_ENV → .venv → global PATH.
-PRE_COMMIT_BIN=""
-if [[ -n "${VIRTUAL_ENV:-}" && -x "${VIRTUAL_ENV}/bin/pre-commit" ]]; then
-    PRE_COMMIT_BIN="${VIRTUAL_ENV}/bin/pre-commit"
+PRE_COMMIT_CMD=()
+if [[ -n "${VIRTUAL_ENV:-}" && -x "${VIRTUAL_ENV}/Scripts/python.exe" ]]; then
+    export PATH="${VIRTUAL_ENV}/Scripts:$PATH"
+    PRE_COMMIT_CMD=("${VIRTUAL_ENV}/Scripts/python.exe" -m pre_commit)
+elif [[ -n "${VIRTUAL_ENV:-}" && -x "${VIRTUAL_ENV}/bin/pre-commit" ]]; then
+    export PATH="${VIRTUAL_ENV}/bin:$PATH"
+    PRE_COMMIT_CMD=("${VIRTUAL_ENV}/bin/pre-commit")
+elif [[ -x .venv/Scripts/python.exe ]]; then
+    export PATH="$(pwd)/.venv/Scripts:$PATH"
+    PRE_COMMIT_CMD=("$(pwd)/.venv/Scripts/python.exe" -m pre_commit)
 elif [[ -x .venv/bin/pre-commit ]]; then
-    PRE_COMMIT_BIN=".venv/bin/pre-commit"
+    export PATH="$(pwd)/.venv/bin:$PATH"
+    PRE_COMMIT_CMD=("$(pwd)/.venv/bin/pre-commit")
 elif command -v pre-commit &>/dev/null; then
-    PRE_COMMIT_BIN="pre-commit"
+    PRE_COMMIT_CMD=(pre-commit)
 fi
 
-if [[ -n "$PRE_COMMIT_BIN" ]]; then
-    "$PRE_COMMIT_BIN" install
-    "$PRE_COMMIT_BIN" install --hook-type commit-msg
+if [[ ${#PRE_COMMIT_CMD[@]} -gt 0 ]]; then
+    "${PRE_COMMIT_CMD[@]}" install
+    "${PRE_COMMIT_CMD[@]}" install --hook-type commit-msg
     echo "✅ installed: .git/hooks/pre-commit (repo pre-commit checks via pre-commit)"
     echo "✅ installed: .git/hooks/commit-msg (conventional commit enforcement via commitlint)"
 else
