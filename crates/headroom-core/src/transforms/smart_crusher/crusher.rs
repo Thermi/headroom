@@ -197,6 +197,10 @@ impl SmartCrusher {
         // the compaction stage; everything not exposed on
         // SmartCrusherConfig keeps its CompactConfig default.
         let compact_cfg = CompactConfig {
+            classify: ClassifyConfig {
+                emit_opaque_markers: config.opaque_markers_enabled(),
+                ..ClassifyConfig::default()
+            },
             core_field_fraction: config.compaction_core_field_fraction,
             heterogeneous_core_ratio: config.compaction_heterogeneous_core_ratio,
             max_flatten_inner_keys: config.compaction_max_flatten_inner_keys,
