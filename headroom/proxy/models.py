@@ -532,6 +532,8 @@ class ProxyConfig:
     def __post_init__(self, smart_routing: bool | None = None) -> None:
         if self.retry_enabled and self.retry_max_attempts < 1:
             raise ValueError("retry_max_attempts must be >= 1 when retry_enabled=True")
+        if self.rate_limit_enabled and self.rate_limit_requests_per_minute < 1:
+            raise ValueError("rate_limit_requests_per_minute must be >= 1")
 
     @property
     def provider_api_overrides(self) -> ProviderApiOverrides:
