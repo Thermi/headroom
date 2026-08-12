@@ -646,6 +646,8 @@ class SessionTrackerStore:
         # Keep this seam equivalent to the legacy store contract. Provider
         # handlers and test doubles deliberately replace get_or_create, and
         # lineage selection must not bypass that interception point.
+        if project is None:
+            return self.get_or_create(session_id, provider)
         return self.get_or_create(session_id, provider, project)
 
     def compute_session_id(
