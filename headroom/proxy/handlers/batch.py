@@ -160,6 +160,7 @@ class BatchHandlerMixin:
 
             original_tokens = 0
             optimized_tokens = 0
+            pipeline_reverted = False
             try:
                 context_limit = (
                     self.openai_provider.get_context_limit(model)
@@ -183,6 +184,7 @@ class BatchHandlerMixin:
                     )
                     optimized_messages = messages
                     optimized_tokens = original_tokens
+                    pipeline_reverted = True
 
                 tokens_saved = original_tokens - optimized_tokens
 
@@ -210,9 +212,13 @@ class BatchHandlerMixin:
                         )
                         existing_funcs = injected_funcs
 
-                optimized_contents, optimized_sys_inst = self._messages_to_gemini_contents(
-                    optimized_messages
-                )
+                if optimized_messages == messages and not pipeline_reverted:
+                    optimized_contents = contents
+                    optimized_sys_inst = system_instruction
+                else:
+                    optimized_contents, optimized_sys_inst = self._messages_to_gemini_contents(
+                        optimized_messages
+                    )
                 for orig_idx, original_content in preserved_contents.items():
                     if orig_idx < len(optimized_contents):
                         optimized_contents[orig_idx] = original_content
@@ -220,8 +226,16 @@ class BatchHandlerMixin:
                 compressed_req_content = {**req_content, "contents": optimized_contents}
                 if optimized_sys_inst:
                     compressed_req_content["systemInstruction"] = optimized_sys_inst
-                if existing_funcs is not None:
-                    compressed_req_content["tools"] = [{"functionDeclarations": existing_funcs}]
+                if tools:
+                    if existing_funcs is None:
+                        compressed_req_content["tools"] = tools
+                    else:
+                        compressed_req_content["tools"] = [
+                            {"functionDeclarations": existing_funcs}
+                            if "functionDeclarations" in tool
+                            else tool
+                            for tool in tools
+                        ]
 
                 compressed_req = {
                     "request": compressed_req_content,
@@ -333,7 +347,6 @@ class BatchHandlerMixin:
                             requests_list,
                             model,
                             api_key,
-                            request_id,
                         )
                 except Exception as e:
                     logger.warning(f"[{request_id}] Failed to store Google batch context: {e}")
@@ -676,7 +689,7 @@ class BatchHandlerMixin:
         # Parse response
         try:
             response_data = response.json()
-        except json.JSONDecodeError:
+        except (json.JSONDecodeError, ValueError, TypeError):
             # Not JSON - pass through
             response_headers = dict(response.headers)
             response_headers.pop("content-encoding", None)
@@ -740,7 +753,7 @@ class BatchHandlerMixin:
         processed_results = [p.result for p in processed]
         response_data["response"]["responses"] = processed_results
 
-        _rid = request.scope.get("headroom_request_id", "?")
+        _rid = getattr(request, "scope", {}).get("headroom_request_id", "?")
         for p in processed:
             if p.was_processed:
                 logger.info(
@@ -857,7 +870,7 @@ class BatchHandlerMixin:
         try:
             # Step 1: Download the input file from OpenAI
             logger.info(f"[{request_id}] Batch: Downloading input file {input_file_id}")
-            file_content = await self._download_openai_file(input_file_id, headers, request_id)
+            file_content = await self._download_openai_file(input_file_id, headers)
 
             if file_content is None:
                 return JSONResponse(
@@ -893,7 +906,7 @@ class BatchHandlerMixin:
             # Step 4: Upload compressed file to OpenAI
             logger.info(f"[{request_id}] Batch: Uploading compressed file")
             new_file_id = await self._upload_openai_file(
-                compressed_content, f"compressed_{input_file_id}.jsonl", headers, request_id
+                compressed_content, f"compressed_{input_file_id}.jsonl", headers
             )
 
             if new_file_id is None:
