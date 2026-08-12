@@ -13,7 +13,13 @@ STATIC_DIR = DASHBOARD_DIR / "static"
 def get_dashboard_html() -> str:
     """Load the dashboard HTML template."""
     template_path = TEMPLATES_DIR / "dashboard.html"
-    return template_path.read_text(encoding="utf-8")
+    try:
+        # ``newline`` preserves the asset's exact line endings on Python 3.13+.
+        return template_path.read_text(encoding="utf-8", newline="")  # type: ignore[call-arg]
+    except TypeError:
+        # ``Path.read_text`` gained ``newline`` after some supported Python versions.
+        with template_path.open("r", encoding="utf-8", newline="") as template:
+            return template.read()
 
 
 def get_settings_html() -> str:
