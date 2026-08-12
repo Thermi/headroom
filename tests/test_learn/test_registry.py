@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -73,11 +74,12 @@ class TestAutoDetect:
 
     def test_returns_empty_when_nothing_detected(self):
         """All plugins returning False -> empty list."""
-        with (
-            patch.object(get_registry()["claude"], "detect", return_value=False),
-            patch.object(get_registry()["codex"], "detect", return_value=False),
-            patch.object(get_registry()["gemini"], "detect", return_value=False),
-        ):
+        patches = [
+            patch.object(plugin, "detect", return_value=False) for plugin in get_registry().values()
+        ]
+        with contextlib.ExitStack() as stack:
+            for plugin_patch in patches:
+                stack.enter_context(plugin_patch)
             assert auto_detect_plugins() == []
 
 
