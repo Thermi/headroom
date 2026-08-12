@@ -3426,6 +3426,13 @@ def create_app(config: ProxyConfig | None = None) -> FastAPI:
         for key_bytes, value_bytes in headers_raw:
             key = key_bytes.decode()
             headers[key] = value_bytes.decode()
+        from headroom.proxy.auth_mode import should_stamp_codex_client
+
+        if should_stamp_codex_client(path, headers) and "x-client" not in headers:
+            headers["x-client"] = "codex"
+            scope["headers"] = [
+                (key.encode("latin-1"), value.encode("latin-1")) for key, value in headers.items()
+            ]
         content_length = headers.get("content-length", "")
         set_current_project(classify_project(headers) or prefix_project)
         client = scope.get("client")
