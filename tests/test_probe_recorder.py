@@ -1,7 +1,10 @@
 """Tests for the opt-in compression event probe recorder."""
 
 import json
+import os
 import stat
+
+import pytest
 
 from headroom.pipeline import PipelineEvent, PipelineStage
 from headroom.proxy.probe_recorder import (
@@ -102,6 +105,7 @@ class TestCompressionEventRecorder:
 
         assert not recorder.path.exists()
 
+    @pytest.mark.skipif(os.name == "nt", reason="Windows does not expose POSIX mode bits")
     def test_record_dir_is_private(self, tmp_path):
         record_dir = tmp_path / "recordings"
 
