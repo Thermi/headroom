@@ -184,7 +184,14 @@ class RequestLogger:
                 log_dict.pop("compressed_messages", None)
                 log_dict.pop("response_content", None)
             line = json.dumps(log_dict, separators=(",", ":")).encode("utf-8") + b"\n"
-            self._queue_log_line(line)
+            if self.log_full_messages:
+                self._queue_log_line(line)
+            else:
+                try:
+                    with self.log_file.open("ab") as file:
+                        file.write(line)
+                except OSError:
+                    pass
 
     def get_recent(self, n: int = 100) -> list[dict]:
         """Get recent log entries (without request/compressed messages and response_content)."""
