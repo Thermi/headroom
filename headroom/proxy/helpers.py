@@ -15,15 +15,16 @@ import os
 import random
 import re
 import shutil
-import subprocess
 import threading
 import time
 from collections import OrderedDict
 from dataclasses import dataclass
 from pathlib import Path
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 from headroom import paths as _paths
+from headroom._subprocess import run as _utf8_subprocess_run
 from headroom.proxy import _json as json
 from headroom.proxy import (
     diagnostic_decode_policy,
@@ -149,6 +150,13 @@ _rtk_session_baseline: dict[str, Any] = {
 }
 _rtk_stats_cache_lock = threading.Lock()
 
+subprocess = SimpleNamespace(run=_utf8_subprocess_run)  # type: ignore[assignment]
+
+
+def _run_context_tool(*args: Any, **kwargs: Any) -> Any:
+    """Run a context-tool command through the UTF-8 subprocess wrapper."""
+    return subprocess.run(*args, **kwargs)
+
 
 def _selected_context_tool() -> str:
     value = os.environ.get(_CONTEXT_TOOL_ENV, _CONTEXT_TOOL_RTK).strip().lower()
@@ -215,7 +223,7 @@ def _read_rtk_lifetime_stats() -> dict[str, Any] | None:
         command.append("--project")
     command.extend(["--format", "json"])
     try:
-        result = subprocess.run(
+        result = _run_context_tool(
             command,
             capture_output=True,
             text=True,
@@ -247,7 +255,7 @@ def _read_context_tool_lifetime_stats(tool: str) -> dict[str, Any] | None:
     if command is None:
         return _context_tool_summary_payload(tool=tool, installed=False)
     try:
-        result = subprocess.run(
+        result = _run_context_tool(
             command,
             capture_output=True,
             text=True,
