@@ -806,7 +806,15 @@ class CostTracker:
         cutoff = now - timedelta(hours=self.COST_RETENTION_HOURS)
 
         # Remove entries from the left (oldest) while they're older than cutoff
-        while self._costs and self._costs[0].timestamp < cutoff:
+        while (
+            self._costs
+            and (
+                self._costs[0].timestamp
+                if hasattr(self._costs[0], "timestamp")
+                else self._costs[0][0]
+            )
+            < cutoff
+        ):
             self._costs.popleft()
 
     def record_tokens(
@@ -925,9 +933,13 @@ class CostTracker:
         """
         cutoff = self._period_cutoff()
         return sum(
-            entry.cost_usd
+            entry.cost_usd if hasattr(entry, "cost_usd") else entry[1]
             for entry in self._costs
-            if entry.timestamp >= cutoff and (basis is None or entry.basis == basis)
+            if (entry.timestamp if hasattr(entry, "timestamp") else entry[0]) >= cutoff
+            and (
+                basis is None
+                or (entry.basis if hasattr(entry, "basis") else COST_BASIS_MEASURED) == basis
+            )
         )
 
     def period_cost_breakdown(self) -> dict[str, Any]:
@@ -944,14 +956,17 @@ class CostTracker:
         records = 0
         estimated_records = 0
         for entry in self._costs:
-            if entry.timestamp < cutoff:
+            timestamp = entry.timestamp if hasattr(entry, "timestamp") else entry[0]
+            cost_usd = entry.cost_usd if hasattr(entry, "cost_usd") else entry[1]
+            basis = entry.basis if hasattr(entry, "basis") else COST_BASIS_MEASURED
+            if timestamp < cutoff:
                 continue
             records += 1
-            if entry.basis == COST_BASIS_ESTIMATED:
-                estimated_usd += entry.cost_usd
+            if basis == COST_BASIS_ESTIMATED:
+                estimated_usd += cost_usd
                 estimated_records += 1
             else:
-                measured_usd += entry.cost_usd
+                measured_usd += cost_usd
 
         total_usd = measured_usd + estimated_usd
         return {
