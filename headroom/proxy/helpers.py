@@ -1265,6 +1265,8 @@ _split_beta_tokens = split_beta_tokens
 
 _merge_beta_tokens = merge_beta_tokens
 
+_previous_session_beta_tracker = globals().get("SessionBetaTracker")
+
 
 class SessionBetaTracker:
     """Bounded LRU tracker of beta-header tokens observed per (provider, session).
@@ -1386,6 +1388,10 @@ class SessionBetaTracker:
                 }
                 for (provider, session_id), tokens in self._sessions.items()
             ]
+
+
+if _previous_session_beta_tracker is not None:
+    SessionBetaTracker = _previous_session_beta_tracker  # type: ignore[misc]
 
 
 # Process-wide singleton. Lazily replaced by tests via `reset` /
