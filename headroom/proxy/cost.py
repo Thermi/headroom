@@ -430,7 +430,8 @@ def build_prefix_cache_stats(
 def merge_cost_stats(
     cost_stats: dict | None,
     cache_stats: dict,
-) -> dict | None:
+    cli_tokens_avoided: int = 0,
+) -> dict:
     """Merge compression and cache savings into cost stats.
 
     Each savings layer is reported separately with its own scope:
@@ -444,7 +445,7 @@ def merge_cost_stats(
     bug (#83).
     """
     if cost_stats is None:
-        return None
+        return {}
 
     cache_net = cache_stats.get("totals", {}).get("net_savings_usd", 0.0)
     compression_savings = cost_stats.get("savings_usd", 0.0)
@@ -454,6 +455,9 @@ def merge_cost_stats(
         "savings_usd": round(compression_savings, 4),
         "compression_savings_usd": round(compression_savings, 4),
         "cache_savings_usd": round(cache_net, 4),
+        "cli_tokens_avoided": cli_tokens_avoided,
+        "cli_filtering_tokens_avoided": cli_tokens_avoided,
+        "cli_tokens_included_in_compression": cli_tokens_avoided > 0,
     }
 
 
