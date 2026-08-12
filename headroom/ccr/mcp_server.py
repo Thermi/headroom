@@ -508,7 +508,6 @@ class HeadroomMCPServer:
     async def _retrieve_content(
         self,
         hash_key: str,
-        query: str | None = None,
     ) -> dict[str, Any]:
         """Retrieve content by hash. Checks local store first, then proxy.
 
@@ -516,17 +515,6 @@ class HeadroomMCPServer:
         """
         # Check local store first
         store = self._get_local_store()
-        if query:
-            results = store.search(hash_key, query)
-            if results:
-                self._stats.record_retrieval(hash_key)
-                return {
-                    "hash": hash_key,
-                    "source": "local",
-                    "query": query,
-                    "results": results,
-                    "count": len(results),
-                }
         entry_status = store.get_entry_status(hash_key, clean_expired=False)
         entry = store.retrieve(hash_key)
         expired_entry_status = None
@@ -908,7 +896,6 @@ class HeadroomMCPServer:
     async def _handle_retrieve(self, arguments: dict[str, Any]) -> list[TextContent]:
         """Handle headroom_retrieve tool call."""
         hash_key = arguments.get("hash")
-        query = arguments.get("query")
         if not hash_key:
             return [
                 TextContent(
@@ -918,11 +905,10 @@ class HeadroomMCPServer:
             ]
 
         logger.info("event=mcp_retrieve_started hash=%s", hash_key)
-        result = await self._retrieve_content(hash_key, query)
+        result = await self._retrieve_content(hash_key)
         logger.info(
-            "event=mcp_retrieve_completed hash=%s query=%s found=%s",
+            "event=mcp_retrieve_completed hash=%s found=%s",
             hash_key,
-            json.dumps(query, ensure_ascii=False, default=str),
             "error" not in result,
         )
 

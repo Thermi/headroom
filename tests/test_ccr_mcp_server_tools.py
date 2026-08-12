@@ -335,18 +335,22 @@ class TestHandleRetrieve:
         assert data["original_content"] == "full original text"
         assert server._stats.retrievals == 1
 
-    async def test_retrieve_local_hit_with_query(self):
+    async def test_retrieve_local_hit_returns_full_content(self):
         server = _make_server()
         with patch("headroom.cache.compression_store.CompressionStore") as MockStore:
             mock_store = MockStore.return_value
-            mock_store.search.return_value = [{"item": "matched"}]
+            entry = MagicMock()
+            entry.original_content = "full original text"
+            entry.original_item_count = 1
+            entry.compressed_item_count = 1
+            entry.retrieval_count = 1
+            mock_store.retrieve.return_value = entry
 
-            result = await server._handle_retrieve({"hash": "abc", "query": "find me"})
+            result = await server._handle_retrieve({"hash": "abc", "query": "ignored"})
 
         data = json.loads(result[0].text)
         assert data["source"] == "local"
-        assert data["query"] == "find me"
-        assert data["results"] == [{"item": "matched"}]
+        assert data["original_content"] == "full original text"
 
     async def test_retrieve_local_miss_then_proxy_hit(self):
         server = _make_server(check_proxy=True)

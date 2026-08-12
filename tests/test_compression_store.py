@@ -105,7 +105,7 @@ def test_retrieve_log_omits_secret_payload_values():
     assert "payload_preview" not in events[0]
 
 
-def test_search_does_not_log_retrieved_payload():
+def test_retrieve_does_not_log_retrieved_payload_for_json_content():
     store = CompressionStore(enable_feedback=False)
     items = [
         {"id": 1, "text": "alpha target"},
@@ -120,13 +120,13 @@ def test_search_does_not_log_retrieved_payload():
     )
 
     with _capture_headroom_retrieve_events() as events:
-        results = store.search(hash_key, "alpha", score_threshold=0.0)
+        entry = store.retrieve(hash_key)
 
-    assert results
+    assert entry is not None
+    assert entry.original_content == json.dumps(items)
     assert len(events) == 1
     assert events[0]["hash"] == hash_key
-    assert events[0]["retrieval_type"] == "search"
-    assert events[0]["query"] == "alpha"
+    assert events[0]["retrieval_type"] == "full"
     assert "payload_preview" not in events[0]
     assert "payload_preview_chars" not in events[0]
     assert "alpha target" not in json.dumps(events[0], ensure_ascii=False)
