@@ -13,60 +13,41 @@ from unittest.mock import MagicMock, patch
 from headroom.image.compressor import ImageCompressor
 
 
-def test_onnx_router_is_built_once_and_cached() -> None:
+def test_trained_router_is_built_once_and_cached() -> None:
     compressor = ImageCompressor()
-    fake_router = MagicMock(name="OnnxTechniqueRouter")
+    fake_router = MagicMock(name="TrainedRouter")
 
-    with patch("headroom.image.onnx_router.OnnxTechniqueRouter", return_value=fake_router) as ctor:
-        first = compressor._get_onnx_router()
-        second = compressor._get_onnx_router()
+    with patch("headroom.image.trained_router.TrainedRouter", return_value=fake_router) as ctor:
+        first = compressor._get_router()
+        second = compressor._get_router()
 
     assert first is second is fake_router
     assert ctor.call_count == 1
 
 
-def test_close_is_a_noop_on_a_singleton_instance() -> None:
-    compressor = ImageCompressor()
-    compressor._is_singleton = True
-    router = MagicMock()
-    compressor._router = router
-    compressor._onnx_router = MagicMock()
-
-    compressor.close()
-
-    # Models stay loaded so the next request reuses them.
-    assert compressor._router is router
-    assert compressor._onnx_router is not None
-    router.release_models.assert_not_called()
-
-
-def test_close_releases_models_on_a_non_singleton_instance() -> None:
+def test_close_releases_models() -> None:
     compressor = ImageCompressor()
     router = MagicMock()
     compressor._router = router
-    compressor._onnx_router = MagicMock()
 
     compressor.close()
 
     router.release_models.assert_called_once()
     assert compressor._router is None
-    assert compressor._onnx_router is None
 
 
-def test_get_image_compressor_returns_a_shared_singleton() -> None:
+def test_get_image_compressor_returns_lightweight_instances() -> None:
     import headroom.proxy.helpers as helpers
 
     helpers._image_compressor_available = None
-    helpers._image_compressor_instance = None
     try:
         a = helpers._get_image_compressor()
         b = helpers._get_image_compressor()
         assert a is not None
-        assert a is b
-        assert a._is_singleton is True
+        assert b is not None
+        assert a is not b
     finally:
         helpers._image_compressor_available = None
-        helpers._image_compressor_instance = None
 
 
 def test_worker_compressor_is_reused_across_calls() -> None:
