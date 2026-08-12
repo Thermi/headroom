@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import stat
+import sys
 
 import pytest
 
@@ -68,7 +69,12 @@ def test_write_text_follows_symlink_instead_of_replacing_it(tmp_path):
     real = tmp_path / "real.json"
     real.write_text("{}\n")
     link = tmp_path / "settings.json"
-    link.symlink_to(real)
+    try:
+        link.symlink_to(real)
+    except OSError as exc:
+        if sys.platform == "win32":
+            pytest.skip(f"file symlinks require elevated Windows privileges: {exc}")
+        raise
 
     fsutil.write_text(link, '{"env": {}}\n')
 
@@ -82,7 +88,11 @@ def test_write_text_preserves_existing_mode(tmp_path):
     p.write_text("{}\n")
     p.chmod(0o644)
     fsutil.write_text(p, '{"a": 1}\n')
-    assert stat.S_IMODE(p.stat().st_mode) == 0o644
+    mode = stat.S_IMODE(p.stat().st_mode)
+    if sys.platform == "win32":
+        assert mode & stat.S_IWRITE
+    else:
+        assert mode == 0o644
 
 
 def test_read_text_falls_back_to_locale_encoding(tmp_path, monkeypatch):
