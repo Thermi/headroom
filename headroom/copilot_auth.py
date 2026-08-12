@@ -857,6 +857,14 @@ def _api_url_from_exchange_payload(payload: dict[str, Any], *, oauth_token: str)
     api_url = _api_url_from_payload(payload)
     if api_url:
         if is_copilot_api_url(api_url):
+            host = urlparse(api_url).netloc.lower()
+            if host in {
+                "api.githubcopilot.com",
+                "api.individual.githubcopilot.com",
+                "api.business.githubcopilot.com",
+                "api.enterprise.githubcopilot.com",
+            }:
+                return DEFAULT_API_URL
             return api_url
         logger.warning(
             "Ignoring non-Copilot API URL from token exchange payload: %s",
