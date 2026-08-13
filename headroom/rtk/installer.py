@@ -199,7 +199,16 @@ def register_claude_hooks(rtk_path: Path | None = None) -> bool:
                                 + script_path[0].lower()
                                 + script_path[2:].replace("\\", "/")
                             )
-                        command = ["bash", script_path, "init", "--global", "--auto-patch"]
+                        command = [
+                            "bash",
+                            "-c",
+                            '"$1" "$2" "$3" "$4" "$5" >/dev/null 2>&1 &',
+                            "headroom-rtk-init",
+                            script_path,
+                            "init",
+                            "--global",
+                            "--auto-patch",
+                        ]
                 result = subprocess.run(
                     command,
                     stdin=subprocess.DEVNULL,
