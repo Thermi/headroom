@@ -102,6 +102,14 @@ class SQLiteMemoryStore:
             conn.close()
             del self._local.conn
 
+    def __del__(self) -> None:
+        try:
+            conn = getattr(self._local, "conn", None)
+            if conn is not None:
+                conn.close()
+        except Exception:
+            pass
+
     def _init_db(self) -> None:
         """Initialize the database schema with indexes."""
         with self._get_conn() as conn:

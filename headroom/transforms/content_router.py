@@ -1466,13 +1466,13 @@ class RouterCompressionResult:
             return (
                 f"Mixed content: {self.sections_processed} sections, "
                 f"routed to {strategies}. "
-                f"{self.total_original_tokens:,}→{self.total_compressed_tokens:,} tokens "
+                f"{self.total_original_tokens:,}->{self.total_compressed_tokens:,} tokens "
                 f"({self.savings_percentage:.0f}% saved)"
             )
         else:
             return (
                 f"Pure {self.strategy_used.value}: "
-                f"{self.total_original_tokens:,}→{self.total_compressed_tokens:,} tokens "
+                f"{self.total_original_tokens:,}->{self.total_compressed_tokens:,} tokens "
                 f"({self.savings_percentage:.0f}% saved)"
             )
 
@@ -3154,6 +3154,14 @@ class ContentRouter(Transform):
         # never a marker-free lossy drop that could not be recovered.
         if self.config.lossless:
             if _ll_label is not None:
+                if self.config.relevance_split and strategy in (
+                    CompressionStrategy.LOG,
+                    CompressionStrategy.SEARCH,
+                ):
+                    kind = "log" if strategy is CompressionStrategy.LOG else "search"
+                    split = self._relevance_split_compress(content, kind, context)
+                    if split is not None:
+                        return split, _estimate_tokens(split), [_ll_label, "relevance_split"]
                 return _ll_content, _estimate_tokens(_ll_content), [_ll_label]
             return content, original_tokens, [CompressionStrategy.PASSTHROUGH.value]
 
@@ -4058,7 +4066,7 @@ class ContentRouter(Transform):
         result = "".join(out_parts)
         # Adopt only when it beats plain whole-block lossless compaction.
         baseline = compact_lossless(content, kind)
-        return result if len(result) < len(baseline) else None
+        return result if len(result) <= len(baseline) and result != baseline else None
 
     def _get_text_crusher(self) -> Any:
         """Get TextCrusher (Phase 2, lazy load). Returns None when disabled, or
@@ -5272,8 +5280,10 @@ class ContentRouter(Transform):
             # (#1307). Partition its cache namespace so a gated tool entry is never
             # served from — or poisons — an ungated entry for byte-identical content.
             enforce_reversibility = role == "tool"
-            if enforce_reversibility:
+            if enforce_reversibility and not force_kompress:
                 content_key = hash((content_key, True))
+            elif enforce_reversibility:
+                enforce_reversibility = False
 
             # Tier 1: skip set — instant rejection
             if self._cache.is_skipped(content_key):

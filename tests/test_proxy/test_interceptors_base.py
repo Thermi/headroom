@@ -37,6 +37,12 @@ def _clean_globals() -> None:
     yield
     reset_interceptor_failure_counts()
     INTERCEPTORS.clear()
+    # This module intentionally clears the shared registry for isolation. Put
+    # the package's built-in interceptor back so later modules see normal
+    # default startup state rather than an order-dependent empty registry.
+    from headroom.proxy.interceptors.astgrep import AstGrepReadOutline
+
+    register(AstGrepReadOutline())
 
 
 @pytest.fixture

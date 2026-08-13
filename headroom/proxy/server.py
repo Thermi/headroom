@@ -1780,11 +1780,13 @@ class HeadroomProxy(
 
         return eager_status, transform_statuses
 
-    def _preload_kompress_models(self) -> dict[str, str]:
+    def _preload_kompress_models(self, *, include_derived: bool = True) -> dict[str, str]:
         """Load Kompress models before serving requests."""
         status: dict[str, str] = {}
         seen_transform_ids: set[int] = set()
-        derived_pipelines = list(getattr(self, "_compress_pipeline_cache", {}).values())
+        derived_pipelines = (
+            list(getattr(self, "_compress_pipeline_cache", {}).values()) if include_derived else []
+        )
         for pipeline in (self.anthropic_pipeline, self.openai_pipeline, *derived_pipelines):
             for transform in pipeline.transforms:
                 if id(transform) in seen_transform_ids:
@@ -1910,6 +1912,19 @@ class HeadroomProxy(
             # written off-thread).
             for transform_status in transform_statuses:
                 self.warmup.merge_transform_status(transform_status)
+        elif self.config.kompress_enabled:
+            # Kompress has a separate opt-in preload seam for deployments that
+            # disable the broad eager-preload pass. Other transforms must remain
+            # untouched when optimize=False.
+            try:
+                eager_status = await asyncio.wait_for(
+                    asyncio.to_thread(self._preload_kompress_models, include_derived=False),
+                    timeout=EAGER_PRELOAD_TIMEOUT_SECONDS,
+                )
+                if eager_status:
+                    self.warmup.merge_transform_status(eager_status)
+            except Exception as exc:
+                logger.warning("Kompress startup preload failed (%s); continuing.", exc)
         # Update internal status from eager loading results
         if eager_status.get("kompress") in {"enabled", "deferred"}:
             self._kompress_status = eager_status["kompress"]
@@ -2199,11 +2214,15 @@ class HeadroomProxy(
         return event
 
     async def _wait_for_retry_delay_or_shutdown(self, delay_seconds: float) -> bool:
-        try:
-            await asyncio.wait_for(self._get_shutdown_event().wait(), timeout=delay_seconds)
-            return True
-        except asyncio.TimeoutError:
-            return False
+        shutdown_task = asyncio.create_task(self._get_shutdown_event().wait())
+        sleep_task = asyncio.create_task(asyncio.sleep(delay_seconds))
+        done, pending = await asyncio.wait(
+            (shutdown_task, sleep_task), return_when=asyncio.FIRST_COMPLETED
+        )
+        for task in pending:
+            task.cancel()
+        await asyncio.gather(*pending, return_exceptions=True)
+        return shutdown_task in done
 
     def _shutdown_retry_response(self, method: str, url: str) -> httpx.Response:
         return httpx.Response(

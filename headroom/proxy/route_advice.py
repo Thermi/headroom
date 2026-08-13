@@ -188,7 +188,10 @@ def _known_provider(provider: str) -> bool:
         import litellm
 
         names = {getattr(p, "value", None) or str(p) for p in getattr(litellm, "provider_list", [])}
+        names.update({"moonshot", "moonshotai"})
         return provider in names
+    except ImportError:
+        return provider in {"moonshot", "moonshotai"}
     except Exception:  # noqa: BLE001
         return False
 

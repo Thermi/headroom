@@ -28,6 +28,8 @@ from __future__ import annotations
 
 import logging
 import os
+import shutil
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from .base import RelevanceScore, RelevanceScorer
@@ -172,18 +174,24 @@ class EmbeddingScorer(RelevanceScorer):
             from fastembed import TextEmbedding
 
             revision = _pinned_revision(self.model_name)
+            kwargs = {"model_name": self.model_name, "providers": ["CPUExecutionProvider"]}
             if revision is not None:
-                # fastembed forwards **kwargs to snapshot_download(revision=...).
-                self._model = TextEmbedding(
-                    model_name=self.model_name,
-                    revision=revision,
-                    providers=["CPUExecutionProvider"],
+                kwargs["revision"] = revision
+            try:
+                self._model = TextEmbedding(**kwargs)
+            except ValueError as exc:
+                # A partially downloaded pinned snapshot can survive a killed
+                # process and is not repaired by fastembed itself. Remove only
+                # that model's cache entry, then allow one clean retry.
+                if "tokenizer_config.json" not in str(exc):
+                    raise
+                cache_root = Path(
+                    os.environ.get("FASTEMBED_CACHE_PATH", "")
+                    or Path(os.environ.get("TEMP", "/tmp")) / "fastembed_cache"
                 )
-            else:
-                self._model = TextEmbedding(
-                    model_name=self.model_name,
-                    providers=["CPUExecutionProvider"],
-                )
+                model_cache = cache_root / "models--qdrant--bge-small-en-v1.5-onnx-q"
+                shutil.rmtree(model_cache, ignore_errors=True)
+                self._model = TextEmbedding(**kwargs)
         return self._model
 
     def _encode(self, texts: list[str]):

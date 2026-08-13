@@ -159,6 +159,7 @@ def test_an_unknown_provider_is_rejected_at_resolve_time():
 
 
 def test_a_real_provider_name_is_accepted():
+    pytest.importorskip("litellm")
     assert BackendResolver(DEFAULT)._build("moonshot") is not None
 
 

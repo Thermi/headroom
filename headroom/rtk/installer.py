@@ -6,6 +6,7 @@ import io
 import logging
 import os
 import platform
+import shutil
 import stat
 import subprocess
 import tarfile
@@ -180,8 +181,27 @@ def register_claude_hooks(rtk_path: Path | None = None) -> bool:
     try:
         with tempfile.TemporaryFile(mode="w+", encoding="utf-8", errors="replace") as out:
             try:
+                command = [str(rtk_path), "init", "--global", "--auto-patch"]
+                if os.name == "nt" and not str(rtk_path).lower().endswith(".exe"):
+                    try:
+                        first_line = (
+                            Path(rtk_path)
+                            .read_text(encoding="utf-8", errors="replace")
+                            .splitlines()[0]
+                        )
+                    except (OSError, IndexError):
+                        first_line = ""
+                    if first_line.startswith("#!") and shutil.which("bash"):
+                        script_path = str(rtk_path)
+                        if len(script_path) >= 2 and script_path[1] == ":":
+                            script_path = (
+                                "/mnt/"
+                                + script_path[0].lower()
+                                + script_path[2:].replace("\\", "/")
+                            )
+                        command = ["bash", script_path, "init", "--global", "--auto-patch"]
                 result = subprocess.run(
-                    [str(rtk_path), "init", "--global", "--auto-patch"],
+                    command,
                     stdin=subprocess.DEVNULL,
                     stdout=out,
                     stderr=out,

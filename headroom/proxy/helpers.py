@@ -138,6 +138,8 @@ _rtk_stats_cache: dict[str, Any] = {
     "tool": None,
     "value": None,
 }
+# Compatibility aliases used by older integrations and tests.
+_context_tool_stats_cache = _rtk_stats_cache
 _rtk_session_baseline: dict[str, Any] = {
     "initialized": False,
     "tool": None,
@@ -148,6 +150,7 @@ _rtk_session_baseline: dict[str, Any] = {
     "total_time_ms": 0,
     "captured_at": 0.0,
 }
+_context_tool_session_baseline = _rtk_session_baseline
 _rtk_stats_cache_lock = threading.Lock()
 
 subprocess = SimpleNamespace(run=_utf8_subprocess_run)  # type: ignore[assignment]
@@ -337,7 +340,7 @@ def _get_context_tool_stats() -> dict[str, Any] | None:
             payload[f"session_baseline_{key}"] = baseline[key]
             payload[key] = max(payload[key] - baseline[key], 0)
         payload["session_savings_pct"] = (
-            payload["tokens_saved"] / payload["input_tokens"] * 100
+            round(payload["tokens_saved"] / payload["input_tokens"] * 100, 4)
             if payload["input_tokens"]
             else None
         )
