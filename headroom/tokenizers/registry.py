@@ -57,10 +57,14 @@ MODEL_PATTERNS: list[tuple[str, str]] = [
     (r"^palm", "google"),
     # Cohere models -> estimation
     (r"^command", "cohere"),
+    # DeepSeek gateway aliases use the estimator at request time. Their
+    # HuggingFace tokenizers are large and may trigger a network download on a
+    # hot request, which can exceed the proxy compression deadline. The model
+    # metadata mapping remains available for explicit tokenizer inspection.
+    (r"^deepseek", "estimation"),
     # Open models commonly served via OpenAI-compatible APIs
     (r"^phi-", "huggingface"),
     (r"^qwen", "huggingface"),
-    (r"^deepseek", "huggingface"),
     (r"^yi-", "huggingface"),
     (r"^falcon", "huggingface"),
     (r"^mpt-", "huggingface"),
