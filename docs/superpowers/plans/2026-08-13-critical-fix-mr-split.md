@@ -173,6 +173,9 @@ gh pr create --base main --head <branch-name> \
   --body-file <mr-body-file>
 ```
 
+If `gh` is unavailable, use the corresponding GitHub new-MR URL from the
+execution report and paste the prepared branch summary/body there.
+
 Each body must include:
 
 ```text
