@@ -21,8 +21,6 @@ Usage:
     ANTHROPIC_BASE_URL=http://localhost:8787 claude
 """
 
-#  Copyright (c) 2026 Noel Kuntze
-
 from __future__ import annotations
 
 import argparse

@@ -1,7 +1,5 @@
 """Pure mixed-content parsing helpers for the content router."""
 
-#  Copyright (c) 2026 Noel Kuntze
-
 from __future__ import annotations
 
 import json

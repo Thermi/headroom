@@ -1,7 +1,5 @@
 """ONNX Runtime helpers for long-running Headroom processes."""
 
-#  Copyright (c) 2026 Noel Kuntze
-
 from __future__ import annotations
 
 import asyncio

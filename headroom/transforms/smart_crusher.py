@@ -41,8 +41,6 @@ fallback. Build it locally with `scripts/build_rust_extension.sh`
   Python bridge.
 """
 
-#  Copyright (c) 2026 Noel Kuntze
-
 from __future__ import annotations
 
 import json

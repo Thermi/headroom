@@ -14,8 +14,6 @@ Covers:
    via the shared executor; no content-block path needed.
 """
 
-#  Copyright (c) 2026 Noel Kuntze
-
 from __future__ import annotations
 
 import os
