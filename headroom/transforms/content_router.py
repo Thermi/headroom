@@ -1786,6 +1786,7 @@ class ContentRouter(Transform):
             self.config.ccr_inject_marker = False
             self.config.smart_crusher_lossless_only = True
         self._observer = observer
+        self._image_optimizer: Any | None = None
 
         # Name-addressable compressor inventory: built-in metadata + opt-in
         # discovery of `headroom.compressor` entry points. Inventory only —
@@ -4399,13 +4400,21 @@ class ContentRouter(Transform):
         - SigLIP for image analysis
         - Provider-specific compression (OpenAI detail, Anthropic/Google resize)
         """
-        try:
-            from ..image import ImageCompressor
+        if self._image_optimizer is None:
+            try:
+                from ..image import ImageCompressor
 
-            return ImageCompressor()
-        except ImportError:
-            logger.debug("ImageCompressor not available")
-            return None
+                self._image_optimizer = ImageCompressor()
+            except ImportError:
+                logger.debug("ImageCompressor not available")
+                return None
+        return self._image_optimizer
+
+    def close(self) -> None:
+        """Release heavyweight image optimizer models owned by this router."""
+        if self._image_optimizer is not None:
+            self._image_optimizer.close()
+            self._image_optimizer = None
 
     def optimize_images_in_messages(
         self,
@@ -4438,32 +4447,28 @@ class ContentRouter(Transform):
         if compressor is None:
             return messages, {"images_optimized": 0, "tokens_saved": 0}
 
-        try:
-            # Check if there are images to compress
-            if not compressor.has_images(messages):
-                return messages, {"images_optimized": 0, "tokens_saved": 0}
+        # Check if there are images to compress
+        if not compressor.has_images(messages):
+            return messages, {"images_optimized": 0, "tokens_saved": 0}
 
-            # Compress images (query is auto-extracted from messages)
-            optimized = compressor.compress(messages, provider=provider)
+        # Compress images (query is auto-extracted from messages)
+        optimized = compressor.compress(messages, provider=provider)
 
-            # Get metrics from last compression
-            result = compressor.last_result
-            if result:
-                metrics = {
-                    "images_optimized": result.compressed_tokens < result.original_tokens,
-                    "tokens_before": result.original_tokens,
-                    "tokens_after": result.compressed_tokens,
-                    "tokens_saved": result.original_tokens - result.compressed_tokens,
-                    "technique": result.technique.value,
-                    "confidence": result.confidence,
-                }
-            else:
-                metrics = {"images_optimized": 0, "tokens_saved": 0}
+        # Get metrics from last compression
+        result = compressor.last_result
+        if result:
+            metrics = {
+                "images_optimized": result.compressed_tokens < result.original_tokens,
+                "tokens_before": result.original_tokens,
+                "tokens_after": result.compressed_tokens,
+                "tokens_saved": result.original_tokens - result.compressed_tokens,
+                "technique": result.technique.value,
+                "confidence": result.confidence,
+            }
+        else:
+            metrics = {"images_optimized": 0, "tokens_saved": 0}
 
-            return optimized, metrics
-        finally:
-            if hasattr(compressor, "close"):
-                compressor.close()
+        return optimized, metrics
 
     # Transform interface
 

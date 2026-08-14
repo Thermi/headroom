@@ -19,6 +19,7 @@ from headroom.image.tile_optimizer import (
     find_optimal_openai_dimensions,
     optimize_images_in_messages,
 )
+from headroom.transforms.content_router import ContentRouter, ContentRouterConfig
 
 # Tests that create images need Pillow (optional dependency)
 _HAS_PIL = False
@@ -107,6 +108,16 @@ class TestTileOptimization:
         """800x600 -> no change needed."""
         opt_w, opt_h = find_optimal_anthropic_dimensions(800, 600)
         assert (opt_w, opt_h) == (800, 600)
+
+
+def test_content_router_reuses_image_optimizer() -> None:
+    """Image model sessions must not be rebuilt for every request."""
+    router = ContentRouter(ContentRouterConfig(enable_image_optimizer=True))
+
+    first = router._get_image_optimizer()
+    second = router._get_image_optimizer()
+
+    assert first is second
 
 
 # ---------------------------------------------------------------------------

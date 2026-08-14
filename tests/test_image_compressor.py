@@ -950,8 +950,8 @@ class TestContentRouterIntegration:
             if compressor is not None:
                 compressor.close()
 
-    def test_content_router_compressor_is_fresh_per_call(self):
-        """ContentRouter should not share image compressors across callers."""
+    def test_content_router_reuses_compressor_for_router_lifetime(self):
+        """ContentRouter should reuse its image compressor across requests."""
         from headroom.transforms.content_router import ContentRouter
 
         router = ContentRouter()
@@ -959,12 +959,9 @@ class TestContentRouterIntegration:
         second = router._get_image_optimizer()
 
         try:
-            assert first is not second
+            assert first is second
         finally:
-            if first is not None:
-                first.close()
-            if second is not None:
-                second.close()
+            router.close()
 
     def test_content_router_optimize_images_works(self):
         """Test optimize_images_in_messages returns valid result."""
@@ -983,8 +980,8 @@ class TestContentRouterIntegration:
         assert "images_optimized" in metrics
         assert metrics["tokens_saved"] == 0
 
-    def test_content_router_returns_metrics_and_closes_after_compression(self):
-        """Image optimization should report savings and close the compressor."""
+    def test_content_router_returns_metrics_without_closing_shared_compressor(self):
+        """Image optimization should report savings without unloading the model."""
         from headroom.transforms.content_router import ContentRouter
 
         router = ContentRouter()
@@ -1017,10 +1014,10 @@ class TestContentRouterIntegration:
             "technique": "full_low",
             "confidence": 0.9,
         }
-        fake.close.assert_called_once()
+        fake.close.assert_not_called()
 
     def test_content_router_returns_basic_metrics_when_compression_has_no_result(self):
-        """Missing compressor result should still close and return neutral metrics."""
+        """Missing compressor result should return neutral metrics."""
         from headroom.transforms.content_router import ContentRouter
 
         router = ContentRouter()
@@ -1040,7 +1037,7 @@ class TestContentRouterIntegration:
 
         assert result == optimized
         assert metrics == {"images_optimized": 0, "tokens_saved": 0}
-        fake.close.assert_called_once()
+        fake.close.assert_not_called()
 
     def test_content_router_image_optimizer_returns_none_when_image_stack_missing(self):
         """Import failures should disable image optimization without raising."""
@@ -1059,22 +1056,24 @@ class TestContentRouterIntegration:
 
         assert compressor is None
 
-    def test_content_router_releases_image_optimizer_after_use(self):
-        """ContentRouter should drop the compressor after each optimization pass."""
+    def test_content_router_releases_image_optimizer_on_close(self):
+        """ContentRouter should release the compressor during explicit cleanup."""
         from headroom.transforms.content_router import ContentRouter
 
         router = ContentRouter()
         tokenizer = MagicMock()
         fake = MagicMock()
         fake.has_images.return_value = False
+        router._image_optimizer = fake
 
-        with patch.object(router, "_get_image_optimizer", return_value=fake):
-            result, metrics = router.optimize_images_in_messages(
-                [{"role": "user", "content": "Hello"}],
-                tokenizer,
-                provider="openai",
-            )
+        result, metrics = router.optimize_images_in_messages(
+            [{"role": "user", "content": "Hello"}],
+            tokenizer,
+            provider="openai",
+        )
 
         assert result == [{"role": "user", "content": "Hello"}]
         assert metrics["tokens_saved"] == 0
+        fake.close.assert_not_called()
+        router.close()
         fake.close.assert_called_once()

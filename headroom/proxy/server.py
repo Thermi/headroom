@@ -2092,6 +2092,18 @@ class HeadroomProxy(
             await self.http_client.aclose()
             self.http_client = None
 
+        pipelines = (
+            self.anthropic_pipeline,
+            self.openai_pipeline,
+            *getattr(self, "_compress_pipeline_cache", {}).values(),
+        )
+        for router in pipelines:
+            for transform in getattr(router, "transforms", ()):
+                close = getattr(transform, "close", None)
+                if close is not None:
+                    with contextlib.suppress(Exception):
+                        close()
+
         if self.memory_handler and hasattr(self.memory_handler, "close"):
             await self.memory_handler.close()
 
