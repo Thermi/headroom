@@ -1,7 +1,5 @@
 """Tests for headroom.proxy.interceptors.base."""
 
-#  Copyright (c) 2026 Noel Kuntze
-
 from __future__ import annotations
 
 from unittest.mock import MagicMock
