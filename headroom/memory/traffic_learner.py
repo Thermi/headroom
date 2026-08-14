@@ -16,8 +16,6 @@ The learner is designed to be zero-config and zero-latency: it processes
 patterns in the background and never blocks the proxy pipeline.
 """
 
-#  Copyright (c) 2026 Noel Kuntze
-
 from __future__ import annotations
 
 import asyncio

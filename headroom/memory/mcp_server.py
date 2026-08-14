@@ -25,8 +25,6 @@ Usage:
     # When --db is omitted, the server resolves .headroom/memory.db from cwd.
 """
 
-#  Copyright (c) 2026 Noel Kuntze
-
 from __future__ import annotations
 
 import argparse
