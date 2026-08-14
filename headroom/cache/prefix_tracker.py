@@ -14,8 +14,6 @@ cached. On the next turn, freeze that many messages so the transform
 pipeline skips them entirely.
 """
 
-#  Copyright (c) 2026 Noel Kuntze
-
 from __future__ import annotations
 
 import copy

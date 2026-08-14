@@ -1,7 +1,5 @@
 """Regression tests for OpenAI cache-mode stability in proxy mode."""
 
-#  Copyright (c) 2026 Noel Kuntze
-
 from __future__ import annotations
 
 from types import SimpleNamespace
