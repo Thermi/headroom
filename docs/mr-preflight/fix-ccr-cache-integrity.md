@@ -26,3 +26,12 @@ All required sections will be completed before submission.
 > This MR is broader and should be coordinated with those open PRs.
 
 No MR will be opened until overlap ownership is clarified.
+
+## Implementation Parity
+
+- `#2607`: **PARTIAL**. Same CCR TTL/cache area, but not the local marker, prefix-lineage, retrieval, and streaming scope.
+- `#2706`: **PARTIAL**. Same proactive-expansion area, not full cache integrity.
+- `#2707`: **PARTIAL**. Narrow query-extraction refactor only.
+- `#2876`: **CLOSED**, retrieval-history subproblem only.
+
+No open MR has full parity.

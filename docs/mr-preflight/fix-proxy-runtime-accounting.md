@@ -23,3 +23,12 @@ section, including actual test output and runtime rollout safety.
 > telemetry pieces, but they do not solve the complete runtime-accounting,
 > savings-history, retry, batch, dashboard, and tracker compatibility scope of
 > this branch. The local MR should not be opened as an uncoordinated duplicate.
+
+## Implementation Parity
+
+- `#2921`: **PARTIAL**. It overlaps savings history but only adds cumulative output-token checkpoints.
+- `#2891`: **CLOSED / DIFFERENT**. Filesystem telemetry backend only.
+- `#2688`: **DIFFERENT**. LiteLLM Bedrock streaming usage only.
+- `#2756`: **MERGED partial prior art** for tokenizer-scale accounting.
+
+No open MR has full parity; #2921 is the direct partial overlap.

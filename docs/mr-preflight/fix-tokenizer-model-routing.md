@@ -26,3 +26,10 @@ Checklist, Screenshots, and Additional Notes. No template exists in the
 > per-model behavior. This branch remains a separate broader fix.
 
 No MR will be opened until this overlap is reviewed.
+
+## Implementation Parity
+
+- `#2681`: **PARTIAL**. Its changed files are limited to one OpenAI provider test; it does not contain this branch's tokenizer registry, DeepSeek, or `/v1/compress` routing solution.
+- `#2935`: **NO MATCH**. It is Copilot model-catalog routing.
+
+No open MR provides the same complete solution.

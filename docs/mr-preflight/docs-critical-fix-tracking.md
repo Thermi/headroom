@@ -22,3 +22,9 @@ be explicitly marked `N/A`.
 No same-problem open MR was found. This branch is eligible for an MR after the
 documentation template is filled and the GitHub search limitations are retained
 in the description.
+
+## Implementation Parity
+
+- `#2684`: **DIFFERENT**. Security documentation, not this critical-fix inventory/parity report.
+
+No open MR solves the same documentation problem.

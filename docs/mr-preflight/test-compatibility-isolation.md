@@ -21,3 +21,10 @@ commands.
 No open MR was found that solves the same complete compatibility/isolation
 problem. This branch is eligible for an MR after the focused tests and template
 fields are prepared.
+
+## Implementation Parity
+
+- `#2831`: **DIFFERENT**. Structural concurrency tests only.
+- `#2266`: **CLOSED / superseded**, related stale-CI intent but not this branch.
+
+No open MR solves the same complete problem.

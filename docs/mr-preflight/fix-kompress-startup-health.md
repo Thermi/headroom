@@ -26,3 +26,11 @@ review readiness, checklist, screenshots, and notes.
 
 No MR will be opened until maintainers choose whether to split or supersede
 these overlapping upstream changes.
+
+## Implementation Parity
+
+- `#2799`: **PARTIAL / same core problem**. It overlaps server and warmup/health files, but not this branch's broader transform, ONNX, and cache behavior.
+- `#2835`: **PARTIAL / different slice**. It changes remote coalescing files, not the complete startup/health solution.
+- `#2831`: **DIFFERENT**. It is tests-only semaphore coverage.
+
+No single open MR has full parity.

@@ -23,3 +23,12 @@ MR is submitted.
 > here. Merged PRs #2951 and #2579 cover two related subproblems, while open
 > PR #2637 overlaps project isolation. This branch remains broader and should
 > be coordinated with #2637 rather than submitted as a duplicate.
+
+## Implementation Parity
+
+- `#2899`: **DIFFERENT**. Optional Cognee feature, not storage safety.
+- `#2637`: **PARTIAL**. Project isolation overlaps, but not local SQLite/vector/graph lifecycle work.
+- `#2951`: **MERGED partial prior art** for malformed entity references.
+- `#2579`: **MERGED partial prior art** for TrafficLearner bounds.
+
+No open MR has full parity; #2637 is the material partial overlap.
