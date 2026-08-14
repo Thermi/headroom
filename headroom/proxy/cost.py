@@ -6,8 +6,6 @@ for prefix cache statistics, cost merging, and session summaries.
 Extracted from server.py for maintainability.
 """
 
-#  Copyright (c) 2026 Noel Kuntze
-
 from __future__ import annotations
 
 import importlib.util
