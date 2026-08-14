@@ -8,8 +8,6 @@ It supports multiple encodings:
 - r50k_base: GPT-3 models (davinci, curie, etc.)
 """
 
-#  Copyright (c) 2026 Noel Kuntze
-
 from __future__ import annotations
 
 import logging

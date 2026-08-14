@@ -5,8 +5,6 @@ dependencies), this provides a reasonable approximation based on
 character/word heuristics calibrated against real tokenizers.
 """
 
-#  Copyright (c) 2026 Noel Kuntze
-
 from __future__ import annotations
 
 import json

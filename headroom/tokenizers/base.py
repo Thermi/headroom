@@ -4,8 +4,6 @@ Defines the TokenCounter protocol and BaseTokenizer class that all
 tokenizer backends must implement.
 """
 
-#  Copyright (c) 2026 Noel Kuntze
-
 from __future__ import annotations
 
 import json
