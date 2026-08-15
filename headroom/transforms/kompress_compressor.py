@@ -2164,8 +2164,10 @@ class KompressCompressor(Transform):
 
         model, _tokenizer, backend = _kompress_cache[model_id]
 
+        if backend == "onnx_cpu":
+            return True  # CPU EP does not benefit from batch-dim parallelism
         if backend.startswith("onnx"):
-            return True  # ONNX EPs don't parallelize the batch dim
+            return False  # GPU/CoreML EPs benefit from batched inference
         if backend == "pytorch":
             try:
                 import torch

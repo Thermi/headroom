@@ -331,6 +331,14 @@ class TestKompressTransformInterface:
 
 
 class TestKompressCompressorBatch:
+    def test_onnx_gpu_uses_batched_path(self, monkeypatch) -> None:
+        compressor = kc.KompressCompressor()
+        monkeypatch.setattr(
+            kc, "_kompress_cache", {compressor.config.model_id: (object(), object(), "onnx_gpu")}
+        )
+
+        assert compressor._should_use_sequential_fallback() is False
+
     """Tests for the batched compression API (compress_batch).
 
     These exercise the non-model paths — passthrough handling, argument
